@@ -81,6 +81,24 @@ header{background:var(--night);color:var(--concrete);position:sticky;top:0;z-ind
 .call-pill{background:var(--amber);color:var(--night);text-decoration:none;font-family:var(--disp);font-weight:700;font-size:16px;letter-spacing:.03em;padding:9px 18px;text-transform:uppercase;white-space:nowrap}
 .call-pill:hover{background:#FFB31F}
 @media(max-width:880px){.nav-links{display:none}}
+/* ---- hamburger + drawer menu ---- */
+.menu-btn{display:flex;flex-direction:column;justify-content:center;gap:5px;width:40px;height:40px;padding:8px;background:none;border:1px solid var(--line-dark);border-radius:8px;cursor:pointer;flex-shrink:0}
+.menu-btn span{display:block;height:2px;width:100%;background:var(--concrete);border-radius:2px;transition:background .15s}
+.menu-btn:hover span,.menu-btn:focus-visible span{background:var(--amber)}
+.drawer-backdrop{position:fixed;inset:0;background:rgba(8,13,19,.62);z-index:190;opacity:0;pointer-events:none;transition:opacity .22s}
+.drawer-backdrop.open{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;left:0;bottom:0;width:290px;max-width:84vw;background:var(--night-2);z-index:200;transform:translateX(-102%);transition:transform .24s ease;display:flex;flex-direction:column;border-right:1px solid var(--line-dark);overflow-y:auto}
+.drawer.open{transform:translateX(0)}
+.drawer-head{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--line-dark)}
+.drawer-head strong{font-family:var(--disp);text-transform:uppercase;letter-spacing:.04em;color:var(--amber);font-size:15px}
+.drawer-close{background:none;border:none;color:var(--concrete);font-size:26px;line-height:1;cursor:pointer;padding:4px 8px}
+.drawer-close:hover{color:var(--amber)}
+.drawer nav{display:flex;flex-direction:column;padding:10px 0}
+.drawer nav a{display:flex;align-items:center;gap:12px;padding:13px 20px;color:var(--concrete);text-decoration:none;font-weight:600;font-size:14.5px;opacity:.88}
+.drawer nav a:hover,.drawer nav a:focus-visible{opacity:1;color:var(--amber);background:rgba(245,163,0,.06)}
+.drawer nav a .d-ico{width:22px;text-align:center;font-size:16px}
+.drawer-div{margin:10px 20px;border-top:1px solid var(--line-dark)}
+.drawer-label{padding:4px 20px 6px;font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--steel);font-weight:700}
 
 /* ---- hero ---- */
 .hero{background:var(--night);color:var(--concrete);position:relative;overflow:hidden}
@@ -247,6 +265,9 @@ footer a:hover{color:var(--amber)}
 
 <header>
   <div class="wrap nav">
+    <button class="menu-btn" onclick="openDrawer()" aria-label="Open menu" aria-controls="drawer" aria-expanded="false" id="menuBtn">
+      <span></span><span></span><span></span>
+    </button>
     <a class="brand" href="#top">
       <span class="brand-mark">MT</span>
       <span class="brand-name">Truck &amp; Trailer Repair<small>Adelanto · California</small></span>
@@ -256,7 +277,6 @@ footer a:hover{color:var(--amber)}
       <a href="#road" data-i="navRoad">Road Service</a>
       <a href="#fleet" data-i="navFleet">Fleet Accounts</a>
       <a href="#visit" data-i="navVisit">Location &amp; Hours</a>
-      <a href="shop.html?portal=" data-i="navPortal">Fleet Login</a>
     </nav>
     <div style="display:flex;align-items:center;gap:10px">
       <button class="lang-btn" id="langBtn" onclick="toggleLang()">ES</button>
@@ -264,6 +284,26 @@ footer a:hover{color:var(--amber)}
     </div>
   </div>
 </header>
+
+<div class="drawer-backdrop" id="drawerBackdrop" onclick="closeDrawer()"></div>
+<aside class="drawer" id="drawer" aria-hidden="true">
+  <div class="drawer-head">
+    <strong data-i="dMenu">Menu</strong>
+    <button class="drawer-close" onclick="closeDrawer()" aria-label="Close menu">&times;</button>
+  </div>
+  <nav>
+    <a href="#top" onclick="closeDrawer()"><span class="d-ico">🏠</span><span data-i="dHome">Home</span></a>
+    <a href="#services" onclick="closeDrawer()"><span class="d-ico">🔧</span><span data-i="navServices">Services</span></a>
+    <a href="#road" onclick="closeDrawer()"><span class="d-ico">🚨</span><span data-i="navRoad">Road Service</span></a>
+    <a href="#fleet" onclick="closeDrawer()"><span class="d-ico">🚛</span><span data-i="navFleet">Fleet Accounts</span></a>
+    <a href="#visit" onclick="closeDrawer()"><span class="d-ico">📍</span><span data-i="navVisit">Location &amp; Hours</span></a>
+    <a href="careers.html"><span class="d-ico">👷</span><span data-i="ftJobs">We're Hiring</span></a>
+    <div class="drawer-div"></div>
+    <div class="drawer-label" data-i="dAccess">Account Access</div>
+    <a href="shop.html?portal="><span class="d-ico">🔑</span><span data-i="dCustLogin">Customer Login</span></a>
+    <a href="shop.html"><span class="d-ico">🛠️</span><span data-i="dEmpLogin">Employee Login</span></a>
+  </nav>
+</aside>
 
 <main id="top">
   <div class="hero">
@@ -565,8 +605,22 @@ function sendFleetApp(){
   });
 }
 var LANG='en';
+function openDrawer(){
+  document.getElementById('drawer').classList.add('open');
+  document.getElementById('drawerBackdrop').classList.add('open');
+  document.getElementById('drawer').setAttribute('aria-hidden','false');
+  document.getElementById('menuBtn').setAttribute('aria-expanded','true');
+}
+function closeDrawer(){
+  document.getElementById('drawer').classList.remove('open');
+  document.getElementById('drawerBackdrop').classList.remove('open');
+  document.getElementById('drawer').setAttribute('aria-hidden','true');
+  document.getElementById('menuBtn').setAttribute('aria-expanded','false');
+}
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closeDrawer();});
 var ES={
   navServices:'Servicios',navRoad:'Servicio en Carretera',navFleet:'Cuentas de Flota',navVisit:'Ubicación y Horario',navPortal:'Acceso de Flota',
+  dMenu:'Menú',dHome:'Inicio',dAccess:'Acceso a Cuentas',dCustLogin:'Acceso de Clientes',dEmpLogin:'Acceso de Empleados',
   heroEyebrow:'Taller Diésel de Servicio Pesado · Burguete Enterprise Inc.',
   heroL1:'Reparación de',heroL2:'Camiones y Remolques',heroL3:'Bien Hecha.',
   heroSub:'Desde diagnóstico de motor hasta inspecciones DOT, nuestros técnicos mantienen su camión trabajando — en el taller o en la carretera. Respuestas directas, presupuestos por escrito y su autorización antes de cualquier trabajo extra.',
