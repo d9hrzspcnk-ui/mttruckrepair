@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Disallow: /shop.html
+
+Sitemap: https://mttruckandtrailerrepair.com/sitemap.xml
