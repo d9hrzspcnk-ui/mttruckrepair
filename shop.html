@@ -652,8 +652,10 @@ function unitInfoStrip(u){
   var bits=[];
   if(u.vin)bits.push('<span><strong>VIN:</strong> '+u.vin+'</span>');
   if(u.num)bits.push('<span><strong>Unit #:</strong> '+u.num+'</span>');
+  if(u.nick)bits.push('<span><strong>Nickname:</strong> '+u.nick+'</span>');
+  if(u.fleet)bits.push('<span><strong>Fleet #:</strong> '+u.fleet+'</span>');
   if(u.engine)bits.push('<span><strong>Engine:</strong> '+u.engine+'</span>');
-  if(u.plate)bits.push('<span><strong>Plate:</strong> '+u.plate+'</span>');
+  if(u.plate)bits.push('<span><strong>Plate:</strong> '+(u.plateState?u.plateState+' ':'')+u.plate+'</span>');
   if(u.miles)bits.push('<span><strong>Miles:</strong> '+u.miles+'</span>');
   if(u.type)bits.push('<span><strong>Type:</strong> '+u.type+'</span>');
   if(!bits.length)return'';
@@ -663,7 +665,7 @@ function vWO(id){
   var w=WO[id];w.isNew=false;
   var cO='<option value="">— Select —</option>'+CUST.map(function(c,i){return'<option value="'+i+'"'+(w.custId===i?' selected':'')+'>'+c.name+'</option>';}).join('');
   var uO='<option value="">— Select Unit —</option>';
-  if(w.custId!==undefined&&CUST[w.custId]&&CUST[w.custId].units){CUST[w.custId].units.forEach(function(u,i){var sel2=(w.unit&&u.vin&&w.unit.vin===u.vin)?' selected':'';uO+='<option value="'+i+'"'+sel2+'>'+((u.num?'#'+u.num+' \u2014 ':'')+((u.year||'')+' '+(u.make||'')+' '+(u.model||'')).trim()+(u.vin?' \u2026'+u.vin.slice(-6):'')).trim()+'</option>';});}
+  if(w.custId!==undefined&&CUST[w.custId]&&CUST[w.custId].units){CUST[w.custId].units.forEach(function(u,i){var sel2=(w.unit&&u.vin&&w.unit.vin===u.vin)?' selected':'';uO+='<option value="'+i+'"'+sel2+'>'+((u.num?'#'+u.num+' \u2014 ':'')+(u.nick?u.nick+' \u2014 ':'')+((u.year||'')+' '+(u.make||'')+' '+(u.model||'')).trim()+(u.vin?' \u2026'+u.vin.slice(-6):'')).trim()+'</option>';});}
   var sO=['Open','In Progress','Waiting Parts','Completed'].map(function(s){return'<option'+(w.status===s?' selected':'')+'>'+s+'</option>';}).join('');
   var tO=TECH.map(function(t){var tn=typeof t==='string'?t:t.name;return'<option'+(w.tech===tn?' selected':'')+'>'+tn+'</option>';}).join('');
   var body='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">'
@@ -696,7 +698,7 @@ function vWO(id){
     +'<button class="btn" onclick="cM()">Close</button>');
   rCS(id);
 }
-function wCust(wid,ci){WO[wid].custId=ci;var cx=CUST[ci];if(cx){WO[wid].customer=cx.name;WO[wid].phone=cx.phone;}var sel=el('usl'+wid);if(sel&&cx&&cx.units){sel.innerHTML='<option value="">— Unit —</option>'+cx.units.map(function(u,i){return'<option value="'+i+'">'+u.year+' '+u.make+' '+u.model+'</option>';}).join('');}}
+function wCust(wid,ci){WO[wid].custId=ci;var cx=CUST[ci];if(cx){WO[wid].customer=cx.name;WO[wid].phone=cx.phone;if(!WO[wid].authorizer&&(!cx.prefs||cx.prefs.auth!==false)){var cnm=custContactName(cx);if(cnm)WO[wid].authorizer=cnm+((cx.cell||cx.phone)?', '+(cx.cell||cx.phone):'');}}var sel=el('usl'+wid);if(sel&&cx&&cx.units){sel.innerHTML='<option value="">— Unit —</option>'+cx.units.map(function(u,i){return'<option value="'+i+'">'+((u.num?'#'+u.num+' — ':'')+(u.nick?u.nick+' — ':'')+((u.year||'')+' '+(u.make||'')+' '+(u.model||'')).trim()+(u.vin?' …'+u.vin.slice(-6):'')).trim()+'</option>';}).join('');}}
 function wUnit(wid,ui){var cx=WO[wid].custId!==undefined?CUST[WO[wid].custId]:null;var u=cx&&cx.units?cx.units[ui]:null;if(u){WO[wid].unit=u;WO[wid].vehicle=(u.year+' '+u.make+' '+u.model).trim();}}
 
 function walkAround(wid){
@@ -971,7 +973,11 @@ function nWO(){
     +'<div class="fg"><label>Phone</label><input id="nw2-nph" type="tel" placeholder="(555) 555-5555" '+F+'></div>'
     +'<div class="fg"><label>Email</label><input id="nw2-nem" type="email" placeholder="email@..." '+F+'></div>'
     +'<div class="fg"><label>DOT #</label><input id="nw2-ndot" '+F+'></div>'
-    +'<div class="fg"><label>MC #</label><input id="nw2-nmc" '+F+'></div></div></div>'
+    +'<div class="fg"><label>MC #</label><input id="nw2-nmc" '+F+'></div>'
+    +'<div class="fg"><label>Contact First</label><input id="nw2-ncf" placeholder="First" '+F+'></div>'
+    +'<div class="fg"><label>Contact Last</label><input id="nw2-ncl" placeholder="Last" '+F+'></div>'
+    +'<div class="fg full"><label>Cell Phone</label><input id="nw2-ncell" type="tel" '+F+'></div></div>'
+    +'<div style="font-size:11px;font-weight:600;margin:6px 0;color:#555;text-transform:uppercase">Contact Preferences</div>'+custPrefRows('nwp-')+'</div>'
     +'</div>'
     +'<div style="background:#FBF4E6;border-radius:12px;padding:12px;margin-bottom:10px">'
     +'<div style="font-size:11px;font-weight:700;color:#8a5a00;text-transform:uppercase;letter-spacing:1px;margin-bottom:7px"><i class="ti ti-truck"></i> Unit / Vehicle</div>'
@@ -988,8 +994,11 @@ function nWO(){
     +'<div class="fg"><label>Model</label><input id="nw2-md" placeholder="Cascadia, T680..." '+F+'></div>'
     +'<div class="fg"><label>Engine</label><input id="nw2-en" placeholder="Cummins X15..." '+F+'></div>'
     +'<div class="fg"><label>Unit #</label><input id="nw2-num" '+F+'></div>'
+    +'<div class="fg"><label>Unit Nickname</label><input id="nw2-nick" placeholder="Big Red..." '+F+'></div>'
+    +'<div class="fg"><label>Fleet #</label><input id="nw2-fleet" '+F+'></div>'
+    +'<div class="fg"><label>Plate State</label><input id="nw2-pls" placeholder="CA" maxlength="2" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#fff;width:100%;font-family:inherit;text-transform:uppercase"></div>'
     +'<div class="fg"><label>License Plate</label><input id="nw2-pl" '+F+'></div>'
-    +'<div class="fg full"><label>Mileage</label><input id="nw2-mi" '+F+'></div></div>'
+    +'<div class="fg"><label>Mileage</label><input id="nw2-mi" '+F+'></div></div>'
     +'</div></div>'
     +'<div style="background:#f5f5f7;border-radius:12px;padding:12px">'
     +'<div style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:7px"><i class="ti ti-tool"></i> Job</div>'
@@ -1005,7 +1014,7 @@ function nw2CustChange(){
   var opts='<option value="">\u2014 Select Unit \u2014</option>';
   if(!isNaN(ci)&&CUST[ci]&&CUST[ci].units&&CUST[ci].units.length){
     CUST[ci].units.forEach(function(u,j){
-      var lbl=((u.num?'#'+u.num+' \u2014 ':'')+((u.year||'')+' '+(u.make||'')+' '+(u.model||'')).trim()+(u.vin?' \u2026'+u.vin.slice(-6):'')).trim()||'Unit '+(j+1);
+      var lbl=((u.num?'#'+u.num+' \u2014 ':'')+(u.nick?u.nick+' \u2014 ':'')+((u.year||'')+' '+(u.make||'')+' '+(u.model||'')).trim()+(u.vin?' \u2026'+u.vin.slice(-6):'')).trim()||'Unit '+(j+1);
       opts+='<option value="'+j+'">'+lbl+'</option>';
     });
   } else opts='<option value="">\u2014 No units on file, add one \u2192 \u2014</option>';
@@ -1020,7 +1029,7 @@ function svNWO(){
   if(newName){
     var dup=CUST.findIndex(function(c){return c.name.toLowerCase()===newName.toLowerCase();});
     if(dup!==-1){ci=dup;CUST[ci].lastVisit=td();}
-    else{CUST.push({name:newName,phone:gv('nw2-nph'),email:gv('nw2-nem'),dot:gv('nw2-ndot'),mc:gv('nw2-nmc'),units:[],jobs:0,lastVisit:td()});ci=CUST.length-1;}
+    else{CUST.push({name:newName,phone:gv('nw2-nph'),email:gv('nw2-nem'),dot:gv('nw2-ndot'),mc:gv('nw2-nmc'),contactFirst:gv('nw2-ncf'),contactLast:gv('nw2-ncl'),cell:gv('nw2-ncell'),prefs:readPrefs('nwp-'),units:[],jobs:0,lastVisit:td()});ci=CUST.length-1;}
   }
   if(isNaN(ci)||!CUST[ci]){alert('Select a customer or tap + New to add one.');return;}
   var cn=CUST[ci].name, phone=CUST[ci].phone||'';
@@ -1028,7 +1037,7 @@ function svNWO(){
   var unitOpen=el('nw2-unitnew')&&el('nw2-unitnew').style.display!=='none';
   var nvin=(gv('nw2-vin')||'').toUpperCase();
   if(unitOpen&&(nvin||gv('nw2-mk')||gv('nw2-md')||gv('nw2-num'))){
-    unit={type:gv('nw2-type'),year:gv('nw2-yr'),make:gv('nw2-mk'),model:gv('nw2-md'),engine:gv('nw2-en'),vin:nvin,num:gv('nw2-num'),plate:gv('nw2-pl'),miles:gv('nw2-mi')};
+    unit={type:gv('nw2-type'),year:gv('nw2-yr'),make:gv('nw2-mk'),model:gv('nw2-md'),engine:gv('nw2-en'),vin:nvin,num:gv('nw2-num'),nick:gv('nw2-nick'),fleet:gv('nw2-fleet'),plateState:(gv('nw2-pls')||'').toUpperCase(),plate:gv('nw2-pl'),miles:gv('nw2-mi')};
     CUST[ci].units=CUST[ci].units||[];
     if(!nvin||!CUST[ci].units.find(function(u){return u.vin===nvin;}))CUST[ci].units.push(unit);
   }else{
@@ -1037,7 +1046,9 @@ function svNWO(){
   }
   var veh=unit?((unit.year||'')+' '+(unit.make||'')+' '+(unit.model||'')).trim():'';
   var cp=gv('nw2-cp')||'Service';
-  WO.push({id:WO.length,ticket:woc++,custId:ci,customer:cn,phone:phone,vehicle:veh,unit:unit||{},complaint:cp,status:'Open',tech:gv('nw2-tech')||'',date:td(),notes:'',lines:[],isNew:false,authorizer:'',poNum:gv('nw2-po')||'',custPO:''});
+  var auth='';var cobj=CUST[ci];
+  if(cobj&&(!cobj.prefs||cobj.prefs.auth!==false)){var cnm=custContactName(cobj);if(cnm)auth=cnm+((cobj.cell||cobj.phone)?', '+(cobj.cell||cobj.phone):'');}
+  WO.push({id:WO.length,ticket:woc++,custId:ci,customer:cn,phone:phone,vehicle:veh,unit:unit||{},complaint:cp,status:'Open',tech:gv('nw2-tech')||'',date:td(),notes:'',lines:[],isNew:false,authorizer:auth,poNum:gv('nw2-po')||'',custPO:''});
   CUST[ci].lastVisit=td();
   saveAll();cM();rWO();rDash();autoNotify('wo_created',WO[WO.length-1]);}
 // ── PROFESSIONAL PRINT SYSTEM ──────────────────────────────
@@ -2014,14 +2025,41 @@ function nInv(){
   oM('New Invoice',
     '<div style="background:#E6F1FB;border-radius:12px;padding:12px;margin-bottom:10px">'
     +'<div style="font-size:11px;font-weight:700;color:#0C447C;text-transform:uppercase;letter-spacing:1px;margin-bottom:7px"><i class="ti ti-user"></i> Customer</div>'
-    +'<select id="ni2-c" onchange="ni2CustChange()" '+F+'>'+cO+'</select>'
-    +'<input id="ni2-n" placeholder="...or type a new customer name" style="margin-top:6px;padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#fff;width:100%;font-family:inherit">'
+    +'<div style="display:flex;gap:6px"><select id="ni2-c" onchange="ni2CustChange()" '+F+'>'+cO+'</select>'
+    +'<button type="button" onclick="ni3ToggleCust()" style="padding:8px 12px;background:#185FA5;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;white-space:nowrap">+ New</button></div>'
+    +'<div id="ni3-custnew" style="display:none;margin-top:8px">'
+    +'<div class="g2"><div class="fg full"><label>Name / Company *</label><input id="ni3-nn" placeholder="Customer or company name" '+F+'></div>'
+    +'<div class="fg"><label>Contact First</label><input id="ni3-ncf" '+F+'></div>'
+    +'<div class="fg"><label>Contact Last</label><input id="ni3-ncl" '+F+'></div>'
+    +'<div class="fg"><label>Phone</label><input id="ni3-nph" type="tel" '+F+'></div>'
+    +'<div class="fg"><label>Cell Phone</label><input id="ni3-ncell" type="tel" '+F+'></div>'
+    +'<div class="fg"><label>Email</label><input id="ni3-nem" type="email" '+F+'></div>'
+    +'<div class="fg"><label>DOT #</label><input id="ni3-ndot" '+F+'></div>'
+    +'<div class="fg full"><label>MC #</label><input id="ni3-nmc" '+F+'></div></div>'
+    +'<div style="font-size:11px;font-weight:600;margin:6px 0;color:#555;text-transform:uppercase">Contact Preferences</div>'+custPrefRows('nip-')+'</div>'
     +'</div>'
     +'<div style="background:#FBF4E6;border-radius:12px;padding:12px;margin-bottom:10px">'
     +'<div style="font-size:11px;font-weight:700;color:#8a5a00;text-transform:uppercase;letter-spacing:1px;margin-bottom:7px"><i class="ti ti-truck"></i> Unit / Vehicle</div>'
-    +'<select id="ni2-u" '+F+'><option value="">\u2014 Select customer first \u2014</option></select>'
-    +'<input id="ni2-v" placeholder="...or type Year Make Model" style="margin-top:6px;padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#fff;width:100%;font-family:inherit">'
-    +'</div>'
+    +'<div style="display:flex;gap:6px"><select id="ni2-u" '+F+'><option value="">\u2014 Select customer first \u2014</option></select>'
+    +'<button type="button" onclick="ni3ToggleUnit()" style="padding:8px 12px;background:#BA7517;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;white-space:nowrap">+ New</button></div>'
+    +'<input id="ni2-v" placeholder="...or type Year Make Model for a quick one-off" style="margin-top:6px;padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#fff;width:100%;font-family:inherit">'
+    +'<div id="ni3-unitnew" style="display:none;margin-top:8px">'
+    +'<div class="fg full"><label>Unit Type</label><select id="ni3-type" '+F+'>'+(function(){var types=['Tractor/Semi \u2014 Sleeper','Tractor/Semi \u2014 Day Cab','Truck','Box Truck','Trailer \u2014 Dry Van','Trailer \u2014 Reefer','Trailer \u2014 Flatbed','Bus','RV / Motorhome','Pickup','Equipment','Other'];return'<option value="">\u2014 Unit Type \u2014</option>'+types.map(function(t2){return'<option>'+t2+'</option>';}).join('');})()+'</select></div>'
+    +'<div class="fg full"><label>VIN \u2014 scan or type, auto-fills below</label><div style="display:flex;gap:5px">'
+    +'<input id="ni3-vin" placeholder="17-digit VIN" style="flex:1;padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#fff;font-family:inherit;text-transform:uppercase">'
+    +'<button type="button" onclick="scanVINBtn(this.dataset.f)" data-f="ni3-vin" title="Scan VIN barcode" style="padding:7px 11px;background:#534AB7;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-family:inherit"><i class="ti ti-scan"></i></button>'
+    +'<button type="button" onclick="vinQuickLookup(this.dataset.f)" data-f="ni3-vin" style="padding:7px 12px;background:#185FA5;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit"><i class="ti ti-search"></i></button></div></div>'
+    +'<div class="g2"><div class="fg"><label>Year</label><input id="ni3-yr" '+F+'></div>'
+    +'<div class="fg"><label>Make</label><input id="ni3-mk" '+F+'></div>'
+    +'<div class="fg"><label>Model</label><input id="ni3-md" '+F+'></div>'
+    +'<div class="fg"><label>Engine</label><input id="ni3-en" '+F+'></div>'
+    +'<div class="fg"><label>Unit #</label><input id="ni3-num" '+F+'></div>'
+    +'<div class="fg"><label>Unit Nickname</label><input id="ni3-nick" '+F+'></div>'
+    +'<div class="fg"><label>Fleet #</label><input id="ni3-fleet" '+F+'></div>'
+    +'<div class="fg"><label>Plate State</label><input id="ni3-pls" placeholder="CA" maxlength="2" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#fff;width:100%;font-family:inherit;text-transform:uppercase"></div>'
+    +'<div class="fg"><label>License Plate</label><input id="ni3-pl" '+F+'></div>'
+    +'<div class="fg"><label>Mileage</label><input id="ni3-mi" '+F+'></div></div>'
+    +'</div></div>'
     +'<div style="background:#f5f5f7;border-radius:12px;padding:12px">'
     +'<div style="font-size:11px;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:7px"><i class="ti ti-list"></i> Line Items</div>'
     +'<div id="ni2-lines"><div style="font-size:12px;color:#888;padding:4px 0 8px">No lines yet \u2014 add labor or parts below.</div></div>'
@@ -2036,13 +2074,16 @@ function nInv(){
     +'</div>',
     '<button class="btn bl" onclick="svNI()"><i class="ti ti-check"></i>Create Invoice</button><button class="btn" onclick="cM()">Cancel</button>');
 }
+function ni3ToggleCust(){var d=el('ni3-custnew');if(!d)return;var open=d.style.display==='none';d.style.display=open?'block':'none';if(open){var c=el('ni2-c');if(c)c.value='';}}
+function ni3ToggleUnit(){var d=el('ni3-unitnew');if(!d)return;d.style.display=d.style.display==='none'?'block':'none';}
 function ni2CustChange(){
   var ci=parseInt(gv('ni2-c'));
+  var nc=el('ni3-custnew');if(nc)nc.style.display='none';
   var sel=el('ni2-u');if(!sel)return;
   var opts='<option value="">\u2014 Select Unit \u2014</option>';
   if(!isNaN(ci)&&CUST[ci]&&CUST[ci].units&&CUST[ci].units.length){
     CUST[ci].units.forEach(function(u,j){
-      var lbl=((u.num?'#'+u.num+' \u2014 ':'')+((u.year||'')+' '+(u.make||'')+' '+(u.model||'')).trim()+(u.vin?' \u2026'+u.vin.slice(-6):'')).trim()||'Unit '+(j+1);
+      var lbl=((u.num?'#'+u.num+' \u2014 ':'')+(u.nick?u.nick+' \u2014 ':'')+((u.year||'')+' '+(u.make||'')+' '+(u.model||'')).trim()+(u.vin?' \u2026'+u.vin.slice(-6):'')).trim()||'Unit '+(j+1);
       opts+='<option value="'+j+'">'+lbl+'</option>';
     });
   } else opts='<option value="">\u2014 No units on file \u2014</option>';
@@ -2122,10 +2163,25 @@ function ni2Tot(){
 }
 function svNI(){
   var ci=parseInt(gv('ni2-c'));
-  var c=gv('ni2-n')||(!isNaN(ci)&&CUST[ci]?CUST[ci].name:'');
-  if(!c){alert('Select a customer or type a name');return;}
+  var newName=gv('ni3-nn');
+  if(newName){
+    var dup=CUST.findIndex(function(c2){return c2.name.toLowerCase()===newName.toLowerCase();});
+    if(dup!==-1){ci=dup;CUST[ci].lastVisit=td();}
+    else{CUST.push({name:newName,phone:gv('ni3-nph'),cell:gv('ni3-ncell'),email:gv('ni3-nem'),dot:gv('ni3-ndot'),mc:gv('ni3-nmc'),contactFirst:gv('ni3-ncf'),contactLast:gv('ni3-ncl'),prefs:readPrefs('nip-'),units:[],jobs:0,lastVisit:td()});ci=CUST.length-1;}
+  }
+  var c=(!isNaN(ci)&&CUST[ci])?CUST[ci].name:'';
+  if(!c){alert('Select a customer or tap + New to add one.');return;}
   var phone=(!isNaN(ci)&&CUST[ci])?CUST[ci].phone||'':'';
   var veh=gv('ni2-v'),vin='';
+  var unitOpen=el('ni3-unitnew')&&el('ni3-unitnew').style.display!=='none';
+  var nvin=(gv('ni3-vin')||'').toUpperCase();
+  if(unitOpen&&(nvin||gv('ni3-mk')||gv('ni3-md')||gv('ni3-num'))){
+    var nu={type:gv('ni3-type'),year:gv('ni3-yr'),make:gv('ni3-mk'),model:gv('ni3-md'),engine:gv('ni3-en'),vin:nvin,num:gv('ni3-num'),nick:gv('ni3-nick'),fleet:gv('ni3-fleet'),plateState:(gv('ni3-pls')||'').toUpperCase(),plate:gv('ni3-pl'),miles:gv('ni3-mi')};
+    CUST[ci].units=CUST[ci].units||[];
+    if(!nvin||!CUST[ci].units.find(function(u2){return u2.vin===nvin;}))CUST[ci].units.push(nu);
+    veh=((nu.year||'')+' '+(nu.make||'')+' '+(nu.model||'')).trim();
+    vin=nvin;
+  }
   var uj=gv('ni2-u');
   if(!veh&&uj!==''&&!isNaN(ci)&&CUST[ci]&&CUST[ci].units&&CUST[ci].units[parseInt(uj)]){
     var u=CUST[ci].units[parseInt(uj)];
@@ -2295,9 +2351,14 @@ function vCust(i){
     +inp('ec-e','Email',c.email,'email@example.com','email')
     +inp('ec-d','DOT #',c.dot,'DOT number')
     +inp('ec-m','MC #',c.mc,'MC number')
+    +inp('ec-cf','Contact First Name',c.contactFirst,'First')
+    +inp('ec-cl','Contact Last Name',c.contactLast,'Last')
+    +inp('ec-cell','Cell Phone',c.cell,'(555) 555-5555','tel')
     +inp('ec-t','Payment Terms',c.payTerms,'Net-30, COD...')
     +'<div class="fg"><label>Notes</label><input id="ec-notes" value="'+(c.notes||'')+'" placeholder="Internal notes..." style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'</div>'
+    +'<div style="font-size:12px;font-weight:600;margin:4px 0 8px;color:#555;text-transform:uppercase;letter-spacing:0.5px">Contact Preferences</div>'
+    +custPrefRows('ec2-',c.prefs)
     +'<div class="tabs"><div class="tab on" onclick="sTb(this,\'tu\')">Units ('+(c.units||[]).length+')</div><div class="tab" onclick="sTb(this,\'tj\')">Jobs ('+jobs.length+')</div><div class="tab" onclick="sTb(this,\'ti\')">Invoices ('+invs.length+')</div></div>'
     +'<div class="tbc on" id="tu"><div id="unit-list-'+i+'">'+uRows+'</div><button class="btn xs bl" style="margin-top:10px" onclick="addU('+i+')"><i class="ti ti-plus"></i>Add Unit</button></div>'
     +'<div class="tbc" id="tj">'+jRows+'</div>'
@@ -2334,6 +2395,7 @@ function svCust(i){
   if(!newName){alert('Name is required');return;}
   CUST[i].name=newName;CUST[i].phone=gv('ec-p');CUST[i].email=gv('ec-e');
   CUST[i].dot=gv('ec-d');CUST[i].mc=gv('ec-m');CUST[i].payTerms=gv('ec-t');CUST[i].notes=gv('ec-notes');
+  CUST[i].contactFirst=gv('ec-cf');CUST[i].contactLast=gv('ec-cl');CUST[i].cell=gv('ec-cell');CUST[i].prefs=readPrefs('ec2-');
   // Update name references in work orders and invoices if name changed
   if(oldName!==newName){
     WO.forEach(function(w){if(w.customer===oldName)w.customer=newName;});
@@ -2355,6 +2417,9 @@ function editU(ci,ui){
     +'<div class="fg"><label>Model</label><input id="eu-md" value="'+(u.model||'')+'" placeholder="Cascadia..." style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>Engine</label><input id="eu-en" value="'+(u.engine||'')+'" placeholder="DD15, ISX..." style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg full"><label>VIN</label><div style="display:flex;gap:5px"><input id="eu-vin" value="'+(u.vin||'')+'" placeholder="17-digit VIN" style="flex:1;padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7"><button type="button" onclick="scanVINBtn(this.dataset.f)" data-f="eu-vin" title="Scan VIN barcode" style="padding:7px 11px;background:#534AB7;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-family:inherit"><i class="ti ti-scan"></i></button><button type="button" onclick="vinQuickLookup(this.dataset.f)" data-f="eu-vin" style="padding:7px 12px;background:#185FA5;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit"><i class=ti ti-search></i> Lookup</button></div></div>'
+    +'<div class="fg"><label>Unit Nickname</label><input id="eu-nick" value="'+(u.nick||'')+'" placeholder="Big Red..." style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
+    +'<div class="fg"><label>Fleet #</label><input id="eu-fleet" value="'+(u.fleet||'')+'" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
+    +'<div class="fg"><label>Plate State</label><input id="eu-pls" value="'+(u.plateState||'')+'" placeholder="CA" maxlength="2" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%;text-transform:uppercase"></div>'
     +'<div class="fg"><label>'+t('ciPlate')+'</label><input id="eu-pl" value="'+(u.plate||'')+'" placeholder="ABC-1234" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>Odometer (Miles)</label><input id="eu-mi" value="'+(u.miles||'')+'" type="number" placeholder="150000" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>'+t('ciTrailer')+'</label><input id="eu-tr" value="'+(u.trailer||'')+'" placeholder="Trailer number" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
@@ -2366,8 +2431,8 @@ function editU(ci,ui){
 function svUnit(ci,ui){
   var mk=gv('eu-mk');if(!mk){alert('Make is required');return;}
   CUST[ci].units[ui]={
-    type:el('eu-type').value,num:gv('eu-num'),year:gv('eu-yr'),make:mk,
-    model:gv('eu-md'),engine:gv('eu-en'),vin:gv('eu-vin'),plate:gv('eu-pl'),
+    type:el('eu-type').value,num:gv('eu-num'),nick:gv('eu-nick'),fleet:gv('eu-fleet'),year:gv('eu-yr'),make:mk,
+    model:gv('eu-md'),engine:gv('eu-en'),vin:gv('eu-vin'),plateState:(gv('eu-pls')||'').toUpperCase(),plate:gv('eu-pl'),
     miles:gv('eu-mi'),trailer:gv('eu-tr'),notes:gv('eu-notes')
   };
   saveAll();vCust(ci);
@@ -2383,7 +2448,10 @@ function addU(ci){
   oM('Add Unit',
     '<div class="g2">'
     +'<div class="fg"><label>Type</label><select id="au-type" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;font-family:inherit;background:#f5f5f7;width:100%;-webkit-appearance:none">'+tOpts+'</select></div>'
-    +'<div class="fg"><label>Unit #</label><input id="au-num" placeholder="Fleet number" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
+    +'<div class="fg"><label>Unit #</label><input id="au-num" placeholder="Unit number" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
+    +'<div class="fg"><label>Unit Nickname</label><input id="au-nick" placeholder="Big Red..." style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
+    +'<div class="fg"><label>Fleet #</label><input id="au-fleet" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
+    +'<div class="fg"><label>Plate State</label><input id="au-pls" placeholder="CA" maxlength="2" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%;text-transform:uppercase"></div>'
     +'<div class="fg"><label>Year</label><input id="au-yr" type="number" placeholder="2019" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>Make *</label><input id="au-mk" placeholder="Freightliner..." style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>Model</label><input id="au-md" placeholder="Cascadia..." style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
@@ -2400,11 +2468,43 @@ function addU(ci){
 function svNewUnit(ci){
   var mk=gv('au-mk');if(!mk){alert('Make is required');return;}
   CUST[ci].units=CUST[ci].units||[];
-  CUST[ci].units.push({type:el('au-type').value,num:gv('au-num'),year:gv('au-yr'),make:mk,model:gv('au-md'),engine:gv('au-en'),vin:gv('au-vin'),plate:gv('au-pl'),miles:gv('au-mi'),trailer:gv('au-tr'),notes:gv('au-notes')});
+  CUST[ci].units.push({type:el('au-type').value,num:gv('au-num'),nick:gv('au-nick'),fleet:gv('au-fleet'),year:gv('au-yr'),make:mk,model:gv('au-md'),engine:gv('au-en'),vin:gv('au-vin'),plateState:(gv('au-pls')||'').toUpperCase(),plate:gv('au-pl'),miles:gv('au-mi'),trailer:gv('au-tr'),notes:gv('au-notes')});
   saveAll();vCust(ci);
 }
 function sTb(tab,id){document.querySelectorAll('.tab').forEach(function(t){t.classList.remove('on');});document.querySelectorAll('.tbc').forEach(function(t){t.classList.remove('on');});tab.classList.add('on');var tc=el(id);if(tc)tc.classList.add('on');}
-function nCust(){oM('New Customer','<div class="g2"><div class="fg"><label>Name *</label><input id="nc-n" placeholder="Full name or company" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div><div class="fg"><label>Phone</label><input id="nc-p" placeholder="(555) 555-5555" type="tel" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div><div class="fg"><label>Email</label><input id="nc-e" placeholder="email@example.com" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div><div class="fg"><label>'+t('ciDOT')+'</label><input id="nc-d" placeholder="DOT number" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div></div>','<button class="btn bl" onclick="var n=gv(\'nc-n\');if(!n){alert(\'Enter name\');return;}CUST.push({name:n,phone:gv(\'nc-p\'),email:gv(\'nc-e\'),dot:gv(\'nc-d\'),units:[],jobs:0,lastVisit:td()});saveAll();cM();rCUST();rDash()">Add</button><button class="btn" onclick="cM()">Cancel</button>');}
+function custPrefRows(prefix,p){
+  p=p||{};
+  var rows=[['auth','Is Default Authorizer'],['bill','Is Billing Contact'],['est','Receive & Authorize Estimates'],['inv','Receive Invoices'],['stmt','Receive Statements'],['rcpt','Receive Payment Receipts']];
+  return rows.map(function(r){var on=p[r[0]]!==false;return'<label style="display:flex;align-items:center;justify-content:space-between;background:'+(on?'#185FA5':'#f0f0f2')+';color:'+(on?'#fff':'#555')+';border-radius:8px;padding:9px 12px;font-size:13px;font-weight:500;margin-bottom:6px;cursor:pointer;transition:background .15s"><span>'+r[1]+'</span><input type="checkbox" id="'+prefix+r[0]+'" '+(on?'checked':'')+' onchange="this.parentElement.style.background=this.checked?\'#185FA5\':\'#f0f0f2\';this.parentElement.style.color=this.checked?\'#fff\':\'#555\'" style="width:17px;height:17px"></label>';}).join('');
+}
+function readPrefs(prefix){
+  var keys=['auth','bill','est','inv','stmt','rcpt'],p={};
+  keys.forEach(function(k){var e2=el(prefix+k);p[k]=e2?e2.checked:true;});
+  return p;
+}
+function custContactName(c){return c?((c.contactFirst||'')+' '+(c.contactLast||'')).trim():'';}
+function nCust(){
+  var F='style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%;font-family:inherit"';
+  oM('New Customer',
+    '<div class="g2">'
+    +'<div class="fg full"><label>Company / Name *</label><input id="nc-n" placeholder="Smith Trucking LLC" '+F+'></div>'
+    +'<div class="fg"><label>Contact First Name</label><input id="nc-cf" placeholder="First" '+F+'></div>'
+    +'<div class="fg"><label>Contact Last Name</label><input id="nc-cl" placeholder="Last" '+F+'></div>'
+    +'<div class="fg"><label>Phone</label><input id="nc-p" placeholder="(555) 555-5555" type="tel" '+F+'></div>'
+    +'<div class="fg"><label>Cell Phone</label><input id="nc-cell" placeholder="(555) 555-5555" type="tel" '+F+'></div>'
+    +'<div class="fg"><label>Email</label><input id="nc-e" placeholder="email@example.com" '+F+'></div>'
+    +'<div class="fg"><label>'+t('ciDOT')+'</label><input id="nc-d" placeholder="DOT number" '+F+'></div>'
+    +'<div class="fg"><label>MC #</label><input id="nc-mc" placeholder="MC number" '+F+'></div>'
+    +'</div>'
+    +'<div style="font-size:12px;font-weight:600;margin:10px 0 8px;color:#555;text-transform:uppercase;letter-spacing:0.5px">Contact Preferences</div>'
+    +custPrefRows('nc2-'),
+    '<button class="btn bl" onclick="svNCust()">Add Customer</button><button class="btn" onclick="cM()">Cancel</button>');
+}
+function svNCust(){
+  var n=gv('nc-n');if(!n){alert('Enter name');return;}
+  CUST.push({name:n,contactFirst:gv('nc-cf'),contactLast:gv('nc-cl'),phone:gv('nc-p'),cell:gv('nc-cell'),email:gv('nc-e'),dot:gv('nc-d'),mc:gv('nc-mc'),prefs:readPrefs('nc2-'),units:[],jobs:0,lastVisit:td()});
+  saveAll();cM();rCUST();rDash();
+}
 
 function goPartsTab(){rParts('parts');}
 function goVendorsTab(){rParts('vendors');}
@@ -6213,6 +6313,11 @@ function custContact(name,fallbackPhone,fallbackEmail){
 }
 function autoNotify(evt,d){
   if(shop.autoNotify===false||!d)return;
+  var _co=CUST.find(function(c){return c.name===d.customer;});
+  if(_co&&_co.prefs){
+    if(evt==='estimate_ready'&&_co.prefs.est===false)return;
+    if(evt==='invoice_paid'&&_co.prefs.rcpt===false)return;
+  }
   var ct=custContact(d.customer,d.phone,d.email);
   var msg='',subj='';
   if(evt==='wo_created'){msg='Hi '+d.customer+', your '+(d.vehicle||'truck')+' has been checked in at '+shop.name+'. Work Order #'+d.ticket+'. We will keep you updated. Questions? Call '+shop.phone;subj='Checked In - Work Order #'+d.ticket;}
