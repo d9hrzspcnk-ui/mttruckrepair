@@ -1480,16 +1480,32 @@ function aiLoading(el,msg){
 function aiDone(el){if(el){el.innerHTML=el._orig||'';el.disabled=false;}}
 
 // ── 1. DIAGNOSTIC CODE LOOKUP ──────────────────────────────
-function aiDiagCodeBtn(code,veh){aiDiagCode(code,veh);}
-function aiDiagCode(code, vehicle){
+function aiDiagCodeBtn(code,veh,eng){aiDiagCode(code,veh,eng);}
+function tpQuickLookup(vehicle){
+  var inp=el('tp-code-inp');
+  var code=inp?inp.value.trim().toUpperCase():'';
+  if(!code){alert('Type a fault code first, then tap Lookup.');return;}
+  var engSel=el('tp-code-eng');
+  aiDiagCode(code,vehicle,engSel?engSel.value:'');
+}
+function aiDiagCode(code, vehicle, engine){
   var btn=event.target;
   aiLoading(btn,'Looking up...');
-  var prompt='You are a diesel truck mechanic expert. Explain fault code "'+code+'" for a '+( vehicle||'diesel truck')+'. Return in this exact format:\n\nWHAT IT MEANS:\n(one sentence)\n\nCOMMON CAUSES:\n- cause 1\n- cause 2\n- cause 3\n\nRECOMMENDED FIX:\n(brief action)\n\nURGENCY: (Low/Medium/High/Critical)';
+  if(!engine){var es=el('tp-code-eng');if(es)engine=es.value;}
+  var prompt='You are a master heavy-duty diesel technician at a truck and trailer repair shop. Look up fault code "'+code+'".\n'
+    +'Vehicle: '+(vehicle||'heavy-duty diesel truck')+'\n'
+    +'Engine: '+(engine||'unknown heavy-duty diesel engine')+'\n\n'
+    +'CRITICAL RULES:\n'
+    +'1. This is a HEAVY-DUTY DIESEL shop. If the code is a bare number (like 272, 3251, 1922), treat it as the engine manufacturer PROPRIETARY fault code for the engine listed above (e.g. a Cummins fault code from INSITE/QuickServe) or a J1939 SPN — NOT an automotive OBD-II P-code. Do NOT add a P prefix to a bare number.\n'
+    +'2. Only treat it as OBD-II if it literally starts with P, B, C, or U.\n'
+    +'3. If you are NOT confident what this exact code means on this exact engine, say "NOT CONFIRMED — verify in official service software" at the top, give your best interpretation labeled as such, and do not present a guess as fact.\n\n'
+    +'Return in this exact format:\n\nCODE SYSTEM:\n(Cummins proprietary / J1939 SPN-FMI / OBD-II / etc.)\n\nWHAT IT MEANS:\n(one or two sentences)\n\nCOMMON CAUSES:\n- cause 1\n- cause 2\n- cause 3\n\nRECOMMENDED FIX:\n(brief action)\n\nURGENCY: (Low/Medium/High/Critical)';
   callClaude(prompt).then(function(result){
     aiDone(btn);
     if(!result)return;
-    oM('Fault Code: '+code,
-      '<div style="background:#f5f5f7;border-radius:8px;padding:12px;font-size:13px;line-height:1.7;white-space:pre-wrap">'+result+'</div>',
+    oM('Fault Code: '+code+(engine?' — '+engine:''),
+      '<div style="background:#f5f5f7;border-radius:8px;padding:12px;font-size:13px;line-height:1.7;white-space:pre-wrap">'+result+'</div>'
+      +'<div style="font-size:11px;color:#888;margin-top:8px"><i class="ti ti-alert-triangle" style="vertical-align:-1px"></i> AI lookup — always confirm in official service software before major repairs.</div>',
       '<button class="btn bl" onclick="cM()">Got it</button>'
     );
   });
@@ -1529,7 +1545,7 @@ function aiJobSummary(woId){
     oM('Job Summary — SO #'+w.ticket,
       '<div style="background:#f5f5f7;border-radius:8px;padding:12px;font-size:14px;line-height:1.7" id="ai-summary-txt">'+result+'</div>'
       +'<div style="font-size:12px;color:#888;margin-top:6px">You can copy this to the work order notes or invoice.</div>',
-      +'<button class="btn bl" onclick="saveAISummary('+woId+')" style=""><i class="ti ti-check"></i>Save to Notes</button>'
+      '<button class="btn bl" onclick="saveAISummary('+woId+')" style=""><i class="ti ti-check"></i>Save to Notes</button>'
       +'<button class="btn" onclick="cM()">Close</button>'
     );
   });
@@ -2577,6 +2593,10 @@ function rSet(){
     +'<button onclick="toggleAIKeyVis()" style="padding:8px 12px;background:#f5f5f7;border:0.5px solid var(--bd);border-radius:8px;cursor:pointer;font-size:18px">👁</button>'
     +'</div>'
     +'<div style="font-size:11px;color:#888;margin-top:4px">Your key is saved to your private Supabase database and never shared.</div>'
+    +'</div>'
+    +'<div class="fg" style="margin-top:10px"><label>Fault Code Reference Website (optional)</label>'
+    +'<input id="s-codeurl" value="'+(shop.codeUrl||'')+'" placeholder="https://... (e.g. your Cummins code site)" style="width:100%;padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7">'
+    +'<div style="font-size:11px;color:#888;margin-top:4px">Techs get a button in the Codes tab that opens this site for official code documentation.</div>'
     +'</div></div>'
     +'<button class="btn bl" style="width:100%;justify-content:center;padding:14px;font-size:15px" onclick="saveSet()"><i class="ti ti-check"></i>Save All Settings</button>';
   rTechs();rVendors();setTimeout(rMarkupTiers,100);
@@ -2850,7 +2870,7 @@ function saveSet(){shop.name=gv('sn')||shop.name;shop.phone=gv('sp');shop.email=
   var sc=el('s-cashapp');if(sc)shop.cashapp=sc.value.trim();
   var sp2=el('s-paypal');if(sp2)shop.paypal=sp2.value.trim();
   var an=el('s-autonotif');if(an)shop.autoNotify=an.checked;
-  var aik=el('s-aikey');if(aik&&aik.value.trim())shop.aiKey=aik.value.trim();var p1=gv('np1'),p2=gv('np2');if(p1){if(p1.length!==4||!/^\d+$/.test(p1)){alert('PIN must be 4 digits');return;}if(p1!==p2){alert('PINs do not match');return;}PIN=p1;el('np1').value='';el('np2').value='';}el('h-addr').textContent=shop.addr;saveAll();alert('Settings saved!');}
+  var aik=el('s-aikey');if(aik&&aik.value.trim())shop.aiKey=aik.value.trim();var curl=el('s-codeurl');if(curl)shop.codeUrl=curl.value.trim();var p1=gv('np1'),p2=gv('np2');if(p1){if(p1.length!==4||!/^\d+$/.test(p1)){alert('PIN must be 4 digits');return;}if(p1!==p2){alert('PINs do not match');return;}PIN=p1;el('np1').value='';el('np2').value='';}el('h-addr').textContent=shop.addr;saveAll();alert('Settings saved!');}
 
 function buildCI(){
   el('ci-body').innerHTML='<div style="text-align:center;margin-bottom:16px"><h2 style="font-size:20px;font-weight:600">'+t('ciTitle')+'</h2><p style="font-size:13px;color:#888;margin-top:4px">'+t('ciSub')+'</p></div>'
@@ -5004,14 +5024,17 @@ function tpRenderWO(){
     h+='<input id="tp-diag-inp" type="file" accept="image/*" capture="environment" style="display:none" onchange="tpAddDiagPhoto(this)">'
       +'<div style="background:#fff;border-radius:12px;padding:12px 14px;margin-bottom:10px">'
       +'<div style="font-size:13px;font-weight:500;color:#3C3489;margin-bottom:8px">Log Diagnostic Code</div>'
-      +'<div style="display:flex;gap:8px;margin-bottom:8px"><input id="tp-code-inp" placeholder="e.g. P0401, SPN 3251..." style="flex:1;padding:9px 10px;font-size:13px;border-radius:8px;border:0.5px solid rgba(0,0,0,0.15);background:#f5f5f7;font-family:inherit;text-transform:uppercase">'
+      +(function(){var truckEng=(w.unit&&w.unit.engine)?w.unit.engine:'';var engs=['Cummins ISX / X15','Cummins ISB / B6.7','Cummins ISL / L9','Detroit DD13 / DD15','Paccar MX-13','Volvo D13','Mack MP8','International A26','Caterpillar','Generic OBD-II / Car-style code (P0xxx)','Unknown engine'];var o='';if(truckEng&&engs.indexOf(truckEng)===-1)o+='<option selected>'+truckEng+'</option>';engs.forEach(function(e2){o+='<option'+(e2===truckEng?' selected':'')+'>'+e2+'</option>';});return'<select id="tp-code-eng" style="width:100%;padding:9px 10px;font-size:13px;border-radius:8px;border:0.5px solid rgba(0,0,0,0.15);background:#f5f5f7;font-family:inherit;margin-bottom:8px">'+o+'</select>';})()
+      +'<div style="display:flex;gap:8px;margin-bottom:8px"><input id="tp-code-inp" placeholder="e.g. 272, SPN 3251, P0401..." style="flex:1;padding:9px 10px;font-size:13px;border-radius:8px;border:0.5px solid rgba(0,0,0,0.15);background:#f5f5f7;font-family:inherit;text-transform:uppercase">'
+      +'<button onclick="tpQuickLookup(\''+(w.vehicle||'').replace(/'/g,'')+'\')" style="background:#EEEDFE;color:#3C3489;border:1px solid #534AB7;border-radius:8px;padding:9px 12px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;white-space:nowrap"><i class="ti ti-robot" style="font-size:13px"></i> Lookup</button>'
       +'<button onclick="tpAddCode()" style="background:#534AB7;color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit">Add</button></div>'
       +'<input id="tp-code-note" placeholder="Note — what did you observe? (optional)" style="width:100%;padding:9px 10px;font-size:13px;border-radius:8px;border:0.5px solid rgba(0,0,0,0.15);background:#f5f5f7;font-family:inherit"></div>'
+      +(shop.codeUrl?'<button onclick="window.open(shop.codeUrl,\'_blank\')" style="background:#fff;color:#B5341C;border:1px solid #B5341C;border-radius:10px;padding:10px 16px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px;justify-content:center;width:100%;margin-bottom:12px;font-family:inherit"><i class="ti ti-external-link"></i>Cummins Code Reference Site</button>':'')
       +'<button onclick="tpDiagClick()" style="background:#EEEDFE;color:#3C3489;border:1px solid #534AB7;border-radius:10px;padding:10px 16px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px;justify-content:center;width:100%;margin-bottom:12px;font-family:inherit"><i class="ti ti-camera"></i>Photo of Diagnostic Screen</button>';
     if(diagPhs.length){h+='<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;margin:4px 0 6px">Screen Photos ('+diagPhs.length+')</div><div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:10px">';diagPhs.forEach(function(src){h+='<img src="'+src+'" style="width:84px;height:84px;object-fit:cover;border-radius:8px;flex-shrink:0;border:2px solid #534AB7">';});h+='</div>';}
     if(wCodes.length){
       h+='<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;margin:4px 0 6px">Logged Codes ('+wCodes.length+')</div>';
-      wCodes.forEach(function(code,i){h+='<div style="background:#fff;border-radius:10px;padding:10px 12px;margin-bottom:7px;border-left:3px solid #534AB7;border-top:0.5px solid rgba(0,0,0,0.08);border-right:0.5px solid rgba(0,0,0,0.08);border-bottom:0.5px solid rgba(0,0,0,0.08)"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:600;font-size:15px;color:#3C3489;letter-spacing:1px">'+code.code+'</div>'+(code.note?'<div style="font-size:12px;color:#888;margin-top:1px">'+code.note+'</div>':'')+'<div style="font-size:11px;color:#aaa;margin-top:1px">'+code.time+'</div></div><div style="display:flex;gap:6px;align-items:center"><button onclick="aiDiagCodeBtn(this.dataset.code,this.dataset.veh)" data-code="'+code.code+'" data-veh="'+(w.vehicle||'')+'"" style="background:#EEEDFE;color:#3C3489;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;font-weight:500;font-family:inherit"><i class="ti ti-robot" style="font-size:12px"></i> AI</button><button onclick="TECH_CODES['+w.id+'].splice('+i+',1);saveAll();tpRenderWO()" style="background:transparent;border:none;color:#888;cursor:pointer;font-size:18px;padding:4px">×</button></div></div></div>';});
+      wCodes.forEach(function(code,i){h+='<div style="background:#fff;border-radius:10px;padding:10px 12px;margin-bottom:7px;border-left:3px solid #534AB7;border-top:0.5px solid rgba(0,0,0,0.08);border-right:0.5px solid rgba(0,0,0,0.08);border-bottom:0.5px solid rgba(0,0,0,0.08)"><div style="display:flex;justify-content:space-between;align-items:center"><div><div style="font-weight:600;font-size:15px;color:#3C3489;letter-spacing:1px">'+code.code+'</div>'+(code.note?'<div style="font-size:12px;color:#888;margin-top:1px">'+code.note+'</div>':'')+'<div style="font-size:11px;color:#aaa;margin-top:1px">'+code.time+'</div></div><div style="display:flex;gap:6px;align-items:center"><button onclick="aiDiagCodeBtn(this.dataset.code,this.dataset.veh)" data-code="'+code.code+'" data-veh="'+(w.vehicle||'')+'" style="background:#EEEDFE;color:#3C3489;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;font-weight:500;font-family:inherit"><i class="ti ti-robot" style="font-size:12px"></i> AI</button><button onclick="TECH_CODES['+w.id+'].splice('+i+',1);saveAll();tpRenderWO()" style="background:transparent;border:none;color:#888;cursor:pointer;font-size:18px;padding:4px">×</button></div></div></div>';});
     } else if(!diagPhs.length) h+='<div style="font-size:13px;color:#888;padding:10px;background:#f5f5f7;border-radius:8px;text-align:center">No codes logged yet</div>';
   }
   if(TP_TAB==='parts'){
