@@ -716,7 +716,7 @@ function walkAround(wid){
     // Mileage & VIN
     +'<div class="g2" style="margin-bottom:12px">'
     +'<div class="fg" style="margin-bottom:0"><label>Mileage at Drop-Off *</label><input id="wa-miles" type="number" value="'+(wa.miles||w.unit&&w.unit.miles||'')+'" placeholder="Current odometer" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%;font-family:inherit"></div>'
-    +'<div class="fg" style="margin-bottom:0"><label>VIN Confirmed</label><div style="display:flex;gap:5px"><input id="wa-vin" value="'+(wa.vin||w.unit&&w.unit.vin||'')+'" placeholder="17-digit VIN" style="flex:1;padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;font-family:inherit"><button type="button" onclick="vinQuickLookup(this.dataset.f)" data-f="wa-vin" style="padding:7px 12px;background:#185FA5;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit"><i class=ti ti-search></i> Lookup</button></div></div>'
+    +'<div class="fg" style="margin-bottom:0"><label>VIN Confirmed</label><div style="display:flex;gap:5px"><input id="wa-vin" value="'+(wa.vin||w.unit&&w.unit.vin||'')+'" placeholder="17-digit VIN" style="flex:1;padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;font-family:inherit"><button type="button" onclick="scanVINBtn(this.dataset.f)" data-f="wa-vin" title="Scan VIN barcode" style="padding:7px 11px;background:#534AB7;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-family:inherit"><i class="ti ti-scan"></i></button><button type="button" onclick="vinQuickLookup(this.dataset.f)" data-f="wa-vin" style="padding:7px 12px;background:#185FA5;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit"><i class=ti ti-search></i> Lookup</button></div></div>'
     +'</div>'
     // Photos grid
     +'<div style="font-size:12px;font-weight:600;color:#555;margin-bottom:8px"><i class="ti ti-camera"></i> Vehicle Photos ('+takenCount+'/4) — date/time stamped automatically</div>'
@@ -938,7 +938,7 @@ function quickAddNewPartToWO(wid,code){
 }
 function toInv(wid){
   var w=WO[wid];var s=calcS(w);
-  INV.push({id:INV.length,num:invc++,customer:w.customer,phone:w.phone||'',vehicle:w.vehicle||'',woTicket:w.ticket,labor:s.l,parts:s.p,supplies:s.sup,subtotal:s.sub,tax:s.tax,total:s.tot,status:'Unpaid',payment:'',date:td(),lines:JSON.parse(JSON.stringify(w.lines||[]))});
+  INV.push({id:INV.length,num:invc++,customer:w.customer,phone:w.phone||'',vehicle:w.vehicle||'',vin:(w.unit&&w.unit.vin)||'',woTicket:w.ticket,labor:s.l,parts:s.p,supplies:s.sup,subtotal:s.sub,tax:s.tax,total:s.tot,status:'Unpaid',payment:'',date:td(),lines:JSON.parse(JSON.stringify(w.lines||[]))});
   w.status='Completed';var cx=CUST.find(function(c){return c.name===w.customer;});if(cx)cx.jobs=(cx.jobs||0)+1;
   saveAll();cM();alert('Invoice #'+(invc-1)+' created! Total: $'+s.tot);goP('i');
 }
@@ -947,11 +947,14 @@ function nWO(){
   oM('New Service Order',
     '<div class="fg"><label>Customer</label><select id="nw-c" style="padding:8px 10px;font-size:13px;border:0.5px solid var(--bd);border-radius:8px;font-family:inherit;background:#f5f5f7;width:100%">'+cO+'</select></div>'
     +'<div class="fg"><label>Or new customer name</label><input id="nw-n" placeholder="Customer name" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
+    +'<div class="fg"><label>VIN — auto-fills vehicle info</label><div style="display:flex;gap:5px"><input id="nw-vin" placeholder="17-digit VIN" style="flex:1;padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;font-family:inherit;text-transform:uppercase"><button type="button" onclick="scanVINBtn(this.dataset.f)" data-f="nw-vin" title="Scan VIN barcode" style="padding:7px 11px;background:#534AB7;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-family:inherit"><i class="ti ti-scan"></i></button><button type="button" onclick="nwVINLookup()" style="padding:7px 12px;background:#185FA5;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;white-space:nowrap"><i class="ti ti-search"></i> Decode</button></div></div>'
     +'<div class="fg"><label>Vehicle</label><input id="nw-v" placeholder="Year Make Model" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>Complaint</label><textarea id="nw-d" placeholder="Describe the work..." style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%;min-height:65px;font-family:inherit;resize:vertical"></textarea></div>',
     '<button class="btn bl" onclick="svNWO()">Create</button><button class="btn" onclick="cM()">Cancel</button>');
 }
-function svNWO(){var sel=el('nw-c');var ci=sel?parseInt(sel.value):NaN;var cn=gv('nw-n')||(!isNaN(ci)&&CUST[ci]?CUST[ci].name:'');if(!cn){alert('Enter customer');return;}WO.push({id:WO.length,ticket:woc++,custId:isNaN(ci)?undefined:ci,customer:cn,vehicle:gv('nw-v'),complaint:gv('nw-d')||'Service',status:'Open',tech:'',date:td(),notes:'',lines:[],isNew:false,authorizer:'',poNum:'',custPO:''});saveAll();cM();rWO();rDash();autoNotify('wo_created',WO[WO.length-1]);}
+var _nwUnit=null;
+function nwVINLookup(){vinQuickLookup('nw-vin');}
+function svNWO(){var sel=el('nw-c');var ci=sel?parseInt(sel.value):NaN;var cn=gv('nw-n')||(!isNaN(ci)&&CUST[ci]?CUST[ci].name:'');if(!cn){alert('Enter customer');return;}var nwvin=(gv('nw-vin')||'').trim().toUpperCase();var nwUnit=(_nwUnit&&_nwUnit.vin===nwvin)?_nwUnit:(nwvin?{vin:nwvin}:{});_nwUnit=null;if(nwvin&&!isNaN(ci)&&CUST[ci]){CUST[ci].units=CUST[ci].units||[];if(!CUST[ci].units.find(function(u){return u.vin===nwvin;}))CUST[ci].units.push(nwUnit);}WO.push({id:WO.length,ticket:woc++,custId:isNaN(ci)?undefined:ci,customer:cn,vehicle:gv('nw-v'),unit:nwUnit,complaint:gv('nw-d')||'Service',status:'Open',tech:'',date:td(),notes:'',lines:[],isNew:false,authorizer:'',poNum:'',custPO:''});saveAll();cM();rWO();rDash();autoNotify('wo_created',WO[WO.length-1]);}
 function prtWO(id){var w=WO[id];var s=calcS(w);var lh=(w.lines||[]).map(function(l){if(l.type==='labor')return'<tr><td>Labor</td><td>'+l.desc+'</td><td>'+l.hrs+'hrs</td><td>$'+l.rate+'/hr</td><td>'+fm(l.subtotal)+'</td></tr>';if(l.type==='part')return'<tr><td>Part</td><td>'+(l.partNum?l.partNum+': ':'')+l.desc+'</td><td>'+l.qty+'</td><td>'+fm(l.sell)+'</td><td>'+fm(l.subtotal)+'</td></tr>';return'<tr><td>Svc</td><td>'+l.desc+'</td><td>1</td><td>'+fm(l.rate)+'</td><td>'+fm(l.subtotal)+'</td></tr>';}).join('');
 var allSvcs=['Diagnostic','Oil Change','90-Day Inspection','Annual Inspection'];
 var chkHtml=allSvcs.map(function(s){var checked=(w.checklist||[]).indexOf(s)!==-1;return'<div style="display:inline-flex;align-items:center;gap:8px;margin:4px 12px 4px 0"><span style="display:inline-block;width:18px;height:18px;border:2px solid #333;border-radius:3px;text-align:center;font-size:13px;line-height:16px">'+(checked?'✓':'')+'</span><span style="font-size:13px">'+s+'</span></div>';}).join('');
@@ -1851,10 +1854,10 @@ function rINV(){
   el('pg-body').innerHTML='<div class="sr"><i class="ti ti-search" style="color:#888"></i><input placeholder="Search..." oninput="fINV(this.value)"></div><div class="tbl"><table><thead><tr><th>Inv#</th><th>Customer</th><th>Vehicle</th><th>Labor</th><th>Parts</th><th>Tax</th><th>Total</th><th>Payment</th><th>Status</th><th></th></tr></thead><tbody id="inv-tb">'+rows+'</tbody></table></div>';
 }
 function fINV(q){var r=el('inv-tb');if(!r)return;r.innerHTML=INV.filter(function(i){return i.customer.toLowerCase().includes(q.toLowerCase())||String(i.num).includes(q);}).map(function(i){return'<tr><td style="padding:7px 9px;color:#185FA5;font-weight:600">#'+i.num+'</td><td style="padding:7px 9px">'+i.customer+'</td><td style="padding:7px 9px;font-size:11px">'+(i.vehicle||'—')+'</td><td style="padding:7px 9px">'+fm(parseFloat(i.labor)||0)+'</td><td style="padding:7px 9px">'+fm(parseFloat(i.parts)||0)+'</td><td style="padding:7px 9px">'+fm(parseFloat(i.tax)||0)+'</td><td style="padding:7px 9px;font-weight:600">'+fm(parseFloat(i.total)||0)+'</td><td style="padding:7px 9px">'+(i.payment||'—')+'</td><td style="padding:7px 9px">'+bdg(i.status)+'</td><td style="padding:7px 9px"><button class="btn xs" onclick="vInv('+i.id+')">View</button></td></tr>';}).join('');}
-function vInv(id){var i=INV[id];var ll=(i.lines||[]).filter(function(l){return l.type==='labor';}).map(function(l){return'<tr><td style="padding:6px 9px">'+(l.desc||'')+'</td><td style="padding:6px 9px">'+l.hrs+'hrs @ $'+l.rate+'</td><td style="padding:6px 9px;font-weight:600">'+fm(l.subtotal)+'</td></tr>';}).join('');var pl=(i.lines||[]).filter(function(l){return l.type==='part';}).map(function(l){return'<tr><td style="padding:6px 9px">'+(l.partNum?l.partNum+': ':'')+l.desc+'</td><td style="padding:6px 9px">'+l.qty+' x '+fm(l.sell)+'</td><td style="padding:6px 9px;font-weight:600">'+fm(l.subtotal)+'</td></tr>';}).join('');oM('Invoice #'+i.num,'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-bottom:10px;margin-bottom:10px;border-bottom:0.5px solid var(--bd)"><div><strong>'+shop.name+'</strong><br>'+shop.phone+'<br>'+shop.addr+'</div><div style="text-align:right">Invoice #'+i.num+'<br>'+i.date+'<br>'+bdg(i.status)+'</div></div><div style="background:#f5f5f7;padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:10px"><strong>Bill To:</strong> '+i.customer+' | '+(i.vehicle||'—')+'</div>'+(ll?'<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;margin-bottom:5px">Labor</div><div class="tbl"><table><thead><tr><th>Description</th><th>Detail</th><th>Total</th></tr></thead><tbody>'+ll+'</tbody></table></div>':'')+(pl?'<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;margin:8px 0 5px">Parts</div><div class="tbl"><table><thead><tr><th>Part</th><th>Qty/Price</th><th>Total</th></tr></thead><tbody>'+pl+'</tbody></table></div>':'')+'<div style="text-align:right;padding-top:8px;border-top:0.5px solid var(--bd);margin-top:8px"><div style="font-size:13px;color:#888">Labor: '+fm(parseFloat(i.labor)||0)+' | Parts: '+fm(parseFloat(i.parts)||0)+' | Tax: '+fm(parseFloat(i.tax)||0)+'</div><div style="font-size:18px;font-weight:700;color:#185FA5;margin-top:3px">Total: '+fm(parseFloat(i.total)||0)+'</div></div>','<button class="btn" onclick="cM();eInv('+id+')"><i class="ti ti-edit"></i>Edit</button><button class="btn gr" onclick="prtInv('+id+')"><i class="ti ti-printer"></i>Print</button><button class="btn bl" onclick="sndInv('+id+')"><i class="ti ti-send"></i>Send</button>'+(i.status!=='Paid'?'<button class="btn bl" onclick="cM();markPaid('+id+')">Mark Paid</button>':'')+'<button class="btn" onclick="cM()">Close</button>');}
+function vInv(id){var i=INV[id];var ll=(i.lines||[]).filter(function(l){return l.type==='labor';}).map(function(l){return'<tr><td style="padding:6px 9px">'+(l.desc||'')+'</td><td style="padding:6px 9px">'+l.hrs+'hrs @ $'+l.rate+'</td><td style="padding:6px 9px;font-weight:600">'+fm(l.subtotal)+'</td></tr>';}).join('');var pl=(i.lines||[]).filter(function(l){return l.type==='part';}).map(function(l){return'<tr><td style="padding:6px 9px">'+(l.partNum?l.partNum+': ':'')+l.desc+'</td><td style="padding:6px 9px">'+l.qty+' x '+fm(l.sell)+'</td><td style="padding:6px 9px;font-weight:600">'+fm(l.subtotal)+'</td></tr>';}).join('');oM('Invoice #'+i.num,'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-bottom:10px;margin-bottom:10px;border-bottom:0.5px solid var(--bd)"><div><strong>'+shop.name+'</strong><br>'+shop.phone+'<br>'+shop.addr+'</div><div style="text-align:right">Invoice #'+i.num+'<br>'+i.date+'<br>'+bdg(i.status)+'</div></div><div style="background:#f5f5f7;padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:10px"><strong>Bill To:</strong> '+i.customer+' | '+(i.vehicle||'—')+(invVIN(i)?'<br><strong>VIN:</strong> '+invVIN(i):'')+'</div>'+(ll?'<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;margin-bottom:5px">Labor</div><div class="tbl"><table><thead><tr><th>Description</th><th>Detail</th><th>Total</th></tr></thead><tbody>'+ll+'</tbody></table></div>':'')+(pl?'<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;margin:8px 0 5px">Parts</div><div class="tbl"><table><thead><tr><th>Part</th><th>Qty/Price</th><th>Total</th></tr></thead><tbody>'+pl+'</tbody></table></div>':'')+'<div style="text-align:right;padding-top:8px;border-top:0.5px solid var(--bd);margin-top:8px"><div style="font-size:13px;color:#888">Labor: '+fm(parseFloat(i.labor)||0)+' | Parts: '+fm(parseFloat(i.parts)||0)+' | Tax: '+fm(parseFloat(i.tax)||0)+'</div><div style="font-size:18px;font-weight:700;color:#185FA5;margin-top:3px">Total: '+fm(parseFloat(i.total)||0)+'</div></div>','<button class="btn" onclick="cM();eInv('+id+')"><i class="ti ti-edit"></i>Edit</button><button class="btn gr" onclick="prtInv('+id+')"><i class="ti ti-printer"></i>Print</button><button class="btn bl" onclick="sndInv('+id+')"><i class="ti ti-send"></i>Send</button>'+(i.status!=='Paid'?'<button class="btn bl" onclick="cM();markPaid('+id+')">Mark Paid</button>':'')+'<button class="btn" onclick="cM()">Close</button>');}
 function nInv(){oM('New Invoice','<div class="g2"><div class="fg full"><label>Customer</label><input id="ni-c" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%" placeholder="Customer name"></div><div class="fg full"><label>Vehicle</label><input id="ni-v" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%" placeholder="Year Make Model"></div><div class="fg"><label>Labor ($)</label><input id="ni-l" type="number" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%" placeholder="0.00"></div><div class="fg"><label>Parts ($)</label><input id="ni-p" type="number" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%" placeholder="0.00"></div></div>','<button class="btn bl" onclick="svNI()">Create</button><button class="btn" onclick="cM()">Cancel</button>');}
 function svNI(){var c=gv('ni-c');if(!c){alert('Enter customer');return;}var l=parseFloat(el('ni-l').value)||0,p=parseFloat(el('ni-p').value)||0;var sub=l+p,tax=parseFloat((sub*shop.taxRate/100).toFixed(2));INV.push({id:INV.length,num:invc++,customer:c,vehicle:gv('ni-v'),labor:l.toFixed(2),parts:p.toFixed(2),supplies:'0.00',subtotal:sub.toFixed(2),tax:tax.toFixed(2),total:(sub+tax).toFixed(2),status:'Unpaid',payment:'',date:td(),lines:[],woTicket:'—'});saveAll();cM();rINV();rDash();}
-function prtInv(id){var i=INV[id];var ll=(i.lines||[]).filter(function(l){return l.type==='labor';}).map(function(l){return'<tr><td>Labor</td><td>'+(l.desc||'')+'</td><td>'+l.hrs+'hrs</td><td>$'+l.rate+'/hr</td><td>'+fm(l.subtotal)+'</td></tr>';}).join('');var pl=(i.lines||[]).filter(function(l){return l.type==='part';}).map(function(l){return'<tr><td>Part</td><td>'+(l.partNum?l.partNum+': ':'')+l.desc+'</td><td>'+l.qty+'</td><td>'+fm(l.sell)+'</td><td>'+fm(l.subtotal)+'</td></tr>';}).join('');var win=window.open('','_blank');win.document.write('<!DOCTYPE html><html><head><title>Invoice #'+i.num+'</title><style>body{font-family:Arial;padding:24px;font-size:13px}table{width:100%;border-collapse:collapse;margin:10px 0}th{background:#f0f0f0;padding:6px 8px;text-align:left;font-size:11px;text-transform:uppercase}td{padding:6px 8px;border-bottom:1px solid #eee}.hdr{display:flex;justify-content:space-between;margin-bottom:14px;padding-bottom:12px;border-bottom:3px solid #185FA5}.big{font-size:18px;font-weight:bold;color:#185FA5}</style></head><body><div class="hdr"><div><h2 style="color:#185FA5;margin:0">'+shop.name+'</h2><div>'+shop.phone+'</div><div>'+shop.addr+'</div><div>'+shop.email+'</div></div><div style="text-align:right"><div style="font-size:20px;font-weight:bold">INVOICE #'+i.num+'</div><div>Date: '+i.date+'</div><div><strong>'+i.status+'</strong></div></div></div><div style="background:#f8f8f8;padding:8px 12px;border-radius:4px;margin-bottom:12px"><strong>Bill To:</strong> '+i.customer+'<br>Vehicle: '+(i.vehicle||'—')+'</div>'+(ll||pl?'<table><thead><tr><th>Type</th><th>Description</th><th>Qty/Hrs</th><th>Price</th><th>Total</th></tr></thead><tbody>'+ll+pl+'</tbody></table>':'')+'<div style="text-align:right;margin-top:10px"><div>Labor: '+fm(parseFloat(i.labor)||0)+' | Parts: '+fm(parseFloat(i.parts)||0)+' | Supplies: '+fm(i.supplies||0)+'</div><div>Tax: '+fm(parseFloat(i.tax)||0)+'</div><div class="big">TOTAL DUE: '+fm(parseFloat(i.total)||0)+'</div></div><p style="font-size:11px;color:#666;margin-top:14px;border-top:1px solid #ddd;padding-top:10px">'+shop.terms+'</p><scr'+'ipt>window.print();<\/scr'+'ipt></body></html>');win.document.close();}
+function prtInv(id){var i=INV[id];var ll=(i.lines||[]).filter(function(l){return l.type==='labor';}).map(function(l){return'<tr><td>Labor</td><td>'+(l.desc||'')+'</td><td>'+l.hrs+'hrs</td><td>$'+l.rate+'/hr</td><td>'+fm(l.subtotal)+'</td></tr>';}).join('');var pl=(i.lines||[]).filter(function(l){return l.type==='part';}).map(function(l){return'<tr><td>Part</td><td>'+(l.partNum?l.partNum+': ':'')+l.desc+'</td><td>'+l.qty+'</td><td>'+fm(l.sell)+'</td><td>'+fm(l.subtotal)+'</td></tr>';}).join('');var win=window.open('','_blank');win.document.write('<!DOCTYPE html><html><head><title>Invoice #'+i.num+'</title><style>body{font-family:Arial;padding:24px;font-size:13px}table{width:100%;border-collapse:collapse;margin:10px 0}th{background:#f0f0f0;padding:6px 8px;text-align:left;font-size:11px;text-transform:uppercase}td{padding:6px 8px;border-bottom:1px solid #eee}.hdr{display:flex;justify-content:space-between;margin-bottom:14px;padding-bottom:12px;border-bottom:3px solid #185FA5}.big{font-size:18px;font-weight:bold;color:#185FA5}</style></head><body><div class="hdr"><div><h2 style="color:#185FA5;margin:0">'+shop.name+'</h2><div>'+shop.phone+'</div><div>'+shop.addr+'</div><div>'+shop.email+'</div></div><div style="text-align:right"><div style="font-size:20px;font-weight:bold">INVOICE #'+i.num+'</div><div>Date: '+i.date+'</div><div><strong>'+i.status+'</strong></div></div></div><div style="background:#f8f8f8;padding:8px 12px;border-radius:4px;margin-bottom:12px"><strong>Bill To:</strong> '+i.customer+'<br>Vehicle: '+(i.vehicle||'—')+(invVIN(i)?'<br>VIN: '+invVIN(i):'')+'</div>'+(ll||pl?'<table><thead><tr><th>Type</th><th>Description</th><th>Qty/Hrs</th><th>Price</th><th>Total</th></tr></thead><tbody>'+ll+pl+'</tbody></table>':'')+'<div style="text-align:right;margin-top:10px"><div>Labor: '+fm(parseFloat(i.labor)||0)+' | Parts: '+fm(parseFloat(i.parts)||0)+' | Supplies: '+fm(i.supplies||0)+'</div><div>Tax: '+fm(parseFloat(i.tax)||0)+'</div><div class="big">TOTAL DUE: '+fm(parseFloat(i.total)||0)+'</div></div><p style="font-size:11px;color:#666;margin-top:14px;border-top:1px solid #ddd;padding-top:10px">'+shop.terms+'</p><scr'+'ipt>window.print();<\/scr'+'ipt></body></html>');win.document.close();}
 function sndInv(id){
   var inv=INV[id];
   if(!inv){alert('Invoice not found');return;}
@@ -2030,7 +2033,7 @@ function editU(ci,ui){
     +'<div class="fg"><label>Make *</label><input id="eu-mk" value="'+(u.make||'')+'" placeholder="Freightliner..." style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>Model</label><input id="eu-md" value="'+(u.model||'')+'" placeholder="Cascadia..." style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>Engine</label><input id="eu-en" value="'+(u.engine||'')+'" placeholder="DD15, ISX..." style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
-    +'<div class="fg full"><label>VIN</label><div style="display:flex;gap:5px"><input id="eu-vin" value="'+(u.vin||'')+'" placeholder="17-digit VIN" style="flex:1;padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7"><button type="button" onclick="vinQuickLookup(this.dataset.f)" data-f="eu-vin" style="padding:7px 12px;background:#185FA5;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit"><i class=ti ti-search></i> Lookup</button></div></div>'
+    +'<div class="fg full"><label>VIN</label><div style="display:flex;gap:5px"><input id="eu-vin" value="'+(u.vin||'')+'" placeholder="17-digit VIN" style="flex:1;padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7"><button type="button" onclick="scanVINBtn(this.dataset.f)" data-f="eu-vin" title="Scan VIN barcode" style="padding:7px 11px;background:#534AB7;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-family:inherit"><i class="ti ti-scan"></i></button><button type="button" onclick="vinQuickLookup(this.dataset.f)" data-f="eu-vin" style="padding:7px 12px;background:#185FA5;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit"><i class=ti ti-search></i> Lookup</button></div></div>'
     +'<div class="fg"><label>'+t('ciPlate')+'</label><input id="eu-pl" value="'+(u.plate||'')+'" placeholder="ABC-1234" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>Odometer (Miles)</label><input id="eu-mi" value="'+(u.miles||'')+'" type="number" placeholder="150000" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>'+t('ciTrailer')+'</label><input id="eu-tr" value="'+(u.trailer||'')+'" placeholder="Trailer number" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
@@ -2064,7 +2067,7 @@ function addU(ci){
     +'<div class="fg"><label>Make *</label><input id="au-mk" placeholder="Freightliner..." style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>Model</label><input id="au-md" placeholder="Cascadia..." style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>Engine</label><input id="au-en" placeholder="DD15, ISX..." style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
-    +'<div class="fg full"><label>VIN</label><div style="display:flex;gap:5px"><input id="au-vin" placeholder="17-digit VIN" style="flex:1;padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7"><button type="button" onclick="vinQuickLookup(this.dataset.f)" data-f="au-vin" style="padding:7px 12px;background:#185FA5;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit"><i class=ti ti-search></i> Lookup</button></div></div>'
+    +'<div class="fg full"><label>VIN</label><div style="display:flex;gap:5px"><input id="au-vin" placeholder="17-digit VIN" style="flex:1;padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7"><button type="button" onclick="scanVINBtn(this.dataset.f)" data-f="au-vin" title="Scan VIN barcode" style="padding:7px 11px;background:#534AB7;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-family:inherit"><i class="ti ti-scan"></i></button><button type="button" onclick="vinQuickLookup(this.dataset.f)" data-f="au-vin" style="padding:7px 12px;background:#185FA5;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-family:inherit"><i class=ti ti-search></i> Lookup</button></div></div>'
     +'<div class="fg"><label>License Plate</label><input id="au-pl" placeholder="ABC-1234" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>Odometer (Miles)</label><input id="au-mi" type="number" placeholder="150000" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>Trailer #</label><input id="au-tr" placeholder="Trailer number" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
@@ -2595,7 +2598,7 @@ function rSet(){
     +'<div style="font-size:11px;color:#888;margin-top:4px">Your key is saved to your private Supabase database and never shared.</div>'
     +'</div>'
     +'<div class="fg" style="margin-top:10px"><label>Fault Code Reference Website (optional)</label>'
-    +'<input id="s-codeurl" value="'+(shop.codeUrl||'')+'" placeholder="https://... (e.g. your Cummins code site)" style="width:100%;padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7">'
+    +'<input id="s-codeurl" value="'+(shop.codeUrl||'')+'" placeholder="Default: quickserve.cummins.com — paste another URL to change" style="width:100%;padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7">'
     +'<div style="font-size:11px;color:#888;margin-top:4px">Techs get a button in the Codes tab that opens this site for official code documentation.</div>'
     +'</div></div>'
     +'<button class="btn bl" style="width:100%;justify-content:center;padding:14px;font-size:15px" onclick="saveSet()"><i class="ti ti-check"></i>Save All Settings</button>';
@@ -2888,7 +2891,7 @@ function buildCI(){
     +'<div class="fg"><label>Make *</label><input id="ci-mk" placeholder="Freightliner..." style="width:100%"></div>'
     +'<div class="fg"><label>Model</label><input id="ci-md" placeholder="Cascadia..." style="width:100%"></div>'
     +'<div class="fg"><label>Engine</label><input id="ci-en" placeholder="DD15, ISX..." style="width:100%"></div>'
-    +'<div class="fg"><label>VIN</label><div style="display:flex;gap:5px"><input id="ci-vin" placeholder="17-digit VIN" style="flex:1" onblur="if(this.value.length>=11)ciVINLookup()"><button type="button" onclick="ciVINLookup()" style="padding:7px 12px;background:#185FA5;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;white-space:nowrap"><i class="ti ti-search"></i> Lookup</button></div></div>'
+    +'<div class="fg"><label>VIN</label><div style="display:flex;gap:5px"><input id="ci-vin" placeholder="17-digit VIN" style="flex:1" onblur="if(this.value.length>=11)ciVINLookup()"><button type="button" onclick="scanVINBtn(this.dataset.f)" data-f="ci-vin" title="Scan VIN barcode" style="padding:7px 11px;background:#534AB7;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-family:inherit"><i class="ti ti-scan"></i></button><button type="button" onclick="ciVINLookup()" style="padding:7px 12px;background:#185FA5;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:500;font-family:inherit;white-space:nowrap"><i class="ti ti-search"></i> Lookup</button></div></div>'
     +'<div class="fg"><label>Miles</label><input id="ci-mi" type="number" placeholder="Odometer" style="width:100%"></div>'
     +'<div class="fg"><label>License Plate</label><input id="ci-pl" placeholder="ABC-1234" style="width:100%"></div>'
     +'<div class="fg"><label>Unit #</label><input id="ci-un" placeholder="Fleet number" style="width:100%"></div>'
@@ -3869,6 +3872,11 @@ function submitRoadService(){
 // ── FLEET CHECK-IN ────────────────────────────────────────
 
 // ── VIN DECODER ────────────────────────────────────────────
+function invVIN(inv){
+  if(inv.vin)return inv.vin;
+  if(inv.woTicket&&inv.woTicket!=='—'){var w=WO.find(function(x){return x.ticket===inv.woTicket;});if(w&&w.unit&&w.unit.vin)return w.unit.vin;}
+  return'';
+}
 async function decodeVIN(vin, callback){
   vin=vin.trim().toUpperCase();
   if(vin.length<11){alert('VIN must be at least 11 characters.');return;}
@@ -3948,27 +3956,51 @@ function autoFillVIN(vinId, yrId, makeId, modelId, engId){
   });
 }
 
-function vinQuickLookup(vinFieldId){
-  var vinEl=el(vinFieldId);
-  if(!vinEl||!vinEl.value.trim()){alert('Enter a VIN first.');return;}
-  if(vinEl.value.trim().length<11){alert('VIN must be at least 11 characters.');return;}
-  var btn=event.target.closest('button');
-  if(btn){btn.innerHTML='<i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i>';btn.disabled=true;}
-  decodeVIN(vinEl.value,function(info){
-    if(btn){btn.innerHTML='<i class="ti ti-search"></i> Lookup';btn.disabled=false;}
-    if(!info)return;
-    var vehicle=(info.year+' '+info.make+' '+info.model).trim();
-    var engine=(info.engineModel||info.engine).trim();
-    oM('VIN Result — '+vinEl.value.toUpperCase().trim(),
+function vinApply(vinFieldId, info){
+  var filled=0;
+  function fill(id,val){var e2=el(id);if(e2&&val){e2.value=val;e2.style.border='1.5px solid #3B6D11';setTimeout(function(){var e3=el(id);if(e3)e3.style.border='';},1600);filled++;}}
+  var vehicle=(info.year+' '+info.make+' '+info.model).trim();
+  var engine=(info.engineModel||info.engine||'').trim();
+  if(vinFieldId==='nw-vin'){
+    fill('nw-v',vehicle);
+    var ve=el('nw-vin');
+    _nwUnit={year:info.year,make:info.make,model:info.model,engine:engine,vin:ve?ve.value.trim().toUpperCase():''};
+    return;
+  }
+  var prefix=vinFieldId.replace(/vin$/,'');
+  fill(prefix+'yr',info.year);fill(prefix+'mk',info.make);fill(prefix+'md',info.model);fill(prefix+'en',engine);
+  if(!filled){
+    oM('VIN Result',
       '<div style="background:#EAF3DE;border-radius:8px;padding:14px;margin-bottom:10px">'
       +'<div style="font-size:18px;font-weight:700;color:#27500A;margin-bottom:6px">'+vehicle+'</div>'
       +(engine?'<div style="font-size:14px;color:#3B6D11;margin-bottom:4px"><i class="ti ti-engine"></i> Engine: '+engine+'</div>':'')
-      +(info.trim?'<div style="font-size:13px;color:#555">Trim: '+info.trim+'</div>':'')
       +(info.gvwr?'<div style="font-size:13px;color:#555">GVWR: '+info.gvwr+'</div>':'')
       +'</div>'
       +'<div style="font-size:12px;color:#888">Source: NHTSA US Government Database</div>',
       '<button class="btn bl" onclick="cM()">Close</button>'
     );
+  }
+}
+function vinQuickLookup(vinFieldId){
+  var vinEl=el(vinFieldId);
+  if(!vinEl||!vinEl.value.trim()){alert('Enter a VIN first.');return;}
+  if(vinEl.value.trim().length<11){alert('VIN must be at least 11 characters.');return;}
+  var btn=(typeof event!=='undefined'&&event&&event.target&&event.target.closest)?event.target.closest('button'):null;
+  if(btn){btn._oh=btn.innerHTML;btn.innerHTML='<i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i>';btn.disabled=true;}
+  decodeVIN(vinEl.value,function(info){
+    if(btn){btn.innerHTML=btn._oh;btn.disabled=false;}
+    if(!info)return;
+    vinApply(vinFieldId,info);
+  });
+}
+function scanVINBtn(fieldId){
+  openScanner(function(code){
+    code=String(code).trim().toUpperCase();
+    if(code.length===18&&code.charAt(0)==='I')code=code.slice(1);
+    var e2=el(fieldId);if(!e2)return;
+    e2.value=code;
+    e2.style.border='1.5px solid #3B6D11';setTimeout(function(){var e3=el(fieldId);if(e3)e3.style.border='';},1600);
+    if(code.length>=11){decodeVIN(code,function(info){if(info)vinApply(fieldId,info);});}
   });
 }
 function autoFillVINFleet(){
@@ -4289,15 +4321,17 @@ async function genInvPDF(id, sendSMS){
     y+=25;
 
     // Bill To
+    var pdfVin=invVIN(inv);
     doc.setFillColor(245,245,247);
-    doc.rect(margin,y,250,55,'F');
+    doc.rect(margin,y,250,pdfVin?68:55,'F');
     doc.setFontSize(8);doc.setTextColor(130,130,130);doc.setFont('helvetica','bold');
     doc.text('BILL TO',margin+8,y+14);
     doc.setFontSize(13);doc.setTextColor(29,29,31);doc.setFont('helvetica','bold');
     doc.text(inv.customer||'',margin+8,y+30);
     doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(100,100,100);
     if(inv.vehicle)doc.text(inv.vehicle,margin+8,y+44);
-    y+=70;
+    if(pdfVin)doc.text('VIN: '+pdfVin,margin+8,y+58);
+    y+=pdfVin?83:70;
 
     // Table header
     doc.setFillColor(24,95,165);
@@ -4522,7 +4556,7 @@ function showSharedInvoice(invId){
     +'<div style="background:#f5f5f7;border-radius:10px;padding:12px 14px;margin-bottom:16px">'
     +'<div style="font-size:13px;font-weight:600">Bill To:</div>'
     +'<div style="font-size:15px;font-weight:700;margin-top:2px">'+inv.customer+'</div>'
-    +(inv.vehicle?'<div style="font-size:13px;color:#888;margin-top:1px">'+inv.vehicle+'</div>':'')
+    +(inv.vehicle?'<div style="font-size:13px;color:#888;margin-top:1px">'+inv.vehicle+'</div>':'')+(invVIN(inv)?'<div style="font-size:12px;color:#aaa;margin-top:1px">VIN: '+invVIN(inv)+'</div>':'')
     +(inv.poNum?'<div style="font-size:12px;color:#888">PO/Auth: '+inv.poNum+'</div>':'')
     +'</div>'
     +'<div style="margin-bottom:16px">'+lines+'</div>'
@@ -5029,7 +5063,7 @@ function tpRenderWO(){
       +'<button onclick="tpQuickLookup(\''+(w.vehicle||'').replace(/'/g,'')+'\')" style="background:#EEEDFE;color:#3C3489;border:1px solid #534AB7;border-radius:8px;padding:9px 12px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;white-space:nowrap"><i class="ti ti-robot" style="font-size:13px"></i> Lookup</button>'
       +'<button onclick="tpAddCode()" style="background:#534AB7;color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit">Add</button></div>'
       +'<input id="tp-code-note" placeholder="Note — what did you observe? (optional)" style="width:100%;padding:9px 10px;font-size:13px;border-radius:8px;border:0.5px solid rgba(0,0,0,0.15);background:#f5f5f7;font-family:inherit"></div>'
-      +(shop.codeUrl?'<button onclick="window.open(shop.codeUrl,\'_blank\')" style="background:#fff;color:#B5341C;border:1px solid #B5341C;border-radius:10px;padding:10px 16px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px;justify-content:center;width:100%;margin-bottom:12px;font-family:inherit"><i class="ti ti-external-link"></i>Cummins Code Reference Site</button>':'')
+      +'<button onclick="window.open(shop.codeUrl||\'https://quickserve.cummins.com\',\'_blank\')" style="background:#fff;color:#B5341C;border:1px solid #B5341C;border-radius:10px;padding:10px 16px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px;justify-content:center;width:100%;margin-bottom:12px;font-family:inherit"><i class="ti ti-external-link"></i>Cummins QuickServe — Official Codes</button>'
       +'<button onclick="tpDiagClick()" style="background:#EEEDFE;color:#3C3489;border:1px solid #534AB7;border-radius:10px;padding:10px 16px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px;justify-content:center;width:100%;margin-bottom:12px;font-family:inherit"><i class="ti ti-camera"></i>Photo of Diagnostic Screen</button>';
     if(diagPhs.length){h+='<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;margin:4px 0 6px">Screen Photos ('+diagPhs.length+')</div><div style="display:flex;gap:8px;overflow-x:auto;padding-bottom:6px;margin-bottom:10px">';diagPhs.forEach(function(src){h+='<img src="'+src+'" style="width:84px;height:84px;object-fit:cover;border-radius:8px;flex-shrink:0;border:2px solid #534AB7">';});h+='</div>';}
     if(wCodes.length){
