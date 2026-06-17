@@ -3507,6 +3507,7 @@ function rReports(){
     '<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">'
     +'<button class="btn bl" onclick="expQB()"><i class="ti ti-file-export"></i>Export to QuickBooks</button>'
     +'<button class="btn gr" onclick="expFullReport()"><i class="ti ti-download"></i>Download Full Report</button>'
+    +'<button class="btn" style="background:#1D6F42;color:#fff;border-color:#1D6F42" onclick="expExcel()"><i class="ti ti-table"></i>Export Everything to Excel</button>'
     +'</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'
     +'<div class="stat"><div class="sl">This Month Revenue</div><div class="sv" style="color:#185FA5">'+fm(mRev)+'</div></div>'
@@ -3682,6 +3683,103 @@ function expFullReport(){
 }
 
 
+
+// ── FULL EXCEL EXPORT (multi-tab workbook) ─────────────────
+function loadXLSX(cb){
+  if(window.XLSX){cb();return;}
+  var s=document.createElement('script');
+  s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+  s.onload=function(){cb();};
+  s.onerror=function(){alert('Could not load the spreadsheet library. Check your internet connection and try again.');};
+  document.head.appendChild(s);
+}
+function xnum(x){var n=parseFloat(x);return isNaN(n)?(x==null?'':x):n;}
+function xflat(arr){
+  return (arr||[]).map(function(o){
+    if(o===null||typeof o!=='object')return {Value:o};
+    var r={};Object.keys(o).forEach(function(k){var v=o[k];if(v===null||v===undefined)r[k]='';else if(typeof v==='object')r[k]=JSON.stringify(v);else r[k]=v;});
+    return r;
+  });
+}
+function expExcel(){
+  var btn=(typeof event!=='undefined'&&event&&event.target)?event.target:null;
+  if(btn){btn._o=btn.innerHTML;btn.innerHTML='<i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i> Building\u2026';btn.disabled=true;}
+  loadXLSX(function(){
+    try{buildWorkbook();}
+    catch(e){alert('Export error: '+e.message);}
+    if(btn){btn.innerHTML=btn._o;btn.disabled=false;}
+  });
+}
+function buildWorkbook(){
+  var X=window.XLSX;if(!X){alert('Spreadsheet library not ready. Try again.');return;}
+  var wo=(typeof WO!=='undefined'&&WO)||[];
+  var inv=(typeof INV!=='undefined'&&INV)||[];
+  var est=(typeof ESTIMATES!=='undefined'&&ESTIMATES)||[];
+  var cust=(typeof CUST!=='undefined'&&CUST)||[];
+  var parts=(typeof PARTS!=='undefined'&&PARTS)||[];
+  var vend=(typeof VENDORS!=='undefined'&&VENDORS)||[];
+  var appts=(typeof APPTS!=='undefined'&&APPTS)||[];
+  var pms=(typeof PMS!=='undefined'&&PMS)||[];
+
+  // Work Orders
+  var woRows=wo.map(function(w){
+    var c=(typeof calcS==='function')?calcS(w):{l:0,p:0,sup:0,sub:0,tax:0,tot:0};
+    return {Ticket:w.ticket,Date:w.date,Status:w.status,Customer:w.customer,Phone:w.phone||'',
+      Vehicle:w.vehicle||'',VIN:(w.unit&&w.unit.vin)||'',Engine:(w.unit&&w.unit.engine)||'',
+      Unit:(w.unit&&w.unit.num)||'',Complaint:w.complaint||'',Tech:w.tech||'',Authorizer:w.authorizer||'',
+      PO:w.poNum||'','Line Items':(w.lines||[]).length,Labor:xnum(c.l),Parts:xnum(c.p),Supplies:xnum(c.sup),
+      Subtotal:xnum(c.sub),Tax:xnum(c.tax),Total:xnum(c.tot),Findings:w.techFindings||'',Notes:w.notes||''};
+  });
+  // WO Line Items (exploded)
+  var lineRows=[];
+  wo.forEach(function(w){(w.lines||[]).forEach(function(l){
+    lineRows.push({'WO Ticket':w.ticket,Customer:w.customer,Type:l.type||'',Description:l.desc||'',
+      'Part#':l.partNum||'','Qty/Hrs':(l.qty!=null?l.qty:(l.hrs!=null?l.hrs:'')),
+      Rate:(l.rate!=null?xnum(l.rate):''),Cost:(l.cost!=null?xnum(l.cost):''),Sell:(l.sell!=null?xnum(l.sell):''),
+      Subtotal:xnum(l.subtotal)});
+  });});
+  // Invoices
+  var invRows=inv.map(function(i){
+    return {'Invoice#':i.num,Date:i.date,Customer:i.customer,Phone:i.phone||'',Vehicle:i.vehicle||'',
+      'WO Ticket':i.woTicket||'',Labor:xnum(i.labor),Parts:xnum(i.parts),Supplies:xnum(i.supplies),
+      Tax:xnum(i.tax),Total:xnum(i.total),Status:i.status,Payment:i.payment||''};
+  });
+  // Customers
+  var custRows=cust.map(function(c){
+    return {Name:c.name,Phone:c.phone||'',Cell:c.cell||'',Email:c.email||'',DOT:c.dot||'',MC:c.mc||'',
+      Units:(c.units||[]).length,Jobs:c.jobs||0,'Last Visit':c.lastVisit||''};
+  });
+  // Vehicles / Units (exploded)
+  var vehRows=[];
+  cust.forEach(function(c){(c.units||[]).forEach(function(u){
+    vehRows.push({Customer:c.name,Unit:u.num||'',Nickname:u.nick||'',Year:u.year||'',Make:u.make||'',
+      Model:u.model||'',Engine:u.engine||'',VIN:u.vin||'',Plate:u.plate||'',Miles:u.miles||u.mileage||'',Type:u.type||''});
+  });});
+  // Inventory
+  var partRows=parts.map(function(p){
+    return {Name:p.name,'Part#':p.partNum||'',UOM:p.uom||'',Category:p.cat||p.category||'',Location:p.location||'',
+      Stock:p.qty,Min:p.min||0,Max:p.max||'',Cost:xnum(p.cost),Sell:xnum(p.sell),Vendor:p.vendor||'',Manufacturer:p.mfr||''};
+  });
+  // Vendors
+  var vendRows=vend.map(function(v){return (typeof v==='string')?{Name:v}:{Name:v.name||'',Phone:v.phone||'',Email:v.email||'',Account:v.account||v.acct||'',Notes:v.notes||''};});
+
+  var add=function(name,rows){if(!rows||!rows.length)rows=[{'(empty)':'No data yet'}];var ws=X.utils.json_to_sheet(rows);X.utils.book_append_sheet(wb,ws,name.slice(0,31));};
+  var wb=X.utils.book_new();
+  add('Work Orders',woRows);
+  add('WO Line Items',lineRows);
+  add('Invoices',invRows);
+  add('Estimates',xflat(est));
+  add('Customers',custRows);
+  add('Vehicles',vehRows);
+  add('Inventory',partRows);
+  add('Vendors',vendRows);
+  add('Appointments',xflat(appts));
+  add('PM Schedule',xflat(pms));
+
+  var fname='MT_Truck_Full_Export_'+new Date().toISOString().split('T')[0]+'.xlsx';
+  X.writeFile(wb,fname);
+  setTimeout(function(){alert('\u2705 Full spreadsheet exported!\n\n'+wo.length+' orders \u00B7 '+inv.length+' invoices \u00B7 '+cust.length+' customers \u00B7 '+parts.length+' parts.\n\nEach data type is on its own tab. Opens in Excel, Numbers, or Google Sheets.');},300);
+}
 
 function scanReceipt(wid){
   // Create file input for camera/photo
