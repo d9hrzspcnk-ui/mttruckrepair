@@ -6787,6 +6787,35 @@ function rProfit(){
     +st('Fees / Services',fm(feeRev))
     +st('Road Service Revenue',fm(rsRev),'#A32D2D',rsJobs+' road call(s)')
     +'</div>';
+  // ── BOTTOM LINE: NET PROFIT ──
+  var _moOH=(typeof expMonthly==='function')?expMonthly():0;
+  var _EXP=(typeof EXPENSES!=='undefined'&&EXPENSES)?EXPENSES:[];
+  var _invD=INV.map(function(i){return new Date(i.date);}).filter(function(d){return !isNaN(d.getTime());});
+  var _minD=_invD.length?new Date(Math.min.apply(null,_invD.map(function(d){return d.getTime();}))):now;
+  var _mAll=Math.max(1,(now.getFullYear()-_minD.getFullYear())*12+(now.getMonth()-_minD.getMonth())+1);
+  var _monthsR=PF_RANGE==='90'?3:(PF_RANGE==='ytd'?(now.getMonth()+1):(PF_RANGE==='all'?_mAll:1));
+  var _recurOH=_moOH*_monthsR;
+  var _oneOH=_EXP.filter(function(e){return e.freq==='onetime'&&pfIn(e.date);}).reduce(function(s,e){return s+(parseFloat(e.amount)||0);},0);
+  var _ohTotal=_recurOH+_oneOH;
+  var _hasPay=_EXP.some(function(e){return e.category==='Payroll / Wages';});
+  var _laborDeduct=_hasPay?0:laborCost;
+  var _net=totalRev-partsCost-_ohTotal-_laborDeduct;
+  var _nm=totalRev>0?(_net/totalRev*100):0;
+  var _rlbl=({month:'This Month',last:'Last Month','90':'Last 90 Days',ytd:'Year to Date',all:'All Time'})[PF_RANGE]||'';
+  if(_EXP.length){
+    h+='<div class="card" style="border:1.5px solid '+(_net>=0?'#3B6D11':'#A32D2D')+'">'
+      +'<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;margin-bottom:10px">Bottom Line \u00B7 '+_rlbl+'</div>'
+      +'<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0"><span>Revenue</span><span style="font-weight:600">'+fm(totalRev)+'</span></div>'
+      +'<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;color:#A32D2D"><span>\u2212 Parts cost (COGS)</span><span>'+fm(partsCost)+'</span></div>'
+      +(_laborDeduct>0?'<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;color:#A32D2D"><span>\u2212 Est. labor wages</span><span>'+fm(_laborDeduct)+'</span></div>':'')
+      +'<div style="display:flex;justify-content:space-between;font-size:13px;padding:3px 0;color:#A32D2D"><span>\u2212 Overhead <span style="color:#888;font-size:11px">('+_monthsR+' mo \u00D7 '+fm(_moOH)+(_oneOH>0?' + 1-time':'')+')</span></span><span>'+fm(_ohTotal)+'</span></div>'
+      +'<div style="display:flex;justify-content:space-between;font-size:17px;font-weight:700;padding:9px 0 2px;border-top:0.5px solid var(--bd);margin-top:6px;color:'+(_net>=0?'#3B6D11':'#A32D2D')+'"><span>Net profit</span><span>'+fm(_net)+'</span></div>'
+      +'<div style="font-size:11px;color:#888;text-align:right;margin-top:2px">'+_nm.toFixed(0)+'% net margin'+(_hasPay?'':' \u00B7 wages estimated from tech pay rates')+'</div>'
+      +'<div style="font-size:11px;color:#888;margin-top:8px;line-height:1.4"><i class="ti ti-info-circle"></i> Overhead is your monthly expenses scaled to this range. <span onclick="expManager()" style="color:#185FA5;text-decoration:underline;cursor:pointer">Edit expenses</span></div>'
+      +'</div>';
+  } else {
+    h+='<div class="card" style="background:#FFF8E6;border:1px solid #E8C766"><div style="font-size:13px;color:#664D03;margin-bottom:10px;line-height:1.45"><i class="ti ti-info-circle"></i> Add your operating expenses (rent, payroll, insurance\u2026) to see your true <strong>net profit</strong> here \u2014 not just revenue.</div><button class="btn bl" onclick="expManager()"><i class="ti ti-plus"></i>Add Operating Expenses</button></div>';
+  }
   if(missingCost>0||noPayHrs>0){
     h+='<div style="background:#FFF3CD;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:12px;color:#664D03"><i class="ti ti-alert-triangle"></i> ';
     if(missingCost>0)h+='<strong>'+missingCost+'</strong> part line(s) in this range have no cost entered \u2014 parts profit is understated. ';
