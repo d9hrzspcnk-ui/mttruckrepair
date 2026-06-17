@@ -6788,6 +6788,7 @@ function rProfit(){
     +st('Road Service Revenue',fm(rsRev),'#A32D2D',rsJobs+' road call(s)')
     +'</div>';
   // ── BOTTOM LINE: NET PROFIT ──
+  var now=new Date();
   var _moOH=(typeof expMonthly==='function')?expMonthly():0;
   var _EXP=(typeof EXPENSES!=='undefined'&&EXPENSES)?EXPENSES:[];
   var _invD=INV.map(function(i){return new Date(i.date);}).filter(function(d){return !isNaN(d.getTime());});
