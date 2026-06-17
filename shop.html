@@ -307,7 +307,7 @@ var SB='https://hkiydqsvvorhvazpmkwb.supabase.co',SK='eyJhbGciOiJIUzI1NiIsInR5cC
 var ES='service_72vdqgv',ET='template_eia8k4h',EK='QC4JaQRWi_9mkE1ze';
 var PIN='1234',OPIN='',ROLE='owner',pe='',APP_LANG='en';
 var WO=[],INV=[],CUST=[],PARTS=[],TECH=['Guillermo'],PMS=[],APPTS=[],VENDORS=[],KITS=[],ESTIMATES=[];
-var TECH_REQS=[],TECH_CLOCKS={},TECH_CODES={},TECH_TIMELOG=[],TECH_FINDINGS=[],NOTIFS=[],TP_USER=null,TP_WO_ID=null,TP_TAB='job',TP_PHOTOS={},TP_PIN='',TP_TICK=null,_tpPrio='Normal';
+var TECH_REQS=[],TECH_CLOCKS={},TECH_CODES={},TECH_TIMELOG=[],TECH_FINDINGS=[],NOTIFS=[],TP_USER=null,TP_WO_ID=null,TP_TAB='job',TP_PHOTOS={},TP_PIN='',TP_TICK=null,_tpPrio='Normal',TP_AI={};
 var DEFAULT_VENDORS=['Cruz Truck Supplies','FleetPride','NAPA','TEC Fontana','Rush Truck Center','CV Enterprises','Velocity Truck Center'];
 function getVendorList(){
   // Support both old string array and new object array
@@ -696,11 +696,20 @@ function vWO(id){
     +'<button class="btn bl" onclick="saveAll();rWO();cM()">Save</button>'
     +'<button class="btn bl" onclick="prtWO('+id+')"><i class="ti ti-printer"></i>Print</button>'
     +'<button class="btn" style="background:#8B4513;color:#fff;border-color:#8B4513" onclick="walkAround('+id+')"><i class="ti ti-camera"></i>Walk-Around</button>'
+    +'<button class="btn" style="background:#534AB7;color:#fff;border-color:#534AB7" onclick="ownerAIAssistant('+id+')"><i class="ti ti-robot"></i>AI Help</button>'
     +'<button class="btn" style="background:#A32D2D;color:#fff;border-color:#A32D2D" onclick="saveAll();sendApproval('+id+')"><i class="ti ti-send"></i>Send for Approval</button>'
     +'<button class="btn" onclick="cM()">Close</button>');
   rCS(id);
 }
 function wCust(wid,ci){WO[wid].custId=ci;var cx=CUST[ci];if(cx){WO[wid].customer=cx.name;WO[wid].phone=cx.phone;if(!WO[wid].authorizer&&(!cx.prefs||cx.prefs.auth!==false)){var cnm=custContactName(cx);if(cnm)WO[wid].authorizer=cnm+((cx.cell||cx.phone)?', '+(cx.cell||cx.phone):'');}}var sel=el('usl'+wid);if(sel&&cx&&cx.units){sel.innerHTML='<option value="">— Unit —</option>'+cx.units.map(function(u,i){return'<option value="'+i+'">'+((u.num?'#'+u.num+' — ':'')+(u.nick?u.nick+' — ':'')+((u.year||'')+' '+(u.make||'')+' '+(u.model||'')).trim()+(u.vin?' …'+u.vin.slice(-6):'')).trim()+'</option>';}).join('');}}
+function ownerAIAssistant(id){
+  var w=WO[id];if(!w)return;
+  TP_WO_ID=id;
+  oM('AI Diagnostic Help \u2014 SO #'+w.ticket, tpAIPanelHTML(w),
+    '<button class="btn" onclick="vWO('+id+')"><i class="ti ti-arrow-left"></i>Back to Order</button>'
+    +'<button class="btn" onclick="cM()">Close</button>');
+  var _t=el('tp-ai-thread');if(_t)_t.scrollTop=_t.scrollHeight;
+}
 function wUnit(wid,ui){var cx=WO[wid].custId!==undefined?CUST[WO[wid].custId]:null;var u=cx&&cx.units?cx.units[ui]:null;if(u){WO[wid].unit=u;WO[wid].vehicle=(u.year+' '+u.make+' '+u.model).trim();}}
 
 function walkAround(wid){
@@ -1668,6 +1677,106 @@ function aiDiagCode(code, vehicle, engine){
       '<button class="btn bl" onclick="cM()">Got it</button>'
     );
   });
+}
+
+// ── 1b. AI TECH ASSISTANT (conversational diagnostics) ─────
+async function callClaudeChat(messages, sys){
+  var apiKey=shop.aiKey||'';
+  if(!apiKey){alert('Add your Anthropic API key in Settings \u2192 AI Features first.');return null;}
+  try{
+    var res=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+      body:JSON.stringify({model:'claude-sonnet-4-5',max_tokens:1024,system:sys||'',messages:messages})
+    });
+    var data=await res.json();
+    if(data.error){return '\u26A0\uFE0F '+(data.error.message||'API error');}
+    return data.content?data.content.map(function(x){return x.text||'';}).join(''):'';
+  }catch(e){return '\u26A0\uFE0F '+e.message;}
+}
+function tpEsc(s){return (''+s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function tpAIContext(w){
+  var codes=(TECH_CODES[w.id]||[]).map(function(c){return c.code;}).join(', ');
+  var eng=(w.unit&&w.unit.engine)?w.unit.engine:'';
+  var miles=(w.unit&&(w.unit.miles||w.unit.mileage))?(w.unit.miles||w.unit.mileage):'';
+  return {veh:w.vehicle||'',eng:eng,miles:miles,complaint:w.complaint||'',codes:codes,findings:w.techFindings||''};
+}
+function tpAISys(w){
+  var c=tpAIContext(w);
+  var lang=(APP_LANG==='es')?'Spanish':'English';
+  return 'You are a master heavy-duty diesel diagnostic assistant helping a technician at MT Truck & Trailer Repair, a heavy-duty truck and trailer repair shop. '
+    +'You are talking to the mechanic working on the truck, not the customer. Be concise and practical \u2014 this is read on a phone in the shop. '
+    +'Diagnose logically: when a clarifying question would change the next step, ask it; otherwise give the most likely causes and the order to check them. '
+    +'CONTEXT \u2014 Vehicle: '+(c.veh||'unknown')+'. Engine: '+(c.eng||'unknown')+'. '+(c.miles?('Mileage: '+c.miles+'. '):'')+'Complaint: '+(c.complaint||'not specified')+'. '+(c.codes?('Fault codes logged: '+c.codes+'. '):'')+(c.findings?('Prior tech findings: '+c.findings+'. '):'')
+    +'SAFETY RULES: Never state an exact torque value, fluid capacity, or clearance spec from memory \u2014 tell the tech to confirm it in the service manual for this engine. '
+    +'For proprietary fault codes you are not fully sure about, say to verify in official service software (Cummins QuickServe/INSITE, Detroit DiagnosticLink, etc.). '
+    +'Flag safety-critical work (brakes, steering, suspension, fuel system, working near charged batteries or under a raised vehicle). '
+    +'Reply in '+lang+'. Keep it short, use plain mechanic language, prefer a few bullet steps over long paragraphs.';
+}
+function tpAIBubble(role,text){
+  if(role==='user')return '<div style="align-self:flex-end;max-width:85%;background:#185FA5;color:#fff;border-radius:14px 14px 4px 14px;padding:9px 12px;font-size:13px;line-height:1.5;white-space:pre-wrap">'+tpEsc(text)+'</div>';
+  return '<div style="align-self:flex-start;max-width:92%;background:#fff;border:0.5px solid rgba(0,0,0,0.1);border-radius:14px 14px 14px 4px;padding:9px 12px;font-size:13px;line-height:1.6;white-space:pre-wrap">'+tpEsc(text)+'</div>';
+}
+function tpAIAppendHTML(html){var t=el('tp-ai-thread');if(!t)return;t.insertAdjacentHTML('beforeend',html);t.scrollTop=t.scrollHeight;}
+function tpAIAppend(role,text){var st=el('tp-ai-starts');if(st)st.style.display='none';tpAIAppendHTML(tpAIBubble(role,text));}
+function tpAIShowTyping(){tpAIAppendHTML('<div id="tp-ai-typing" style="align-self:flex-start;color:#888;font-size:13px;padding:4px 8px"><i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i></div>');}
+function tpAIRemoveTyping(){var d=el('tp-ai-typing');if(d)d.remove();}
+function tpAIStart(q){tpAISend(q);}
+function tpAISend(qOverride){
+  var w=WO[TP_WO_ID];if(!w)return;
+  var inp=el('tp-ai-inp');
+  var q=qOverride||(inp?inp.value.trim():'');
+  if(!q)return;
+  if(inp&&!qOverride){inp.value='';inp.style.height='auto';}
+  if(!TP_AI[w.id])TP_AI[w.id]=[];
+  TP_AI[w.id].push({role:'user',content:q});
+  tpAIAppend('user',q);
+  tpAIShowTyping();
+  var sb=el('tp-ai-save');if(sb)sb.style.display='';
+  var thread=TP_AI[w.id].map(function(m){return {role:m.role,content:m.content};});
+  callClaudeChat(thread,tpAISys(w)).then(function(ans){
+    tpAIRemoveTyping();
+    ans=ans||'(no response)';
+    if(ans.charAt(0)==='\u26A0'){tpAIAppend('assistant',ans);TP_AI[w.id].pop();return;}
+    TP_AI[w.id].push({role:'assistant',content:ans});
+    tpAIAppend('assistant',ans);
+  });
+}
+function tpAISaveFindings(){
+  var w=WO[TP_WO_ID];if(!w)return;
+  var thread=TP_AI[w.id]||[];if(!thread.length)return;
+  var ES=(APP_LANG==='es');
+  var convo=thread.map(function(m){return (m.role==='user'?'TECH: ':'AI: ')+m.content;}).join('\n');
+  var sys='Summarize this shop diagnostic conversation into a short, factual technician findings note for the work order. 1-3 sentences, plain mechanic language, only what was diagnosed or recommended, no preamble. Reply in '+(ES?'Spanish':'English')+'.';
+  tpAIAppendHTML('<div id="tp-ai-typing" style="align-self:center;color:#888;font-size:12px;padding:6px">'+(ES?'Generando resumen\u2026':'Generating summary\u2026')+'</div>');
+  callClaudeChat([{role:'user',content:convo}],sys).then(function(sum){
+    tpAIRemoveTyping();
+    if(!sum||sum.charAt(0)==='\u26A0'){alert(ES?'No se pudo generar el resumen.':'Could not generate summary.');return;}
+    var prev=w.techFindings?(w.techFindings+'\n'):'';
+    w.techFindings=prev+sum.trim();
+    saveAll();
+    alert(ES?'Resumen guardado en los hallazgos de la orden.':'Summary saved to the work order findings.');
+  });
+}
+function tpAIPanelHTML(w){
+  var c=tpAIContext(w);
+  var ES=(APP_LANG==='es');
+  var bits=[];if(c.veh)bits.push(c.veh);if(c.eng)bits.push(c.eng);if(c.miles)bits.push(c.miles+(ES?' millas':' mi'));if(c.codes)bits.push((ES?'C\u00F3digos: ':'Codes: ')+c.codes);
+  var ctxLine=bits.length?bits.join(' \u00B7 '):(ES?'Sin datos del veh\u00EDculo todav\u00EDa':'No vehicle details yet');
+  var starts=ES
+    ? [['No arranca','El motor gira pero no arranca'],['No genera aire','El sistema no genera presi\u00F3n de aire'],['Aviso DEF / sin potencia','Luz de DEF encendida y el motor pierde potencia (derate)'],['No regenera','El DPF no completa la regeneraci\u00F3n'],['Luz de ABS','Luz de ABS encendida en el cami\u00F3n o remolque'],['Sobrecalentamiento','El motor se est\u00E1 sobrecalentando']]
+    : [['No-start','Engine cranks but will not start'],['Won\'t build air','Air system will not build pressure'],['DEF / derate warning','DEF light on and the engine is derating'],['Won\'t regen','DPF will not complete a regen'],['ABS light','ABS light on the truck or trailer'],['Overheating','Engine is running hot']];
+  var startBtns=starts.map(function(s){return '<button onclick="tpAIStart(this.dataset.q)" data-q="'+s[1].replace(/"/g,'&quot;')+'" style="background:#EEEDFE;color:#3C3489;border:1px solid #534AB7;border-radius:18px;padding:7px 12px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap">'+s[0]+'</button>';}).join('');
+  var hist=(TP_AI[w.id]||[]).map(function(m){return tpAIBubble(m.role,m.content);}).join('');
+  var hasThread=(TP_AI[w.id]&&TP_AI[w.id].length>0);
+  var h='<div style="background:#EEEDFE;border-radius:10px;padding:9px 12px;margin-bottom:8px;font-size:12px;color:#3C3489;display:flex;align-items:center;gap:6px"><i class="ti ti-robot"></i><span>'+tpEsc(ctxLine)+'</span></div>';
+  h+='<div style="font-size:11px;color:#888;margin-bottom:8px;line-height:1.4">'+(ES?'Asistente de diagn\u00F3stico \u2014 confirma siempre torques y c\u00F3digos en el manual o software oficial.':'Diagnostic assistant \u2014 always confirm torque specs and codes in the manual or official software.')+'</div>';
+  h+='<div id="tp-ai-thread" style="display:flex;flex-direction:column;gap:8px;min-height:110px;max-height:46vh;overflow-y:auto;padding:4px 2px;margin-bottom:8px">'+hist+'</div>';
+  h+='<div id="tp-ai-starts" style="display:'+(hasThread?'none':'flex')+';flex-wrap:wrap;gap:6px;margin-bottom:10px">'+startBtns+'</div>';
+  h+='<div style="display:flex;gap:8px;align-items:flex-end"><textarea id="tp-ai-inp" rows="1" placeholder="'+(ES?'Describe el problema\u2026':'Describe the problem\u2026')+'" style="flex:1;padding:9px 11px;font-size:13px;border-radius:10px;border:0.5px solid rgba(0,0,0,0.15);background:#f5f5f7;font-family:inherit;resize:none;max-height:110px" oninput="this.style.height=\'auto\';this.style.height=Math.min(this.scrollHeight,110)+\'px\'"></textarea>';
+  h+='<button onclick="tpAISend()" style="background:#534AB7;color:#fff;border:none;border-radius:10px;padding:10px 14px;font-size:15px;cursor:pointer;font-family:inherit;flex-shrink:0"><i class="ti ti-send"></i></button></div>';
+  h+='<button id="tp-ai-save" onclick="tpAISaveFindings()" style="display:'+(hasThread?'':'none')+';background:#fff;color:#27500A;border:1px solid #3B6D11;border-radius:10px;padding:9px 14px;font-size:13px;font-weight:500;cursor:pointer;width:100%;margin-top:10px;font-family:inherit"><i class="ti ti-device-floppy"></i> '+(ES?'Guardar resumen en la orden':'Save summary to work order')+'</button>';
+  return h;
 }
 
 // ── 2. CUSTOMER MESSAGE WRITER ─────────────────────────────
@@ -5372,10 +5481,10 @@ function tpRenderWO(){
   var wp={before:getWOPhotos(w.id,'before'),after:getWOPhotos(w.id,'after')};
   var wCodes=TECH_CODES[w.id]||[];
   var wReqs=TECH_REQS.filter(function(r){return r.woId===w.id&&r.techName===TP_USER.name;});
-  var badges={job:0,photos:wp.before.length+wp.after.length,codes:wCodes.length+(TP_PHOTOS[w.id]&&TP_PHOTOS[w.id].diag?(TP_PHOTOS[w.id].diag.length):0),parts:wReqs.length};
+  var badges={job:0,photos:wp.before.length+wp.after.length,codes:wCodes.length+(TP_PHOTOS[w.id]&&TP_PHOTOS[w.id].diag?(TP_PHOTOS[w.id].diag.length):0),parts:wReqs.length,ai:(TP_AI[w.id]?TP_AI[w.id].length:0)};
   var h='<div onclick="tpShowDash()" style="display:flex;align-items:center;gap:5px;color:#888;font-size:13px;cursor:pointer;margin-bottom:10px;padding:2px 0"><i class="ti ti-arrow-left"></i>Back to My Orders</div>';
   h+='<div style="display:flex;border-bottom:0.5px solid rgba(0,0,0,0.1);margin-bottom:12px;overflow-x:auto">';
-  [{k:'job',l:t('tpJob')},{k:'photos',l:t('tpPhotos')},{k:'codes',l:t('tpCodes')},{k:'parts',l:t('tpParts')}].forEach(function(tab){
+  [{k:'job',l:t('tpJob')},{k:'photos',l:t('tpPhotos')},{k:'codes',l:t('tpCodes')},{k:'parts',l:t('tpParts')},{k:'ai',l:(APP_LANG==='es'?'Asistente':'Assistant')}].forEach(function(tab){
     var active=TP_TAB===tab.k;
     var badge=badges[tab.k];
     h+='<div onclick="tpSetTab(this.dataset.tab)" data-tab="'+tab.k+'" style="flex:0 0 auto;padding:8px 14px;font-size:12px;cursor:pointer;color:'+(active?'#185FA5':'#888')+';border-bottom:2px solid '+(active?'#185FA5':'transparent')+';font-weight:'+(active?'600':'400')+';display:flex;align-items:center;gap:4px">'
@@ -5513,8 +5622,10 @@ function tpRenderWO(){
       wReqs.forEach(function(r){var rc=r.status==='Approved'?{bg:'#EAF3DE',c:'#27500A'}:r.status==='Denied'?{bg:'#FCEBEB',c:'#501313'}:{bg:'#FAEEDA',c:'#633806'};h+='<div style="background:#fff;border-radius:10px;padding:10px 12px;margin-bottom:7px;border:0.5px solid rgba(0,0,0,0.1)">'+'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px"><div style="font-size:13px;font-weight:500">'+r.part+' <span style="font-weight:400;color:#888">x'+r.qty+'</span></div><span style="background:'+rc.bg+';color:'+rc.c+';border-radius:6px;padding:2px 8px;font-size:11px;font-weight:500">'+r.status+'</span></div>'+(r.reason?'<div style="font-size:12px;color:#888">'+r.reason+'</div>':'')+(r.status==='Approved'?'<div style="font-size:11px;color:#27500A;margin-top:3px">✓ Approved — go ahead and order</div>':r.status==='Denied'?'<div style="font-size:11px;color:#A32D2D;margin-top:3px">✗ Denied by owner</div>':'')+'</div>';});
     }
   }
+  if(TP_TAB==='ai'){h+=tpAIPanelHTML(w);}
   h+='<div style="height:20px"></div>';
   el('tp-body').innerHTML=h;
+  if(TP_TAB==='ai'){var _tt=el('tp-ai-thread');if(_tt)_tt.scrollTop=_tt.scrollHeight;}
 }
 function tpSaveFindings(id){
   var ta=el('tp-tech-notes');
