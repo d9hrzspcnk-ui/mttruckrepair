@@ -306,7 +306,7 @@ tr:last-child td{border-bottom:none}
 var SB='https://hkiydqsvvorhvazpmkwb.supabase.co',SK='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhraXlkcXN2dm9yaHZhenBta3diIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxNTM5NjAsImV4cCI6MjA5NDcyOTk2MH0.LKEcb5SlZqT2RYQRx9Pr3gW6H3pVCboIXGrSjqq5f_0';
 var ES='service_72vdqgv',ET='template_eia8k4h',EK='QC4JaQRWi_9mkE1ze';
 var PIN='1234',OPIN='',ROLE='owner',pe='',APP_LANG='en';
-var WO=[],INV=[],CUST=[],PARTS=[],TECH=['Guillermo'],PMS=[],APPTS=[],VENDORS=[],KITS=[],ESTIMATES=[];
+var WO=[],INV=[],CUST=[],PARTS=[],TECH=['Guillermo'],PMS=[],APPTS=[],VENDORS=[],KITS=[],ESTIMATES=[],EXPENSES=[];
 var TECH_REQS=[],TECH_CLOCKS={},TECH_CODES={},TECH_TIMELOG=[],TECH_FINDINGS=[],NOTIFS=[],TP_USER=null,TP_WO_ID=null,TP_TAB='job',TP_PHOTOS={},TP_PIN='',TP_TICK=null,_tpPrio='Normal',TP_AI={};
 var DEFAULT_VENDORS=['Cruz Truck Supplies','FleetPride','NAPA','TEC Fontana','Rush Truck Center','CV Enterprises','Velocity Truck Center'];
 function getVendorList(){
@@ -463,11 +463,11 @@ function getWODiagPhotos(woId){
   return saved.concat(mem.filter(function(p){return p.startsWith('data:');}));
 }
 async function saveAll(){
-  await Promise.all([dbS('mttr-wo',JSON.stringify(WO)),dbS('mttr-inv',JSON.stringify(INV)),dbS('mttr-cust',JSON.stringify(CUST)),dbS('mttr-parts',JSON.stringify(PARTS)),dbS('mttr-shop',JSON.stringify(shop)),dbS('mttr-tech',JSON.stringify(TECH)),dbS('mttr-pms',JSON.stringify(PMS)),dbS('mttr-appts',JSON.stringify(APPTS)),dbS('mttr-vendors',JSON.stringify(VENDORS)),dbS('mttr-kits',JSON.stringify(KITS)),dbS('mttr-ctrs',JSON.stringify({woc:woc,invc:invc,PIN:PIN,OPIN:OPIN})),dbS('mttr-tech-reqs',JSON.stringify(TECH_REQS)),dbS('mttr-tech-clocks',JSON.stringify(TECH_CLOCKS)),dbS('mttr-tech-codes',JSON.stringify(TECH_CODES)),dbS('mttr-estimates',JSON.stringify(ESTIMATES)),dbS('mttr-notifs',JSON.stringify(NOTIFS)),dbS('mttr-estc',JSON.stringify({estc:estc})),dbS('mttr-tech-timelog',JSON.stringify(TECH_TIMELOG)),dbS('mttr-tech-findings',JSON.stringify(TECH_FINDINGS))]);
+  await Promise.all([dbS('mttr-wo',JSON.stringify(WO)),dbS('mttr-inv',JSON.stringify(INV)),dbS('mttr-cust',JSON.stringify(CUST)),dbS('mttr-parts',JSON.stringify(PARTS)),dbS('mttr-shop',JSON.stringify(shop)),dbS('mttr-tech',JSON.stringify(TECH)),dbS('mttr-pms',JSON.stringify(PMS)),dbS('mttr-appts',JSON.stringify(APPTS)),dbS('mttr-vendors',JSON.stringify(VENDORS)),dbS('mttr-kits',JSON.stringify(KITS)),dbS('mttr-ctrs',JSON.stringify({woc:woc,invc:invc,PIN:PIN,OPIN:OPIN})),dbS('mttr-tech-reqs',JSON.stringify(TECH_REQS)),dbS('mttr-tech-clocks',JSON.stringify(TECH_CLOCKS)),dbS('mttr-tech-codes',JSON.stringify(TECH_CODES)),dbS('mttr-estimates',JSON.stringify(ESTIMATES)),dbS('mttr-notifs',JSON.stringify(NOTIFS)),dbS('mttr-estc',JSON.stringify({estc:estc})),dbS('mttr-tech-timelog',JSON.stringify(TECH_TIMELOG)),dbS('mttr-tech-findings',JSON.stringify(TECH_FINDINGS)),dbS('mttr-exp',JSON.stringify(EXPENSES))]);
   var s=el('sv-ind');if(s){s.style.opacity='1';setTimeout(function(){s.style.opacity='0';},2500);}
 }
 async function loadAll(){
-  var ks=['wo','inv','cust','parts','shop','tech','pms','appts','vendors','kits','ctrs','estimates','estc','notifs','tech-reqs','tech-clocks','tech-codes','tech-timelog','tech-findings'];
+  var ks=['wo','inv','cust','parts','shop','tech','pms','appts','vendors','kits','ctrs','estimates','estc','notifs','tech-reqs','tech-clocks','tech-codes','tech-timelog','tech-findings','exp'];
   var vs=await Promise.all(ks.map(function(k){return dbL('mttr-'+k);}));
   ks.forEach(function(k,i){
     if(!vs[i])return;
@@ -475,7 +475,7 @@ async function loadAll(){
       if(k==='wo')WO=d;else if(k==='inv')INV=d;else if(k==='cust')CUST=d;else if(k==='parts')PARTS=d;
       else if(k==='shop')Object.assign(shop,d);else if(k==='tech')TECH=d;
       else if(k==='pms')PMS=d;else if(k==='appts')APPTS=d;else if(k==='vendors')VENDORS=d;else if(k==='kits')KITS=d;
-      else if(k==='tech-reqs')TECH_REQS=d;else if(k==='tech-clocks')TECH_CLOCKS=d;else if(k==='tech-codes')TECH_CODES=d;else if(k==='estimates')ESTIMATES=d;else if(k==='notifs')NOTIFS=d;else if(k==='estc'&&d.estc)estc=d.estc;else if(k==='tech-timelog')TECH_TIMELOG=d;else if(k==='tech-findings')TECH_FINDINGS=d;
+      else if(k==='tech-reqs')TECH_REQS=d;else if(k==='tech-clocks')TECH_CLOCKS=d;else if(k==='tech-codes')TECH_CODES=d;else if(k==='estimates')ESTIMATES=d;else if(k==='notifs')NOTIFS=d;else if(k==='estc'&&d.estc)estc=d.estc;else if(k==='tech-timelog')TECH_TIMELOG=d;else if(k==='tech-findings')TECH_FINDINGS=d;else if(k==='exp')EXPENSES=d;
       else if(k==='ctrs'){if(d.woc)woc=d.woc;if(d.invc)invc=d.invc;if(d.PIN)PIN=d.PIN;if(d.OPIN!=null)OPIN=d.OPIN;}
     }catch(ex){}
   });
@@ -6580,6 +6580,161 @@ function pfIn(dateStr){
   var b=pfBounds();if(b[0]&&d<b[0])return false;if(b[1]&&d>=b[1])return false;return true;
 }
 function techPayRate(name){var x=getTechList().find(function(t){return t.name===name;});return x?(parseFloat(x.pay)||0):0;}
+// ── OWNER FINANCIAL ASSISTANT (Bookkeeper / CPA / CFO) ─────
+// ── OPERATING EXPENSES (owner) ─────────────────────────────
+var EXP_CATS=['Rent / Lease','Payroll / Wages','Insurance','Utilities','Fuel','Shop Supplies','Tools / Equipment','Software / Subscriptions','Marketing','Loan / Financing','Taxes / Licenses','Professional (CPA/Legal)','Waste Disposal','Phone / Internet','Other'];
+function expMonthly(){var E=(typeof EXPENSES!=='undefined'&&EXPENSES)||[];var mo=0;E.forEach(function(e){var a=parseFloat(e.amount)||0;if(e.freq==='monthly')mo+=a;else if(e.freq==='annual')mo+=a/12;});return mo;}
+function expSummaryText(){
+  var E=(typeof EXPENSES!=='undefined'&&EXPENSES)||[];
+  if(!E.length)return 'OPERATING EXPENSES: none entered yet. Tell the owner to add his real monthly costs (rent, payroll, insurance, utilities, fuel, loan payments, etc.) in the Operating Expenses screen so you can calculate true net profit instead of estimating.';
+  var mo=0,cat={},ones=[];
+  E.forEach(function(e){var a=parseFloat(e.amount)||0;
+    if(e.freq==='monthly'){mo+=a;cat[e.category]=(cat[e.category]||0)+a;}
+    else if(e.freq==='annual'){mo+=a/12;cat[e.category]=(cat[e.category]||0)+a/12;}
+    else ones.push(e);});
+  var L=[];
+  L.push('OPERATING EXPENSES (entered by owner): recurring monthly overhead $'+mo.toFixed(2)+' (annualized $'+(mo*12).toFixed(2)+').');
+  var cb=Object.keys(cat).map(function(k){return k+' $'+cat[k].toFixed(0)+'/mo';});
+  if(cb.length)L.push('Monthly overhead by category: '+cb.join('; ')+'.');
+  if(ones.length){var ot=ones.reduce(function(s,e){return s+(parseFloat(e.amount)||0);},0);L.push('One-time expenses logged: '+ones.length+' totaling $'+ot.toFixed(2)+' (recent: '+ones.slice(-5).map(function(e){return e.name+' $'+(parseFloat(e.amount)||0).toFixed(0)+(e.date?' '+e.date:'');}).join('; ')+').');}
+  L.push('NET PROFIT METHOD: true monthly net = monthly revenue MINUS parts cost (COGS) MINUS the recurring monthly overhead above. If Payroll/Wages is already entered in these expenses, do NOT also subtract a separate estimated tech-labor cost \u2014 that double-counts wages. Treat the entered expenses as the authoritative overhead.');
+  return L.join('\n');
+}
+function expManager(){
+  var E=(typeof EXPENSES!=='undefined'&&EXPENSES)||[];
+  var mo=expMonthly();
+  var catOpts=EXP_CATS.map(function(c){return '<option>'+c+'</option>';}).join('');
+  var freqOpts='<option value="monthly">Monthly</option><option value="annual">Annual</option><option value="onetime">One-time</option>';
+  var rows=E.length?E.slice().reverse().map(function(e){
+    var idx=E.indexOf(e);
+    var fl=e.freq==='monthly'?'/mo':(e.freq==='annual'?'/yr':'');
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:0.5px solid var(--bd)"><div><div style="font-size:13px;font-weight:600">'+(e.name||e.category)+'</div><div style="font-size:11px;color:#888">'+e.category+(e.date?' \u00B7 '+e.date:'')+' \u00B7 '+e.freq+'</div></div><div style="display:flex;align-items:center;gap:10px"><div style="font-size:14px;font-weight:600;color:#A32D2D">'+fm(parseFloat(e.amount)||0)+fl+'</div><button onclick="expDel('+idx+')" style="background:transparent;border:none;color:#888;cursor:pointer;font-size:18px">\u00D7</button></div></div>';
+  }).join(''):'<div style="font-size:13px;color:#888;padding:12px;text-align:center">No expenses entered yet. Add your monthly costs below.</div>';
+  oM('Operating Expenses',
+    '<div style="background:#E6F1FB;border-radius:10px;padding:12px 14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:11px;color:#0C447C;text-transform:uppercase;font-weight:600">Monthly Overhead</div><div style="font-size:22px;font-weight:700;color:#185FA5">'+fm(mo)+'</div></div><div style="text-align:right"><div style="font-size:11px;color:#888">Annualized</div><div style="font-size:16px;font-weight:600">'+fm(mo*12)+'</div></div></div>'
+    +'<div style="font-size:12px;font-weight:600;margin-bottom:8px">Add an expense</div>'
+    +'<div class="g2">'
+    +'<div class="fg"><label>Name / Vendor</label><input id="ex-n" placeholder="e.g. Shop rent" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
+    +'<div class="fg"><label>Category</label><select id="ex-c" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;font-family:inherit;background:#f5f5f7;width:100%">'+catOpts+'</select></div>'
+    +'<div class="fg"><label>Amount ($)</label><input id="ex-a" type="number" inputmode="decimal" placeholder="0.00" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
+    +'<div class="fg"><label>Frequency</label><select id="ex-f" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;font-family:inherit;background:#f5f5f7;width:100%">'+freqOpts+'</select></div>'
+    +'<div class="fg full"><label>Date</label><input id="ex-d" type="date" value="'+td()+'" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
+    +'</div>'
+    +'<button class="btn bl" style="width:100%;margin-bottom:14px" onclick="expAdd()"><i class="ti ti-plus"></i>Add Expense</button>'
+    +'<div style="font-size:12px;font-weight:600;margin-bottom:4px">Your expenses ('+E.length+')</div>'+rows,
+    '<button class="btn" onclick="finAssistant()"><i class="ti ti-calculator"></i>Ask the CFO</button><button class="btn" onclick="cM()">Close</button>');
+}
+function expAdd(){
+  if(typeof EXPENSES==='undefined')window.EXPENSES=[];
+  var n=gv('ex-n'),c=gv('ex-c'),a=parseFloat(gv('ex-a')),f=el('ex-f')?el('ex-f').value:'monthly',d=gv('ex-d');
+  if(!a||a<=0){alert('Enter an amount greater than 0.');return;}
+  if(!n)n=c;
+  EXPENSES.push({id:Date.now(),date:d||td(),category:c,name:n,amount:a,freq:f});
+  saveAll();expManager();
+}
+function expDel(idx){
+  if(typeof EXPENSES==='undefined'||idx<0||idx>=EXPENSES.length)return;
+  if(!confirm('Delete this expense?'))return;
+  EXPENSES.splice(idx,1);saveAll();expManager();
+}
+
+function finSummary(){
+  var now=new Date(),tm=now.getMonth(),ty=now.getFullYear();
+  var ALL=(typeof INV!=='undefined'&&INV)||[];
+  function calc(invs){
+    var laborRev=0,partsRev=0,partsCost=0,feeRev=0,paid=0,unpaid=0,tot=0,tax=0,byCust={};
+    invs.forEach(function(inv){
+      var t=parseFloat(inv.total)||0;tot+=t;tax+=parseFloat(inv.tax)||0;
+      if(inv.status==='Paid')paid+=t;else unpaid+=t;
+      var lRev=0,pRev=0,pCost=0;
+      if(inv.lines&&inv.lines.length){
+        inv.lines.forEach(function(l){var st=parseFloat(l.subtotal)||0;
+          if(l.type==='labor')lRev+=st;
+          else if(l.type==='part'){pRev+=st;var c=parseFloat(l.cost),q=parseFloat(l.qty)||1;if(!isNaN(c)&&c>0)pCost+=c*q;}
+          else feeRev+=st;});
+      }else{lRev=parseFloat(inv.labor)||0;pRev=parseFloat(inv.parts)||0;}
+      laborRev+=lRev;partsRev+=pRev;partsCost+=pCost;
+      var cn=inv.customer||'Unknown';byCust[cn]=(byCust[cn]||0)+t;
+    });
+    return {count:invs.length,tot:tot,paid:paid,unpaid:unpaid,tax:tax,laborRev:laborRev,partsRev:partsRev,partsCost:partsCost,partsProfit:partsRev-partsCost,feeRev:feeRev,byCust:byCust};
+  }
+  var all=calc(ALL);
+  var m=calc(ALL.filter(function(i){var d=new Date(i.date);return d.getMonth()===tm&&d.getFullYear()===ty;}));
+  var y=calc(ALL.filter(function(i){var d=new Date(i.date);return d.getFullYear()===ty;}));
+  var top=Object.keys(all.byCust).map(function(k){return [k,all.byCust[k]];}).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
+  var avg=all.count?all.tot/all.count:0;
+  var pm=all.partsRev>0?(all.partsProfit/all.partsRev*100):0;
+  var concentration=all.tot>0&&top.length?(top[0][1]/all.tot*100):0;
+  var L=[];
+  L.push('Currency USD. Today is '+now.toISOString().split('T')[0]+'.');
+  L.push('ALL-TIME: revenue $'+all.tot.toFixed(2)+' across '+all.count+' invoices (avg ticket $'+avg.toFixed(2)+'). Collected $'+all.paid.toFixed(2)+'; outstanding/unpaid (accounts receivable) $'+all.unpaid.toFixed(2)+'. Sales tax collected $'+all.tax.toFixed(2)+'.');
+  L.push('THIS MONTH: revenue $'+m.tot.toFixed(2)+' ('+m.count+' invoices); unpaid $'+m.unpaid.toFixed(2)+'.');
+  L.push('THIS YEAR ('+ty+'): revenue $'+y.tot.toFixed(2)+' ('+y.count+' invoices).');
+  L.push('REVENUE MIX (all-time): labor $'+all.laborRev.toFixed(2)+'; parts $'+all.partsRev.toFixed(2)+' (parts cost $'+all.partsCost.toFixed(2)+', parts gross margin '+pm.toFixed(0)+'%); fees/services $'+all.feeRev.toFixed(2)+'.');
+  if(top.length)L.push('TOP CUSTOMERS by all-time revenue: '+top.map(function(e){return e[0]+' $'+e[1].toFixed(0);}).join('; ')+'. Largest customer is '+concentration.toFixed(0)+'% of all revenue.');
+  L.push(expSummaryText());
+  return L.join('\n');
+}
+function finSys(){
+  return 'You are a seasoned bookkeeper, CPA, financial advisor, and fractional CFO for MT Truck & Trailer Repair, a heavy-duty diesel truck and trailer repair shop in Adelanto, California, owned and run hands-on by Guillermo. '
+    +'Talk plainly to a busy shop owner \u2014 no jargon dumps. Be concise and practical, and give a clear recommendation, not just options. '
+    +'Ground every answer in the shop\'s real numbers below and quote the actual figures when relevant. '
+    +'You can help with: bookkeeping and categorizing income, reading the P&L and cash flow, how much to set aside for taxes, quarterly estimated taxes, pricing and labor-rate decisions, parts vs labor margins, customer-concentration risk, equipment/financing decisions, and CFO-style planning and forecasting. '
+    +'When a number you need is missing (especially operating expenses), ask the owner for it rather than guessing. '
+    +'When operating expenses are provided below, compute the shop\'s true net profit (monthly and annual) and state plainly whether it is making or losing money, and whether the lever to pull is higher prices, more volume, or lower costs \u2014 back every call with his actual figures. '+'HARD LIMITS: You are an analysis and planning aid, not a replacement for a licensed CPA or attorney. For actually filing taxes, choosing or changing a business structure, payroll tax compliance, or any legal/regulatory decision, tell him to confirm with his licensed CPA or attorney before acting. Never invent specific tax rates, brackets, or filing deadlines you are not sure of \u2014 say to verify them. '
+    +'SHOP NUMBERS:\n'+finSummary();
+}
+var FIN_AI=[];
+function finBubble(role,text){return tpAIBubble(role,text);}
+function finAppendHTML(html){var t=el('fin-ai-thread');if(!t)return;t.insertAdjacentHTML('beforeend',html);t.scrollTop=t.scrollHeight;}
+function finAppend(role,text){var st=el('fin-ai-starts');if(st)st.style.display='none';finAppendHTML(finBubble(role,text));}
+function finShowTyping(){finAppendHTML('<div id="fin-ai-typing" style="align-self:flex-start;color:#888;font-size:13px;padding:4px 8px"><i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i></div>');}
+function finRemoveTyping(){var d=el('fin-ai-typing');if(d)d.remove();}
+function finStart(q){finSend(q);}
+function finNew(){FIN_AI=[];finAssistant();}
+function finSend(qOverride){
+  var inp=el('fin-ai-inp');
+  var q=qOverride||(inp?inp.value.trim():'');
+  if(!q)return;
+  if(inp&&!qOverride){inp.value='';inp.style.height='auto';}
+  FIN_AI.push({role:'user',content:q});
+  finAppend('user',q);
+  finShowTyping();
+  var thread=FIN_AI.map(function(m){return {role:m.role,content:m.content};});
+  callClaudeChat(thread,finSys()).then(function(ans){
+    finRemoveTyping();
+    ans=ans||'(no response)';
+    if(ans.charAt(0)==='\u26A0'){finAppend('assistant',ans);FIN_AI.pop();return;}
+    FIN_AI.push({role:'assistant',content:ans});
+    finAppend('assistant',ans);
+  });
+}
+function finPanelHTML(){
+  var starts=[
+    ['Set aside for taxes?','Based on my numbers, roughly how much should I be setting aside for taxes, and how should I do it?'],
+    ['How is my cash flow?','Walk me through my cash flow right now \u2014 what stands out, good or bad?'],
+    ['Are my margins healthy?','Are my parts and labor margins healthy for a heavy-duty truck shop? What should they be?'],
+    ['Who carries my revenue?','How concentrated is my revenue in a few customers, and is that a risk?'],
+    ['Raise my labor rate?','Should I raise my labor rate? Help me think it through with my numbers.'],
+    ['Explain my P&L','Walk me through what a profit & loss statement is for my shop and what I\'d need to build a real one.']
+  ];
+  var startBtns=starts.map(function(s){return '<button onclick="finStart(this.dataset.q)" data-q="'+s[1].replace(/"/g,'&quot;')+'" style="background:#E6F1FB;color:#0C447C;border:1px solid #185FA5;border-radius:18px;padding:7px 12px;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap">'+s[0]+'</button>';}).join('');
+  var hist=FIN_AI.map(function(m){return finBubble(m.role,m.content);}).join('');
+  var has=FIN_AI.length>0;
+  var h='<div style="font-size:11px;color:#888;margin-bottom:8px;line-height:1.45">Bookkeeper \u00B7 CPA \u00B7 Financial advisor \u00B7 Fractional CFO \u2014 working from your live shop numbers. <strong>Not a substitute for a licensed CPA or attorney</strong> for filing taxes or legal decisions; confirm those with your professional.</div>';
+  h+='<div id="fin-ai-thread" style="display:flex;flex-direction:column;gap:8px;min-height:120px;max-height:46vh;overflow-y:auto;padding:4px 2px;margin-bottom:8px">'+hist+'</div>';
+  h+='<div id="fin-ai-starts" style="display:'+(has?'none':'flex')+';flex-wrap:wrap;gap:6px;margin-bottom:10px">'+startBtns+'</div>';
+  h+='<div style="display:flex;gap:8px;align-items:flex-end"><textarea id="fin-ai-inp" rows="1" placeholder="Ask about taxes, cash flow, pricing, margins\u2026" style="flex:1;padding:9px 11px;font-size:13px;border-radius:10px;border:0.5px solid rgba(0,0,0,0.15);background:#f5f5f7;font-family:inherit;resize:none;max-height:110px" oninput="this.style.height=\'auto\';this.style.height=Math.min(this.scrollHeight,110)+\'px\'"></textarea>';
+  h+='<button onclick="finSend()" style="background:#185FA5;color:#fff;border:none;border-radius:10px;padding:10px 14px;font-size:15px;cursor:pointer;font-family:inherit;flex-shrink:0"><i class="ti ti-send"></i></button></div>';
+  return h;
+}
+function finAssistant(){
+  oM('Financial Advisor \u2014 Bookkeeper / CPA / CFO', finPanelHTML(),
+    '<button class="btn" onclick="finNew()"><i class="ti ti-refresh"></i>New chat</button>'
+    +'<button class="btn" onclick="cM()">Close</button>');
+  var t=el('fin-ai-thread');if(t)t.scrollTop=t.scrollHeight;
+}
+
 function rProfit(){
   var invs=INV.filter(function(i){return pfIn(i.date);});
   var woByTicket={};WO.forEach(function(w){woByTicket[w.ticket]=w;});
@@ -6621,7 +6776,7 @@ function rProfit(){
   var laborMargin=laborRev>0?(laborProfit/laborRev*100):0;
   function pill(r,lbl){return'<button onclick="pfSetRange(this.dataset.r)" data-r="'+r+'" style="padding:6px 13px;border-radius:20px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;border:0.5px solid '+(PF_RANGE===r?'#185FA5':'var(--bd)')+';background:'+(PF_RANGE===r?'#185FA5':'#fff')+';color:'+(PF_RANGE===r?'#fff':'#555')+'">'+lbl+'</button>';}
   function st(l,v,c,sub){return'<div class="stat"><div class="sl">'+l+'</div><div class="sv"'+(c?' style="color:'+c+'"':'')+'>'+v+'</div>'+(sub?'<div style="font-size:10px;color:#888;margin-top:2px">'+sub+'</div>':'')+'</div>';}
-  var h='<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">'+pill('month','This Month')+pill('last','Last Month')+pill('90','90 Days')+pill('ytd','YTD')+pill('all','All Time')+'</div>';
+  var h='<button onclick="finAssistant()" style="width:100%;background:#185FA5;color:#fff;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:14px;display:flex;align-items:center;justify-content:center;gap:8px"><i class="ti ti-calculator"></i>Financial Advisor \u2014 Bookkeeper / CPA / CFO (AI)</button>'+'<button onclick="expManager()" style="width:100%;background:#fff;color:#185FA5;border:1px solid #185FA5;border-radius:10px;padding:11px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:14px;display:flex;align-items:center;justify-content:center;gap:8px"><i class="ti ti-receipt-2"></i>Operating Expenses</button>'+'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px">'+pill('month','This Month')+pill('last','Last Month')+pill('90','90 Days')+pill('ytd','YTD')+pill('all','All Time')+'</div>';
   h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'
     +st('Total Revenue',fm(totalRev),'#185FA5',invs.length+' invoice(s)')
     +st('Collected / Owed',fm(paidRev),'#3B6D11',fm(unpaidRev)+' unpaid')
