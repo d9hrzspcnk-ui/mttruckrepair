@@ -6570,7 +6570,7 @@ async function receiptSave(ev){
 }
 
 // ── ITEMIZED RECEIPT: split each line to Stock / Customer invoice / Overhead ──
-var _rsData=null;
+var _rsData=null,_rsPending=null;
 function receiptSplitPreview(d,imgURL){
   _pendingReceiptImg=imgURL;_rsData=d;
   var inS='padding:7px 9px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%';
@@ -6622,14 +6622,18 @@ function _rsInvOpts(){
   });
   sel.innerHTML=opts;
 }
-function _rsAddStock(p,vendor,invn){
-  if(typeof PARTS==='undefined')window.PARTS=[];
-  var match=null;
-  PARTS.forEach(function(x){
+function _rsFindStockMatch(p){
+  var match=null;var P=(typeof PARTS!=='undefined'&&PARTS)||[];
+  P.forEach(function(x){
     if(match)return;
     if(p.partNum&&x.partNum&&(''+x.partNum).toLowerCase()===(''+p.partNum).toLowerCase())match=x;
     else if(!p.partNum&&x.name&&p.desc&&x.name.toLowerCase()===p.desc.toLowerCase())match=x;
   });
+  return match;
+}
+function _rsAddStock(p,vendor,invn,mode){
+  if(typeof PARTS==='undefined')window.PARTS=[];
+  var match=(mode==='new')?null:_rsFindStockMatch(p);
   var mk=getMarkup(p.cost);
   if(match){
     match.qty=(parseInt(match.qty)||0)+(parseInt(p.qty)||0);
@@ -6639,41 +6643,77 @@ function _rsAddStock(p,vendor,invn){
     PARTS.push({name:p.desc||'Part',partNum:p.partNum||'',cat:'General',vendor:vendor||'',cost:(p.cost||0).toFixed(2),sell:(p.cost*(1+mk/100)).toFixed(2),markup:mk,qty:parseInt(p.qty)||0,min:2,lastInvoice:invn});
   }
 }
-async function receiptSplitSave(ev){
+function receiptSplitSave(ev){
   var d=_rsData;if(!d)return;
   var lines=d.lines||[];
-  var vendor=gv('rs-vendor'),invn=gv('rs-inv'),date=gv('rs-date')||_rcISO(''),ohCat=el('rs-cat')?el('rs-cat').value:'Shop Supplies';
   var parsed=lines.map(function(l,i){
     return {desc:gv('rs-desc-'+i)||(l.desc||'Part'),qty:parseFloat(gv('rs-qty-'+i))||1,cost:parseFloat(gv('rs-cost-'+i))||0,dest:(el('rs-dest-'+i)?el('rs-dest-'+i).value:'stock'),partNum:l.partNum||''};
   });
   var needCust=parsed.some(function(p){return p.dest==='customer';}),custName='';
   if(needCust){custName=el('rs-cust')?el('rs-cust').value:'';if(!custName){alert('Pick a customer for the items you are billing, or switch those items to Stock or Overhead.');return;}}
+  _rsPending={parsed:parsed,vendor:gv('rs-vendor'),invn:gv('rs-inv'),date:gv('rs-date')||_rcISO(''),ohCat:(el('rs-cat')?el('rs-cat').value:'Shop Supplies'),needCust:needCust,custName:custName,invChoice:(el('rs-invsel')?el('rs-invsel').value:'new'),img:_pendingReceiptImg};
+  if(parsed.some(function(p){return p.dest==='stock';})){_rsStockConfirm();}
+  else{_rsCommit(ev);}
+}
+function _rsStockConfirm(){
+  var P=_rsPending;if(!P)return;
+  var inS='padding:7px 9px;font-size:13px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%';
+  var rows=P.parsed.map(function(p){
+    if(p.dest!=='stock')return '';
+    var idx=P.parsed.indexOf(p);
+    var m=_rsFindStockMatch(p);
+    var head='<div style="font-size:13px;font-weight:600;margin-bottom:4px">'+_rcEsc(p.desc)+(p.partNum?' \u00B7 #'+_rcEsc(p.partNum):'')+'</div>';
+    if(m){
+      var cur=parseInt(m.qty)||0,add=parseInt(p.qty)||0;
+      return '<div style="border:0.5px solid var(--bd);border-radius:10px;padding:10px;margin-bottom:8px">'+head
+        +'<div style="font-size:11px;color:#27500A;background:#EAF3DE;display:inline-block;padding:2px 8px;border-radius:10px;margin-bottom:6px">Matches stock: '+_rcEsc(m.name)+(m.partNum?' (#'+_rcEsc(m.partNum)+')':'')+'</div>'
+        +'<select id="rsc-mode-'+idx+'" style="'+inS+';font-family:inherit"><option value="merge">Add '+add+' to existing ('+cur+' \u2192 '+(cur+add)+')</option><option value="new">No \u2014 make it a separate new part</option></select>'
+        +'</div>';
+    }
+    return '<div style="border:0.5px solid var(--bd);border-radius:10px;padding:10px;margin-bottom:8px">'+head
+      +'<div style="font-size:11px;color:#888">No match in inventory \u2014 will be added as a new part.</div>'
+      +'<input type="hidden" id="rsc-mode-'+idx+'" value="new">'
+      +'</div>';
+  }).join('');
+  var nCust=P.parsed.filter(function(p){return p.dest==='customer';}).length;
+  var nOh=P.parsed.filter(function(p){return p.dest==='overhead';}).length;
+  var extra='';
+  if(nCust||nOh){extra='<div style="font-size:12px;color:#888;margin:6px 0 2px">Also saving: '+[(nCust?nCust+' to '+(P.invChoice==='new'?'a new invoice for '+_rcEsc(P.custName):'an existing invoice'):''),(nOh?nOh+' to overhead':'')].filter(Boolean).join(', ')+'.</div>';}
+  oM('Confirm inventory',
+    '<div style="font-size:12px;color:#888;line-height:1.5;margin-bottom:12px">Check how each stock item lands so you don\u2019t get duplicates.</div>'+rows+extra,
+    '<button class="btn bl" onclick="_rsCommit(event)"><i class="ti ti-check"></i>Confirm &amp; Save</button><button class="btn" onclick="receiptSplitPreview(_rsData,_pendingReceiptImg)">Back</button>'
+  );
+}
+async function _rsCommit(ev){
+  var P=_rsPending;if(!P)return;
   var btn=ev&&ev.target?ev.target:null;if(btn&&btn.tagName!=='BUTTON')btn=btn.closest('button');if(btn)aiLoading(btn,'Saving\u2026');
   var url='';
-  try{if(_pendingReceiptImg){var fn=Date.now()+'-'+Math.floor(Math.random()*10000)+'.jpg';url=(await uploadReceiptPrivate(_pendingReceiptImg,fn))||'';}}catch(e){url='';}
+  try{if(P.img){var fn=Date.now()+'-'+Math.floor(Math.random()*10000)+'.jpg';url=(await uploadReceiptPrivate(P.img,fn))||'';}}catch(e){url='';}
   var invTarget=null;
-  if(needCust){
-    var sel=el('rs-invsel'),v=sel?sel.value:'new';
-    if(v==='new'){
-      var cu=null;((typeof CUST!=='undefined'&&CUST)||[]).forEach(function(c){if(c.name===custName)cu=c;});
-      var ni={id:INV.length,num:invc++,customer:custName,phone:(cu&&cu.phone)||'',vehicle:'',vin:'',labor:'0.00',parts:'0.00',supplies:0,taxPct:(parseFloat(shop.taxRate)||0),subtotal:'0.00',tax:'0.00',total:'0.00',status:'Unpaid',payment:'',date:td(),lines:[],woTicket:'\u2014'};
+  if(P.needCust){
+    if(P.invChoice==='new'){
+      var cu=null;((typeof CUST!=='undefined'&&CUST)||[]).forEach(function(c){if(c.name===P.custName)cu=c;});
+      var ni={id:INV.length,num:invc++,customer:P.custName,phone:(cu&&cu.phone)||'',vehicle:'',vin:'',labor:'0.00',parts:'0.00',supplies:0,taxPct:(parseFloat(shop.taxRate)||0),subtotal:'0.00',tax:'0.00',total:'0.00',status:'Unpaid',payment:'',date:td(),lines:[],woTicket:'\u2014'};
       INV.push(ni);invTarget=ni.id;
-    }else{invTarget=parseInt(v);}
+    }else{invTarget=parseInt(P.invChoice);}
   }
   var nStock=0,nCust=0,nOh=0;
-  parsed.forEach(function(p){
+  P.parsed.forEach(function(p){
     if(p.dest==='customer'&&invTarget!=null){
       var mk=getMarkup(p.cost),sell=+(p.cost*(1+mk/100)).toFixed(2);
       if(!INV[invTarget].lines)INV[invTarget].lines=[];
-      INV[invTarget].lines.push({type:'part',partNum:p.partNum,desc:p.desc,vendor:vendor,qty:p.qty,cost:+p.cost.toFixed(2),markup:mk,sell:sell,tax:true,subtotal:+(p.qty*sell).toFixed(2),srcInvoice:invn});
+      INV[invTarget].lines.push({type:'part',partNum:p.partNum,desc:p.desc,vendor:P.vendor,qty:p.qty,cost:+p.cost.toFixed(2),markup:mk,sell:sell,tax:true,subtotal:+(p.qty*sell).toFixed(2),srcInvoice:P.invn});
       nCust++;
     }else if(p.dest==='overhead'){
-      EXPENSES.push({id:Date.now()+Math.floor(Math.random()*100000),date:date,category:ohCat,name:vendor||ohCat,amount:+(p.qty*p.cost).toFixed(2),freq:'onetime',tax:0,note:p.desc,invoice:invn,receipt:url});
+      EXPENSES.push({id:Date.now()+Math.floor(Math.random()*100000),date:P.date,category:P.ohCat,name:P.vendor||P.ohCat,amount:+(p.qty*p.cost).toFixed(2),freq:'onetime',tax:0,note:p.desc,invoice:P.invn,receipt:url});
       nOh++;
-    }else{_rsAddStock(p,vendor,invn);nStock++;}
+    }else if(p.dest==='stock'){
+      var idx=P.parsed.indexOf(p);var me=el('rsc-mode-'+idx);var mode=me?me.value:'merge';
+      _rsAddStock(p,P.vendor,P.invn,mode);nStock++;
+    }
   });
   if(invTarget!=null)recalcInv(invTarget);
-  _pendingReceiptImg=null;_rsData=null;
+  _pendingReceiptImg=null;_rsData=null;_rsPending=null;
   await saveAll();
   var bits=[];if(nStock)bits.push(nStock+' to stock');if(nCust)bits.push(nCust+' to invoice'+(invTarget!=null?' #'+INV[invTarget].num:''));if(nOh)bits.push(nOh+' to overhead');
   expManager();
