@@ -5324,6 +5324,15 @@ function tpRenderDash(){
   if(myReqs.length){
     h+='<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin:12px 0 6px">Parts Requests</div>';
     myReqs.forEach(function(r){
+      if(r.type==='got'){
+        h+='<div style="background:#fff;border-radius:10px;padding:10px 12px;margin-bottom:7px;border:0.5px solid rgba(0,0,0,0.1)">'
+          +'<div style="display:flex;justify-content:space-between;align-items:center">'
+          +'<div><div style="font-size:13px;font-weight:500"><i class="ti ti-package"></i> Parts receipt sent'+(r.parsed&&r.parsed.lines?' \u00B7 '+r.parsed.lines.length+' item(s)':'')+'</div>'
+          +'<div style="font-size:11px;color:#888">'+(r.woTicket?'WO #'+r.woTicket+' \u00B7 ':'')+r.time+'</div></div>'
+          +'<span style="background:#EEEDFE;color:#3C3489;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:500">'+(r.status==='Routed'?'Logged':r.status)+'</span>'
+          +'</div></div>';
+        return;
+      }
       var rc=r.status==='Approved'?{bg:'#EAF3DE',c:'#27500A'}:r.status==='Denied'?{bg:'#FCEBEB',c:'#501313'}:{bg:'#FAEEDA',c:'#633806'};
       h+='<div style="background:#fff;border-radius:10px;padding:10px 12px;margin-bottom:7px;border:0.5px solid rgba(0,0,0,0.1)">'
         +'<div style="display:flex;justify-content:space-between;align-items:center">'
@@ -5569,6 +5578,8 @@ function tpRenderWO(){
     } else if(!diagPhs.length) h+='<div style="font-size:13px;color:#888;padding:10px;background:#f5f5f7;border-radius:8px;text-align:center">No codes logged yet</div>';
   }
   if(TP_TAB==='parts'){
+    h+='<label style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:#534AB7;color:#fff;border-radius:12px;padding:13px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:6px"><i class="ti ti-camera-ai" style="font-size:18px"></i>I Got Parts \u2014 snap receipt<input type="file" accept="image/*" capture="environment" style="display:none" onchange="tpGotParts(this,'+w.id+')"></label>';
+    h+='<div style="font-size:11px;color:#888;text-align:center;margin-bottom:14px">Snap the receipt for parts you picked up \u2014 it goes to the owner to log. No prices needed.</div>';
     h+='<div style="background:#E6F1FB;border:0.5px solid #185FA5;border-radius:12px;padding:12px 14px;margin-bottom:12px">'
       +'<div style="font-size:13px;font-weight:600;color:#0C447C;margin-bottom:8px">Request Parts / Report Issue</div>'
       +'<div style="display:flex;gap:8px;margin-bottom:8px"><input id="tp-pname" placeholder="Part name..." style="flex:1;padding:9px 10px;font-size:13px;border-radius:8px;border:0.5px solid rgba(0,0,0,0.15);background:#fff;font-family:inherit"><input id="tp-pqty" type="number" min="1" value="1" style="width:56px;padding:9px 8px;font-size:13px;border-radius:8px;border:0.5px solid rgba(0,0,0,0.15);background:#fff;text-align:center;font-family:inherit"></div>'
@@ -6054,6 +6065,18 @@ function rOwnerTechs(tab){
     if(_ownerTechsTab==='parts'){
     if(!TECH_REQS.length)h+='<div class="card" style="font-size:13px;color:#888">No parts requests yet</div>';
     TECH_REQS.forEach(function(r){
+      if(r.type==='got'){
+        var gs=r.status==='Pending'?{bg:'#EEEDFE',c:'#3C3489',bar:'#534AB7'}:{bg:'#EAF3DE',c:'#27500A',bar:'#3B6D11'};
+        h+='<div style="background:#fff;border-radius:10px;padding:10px 12px;margin-bottom:7px;border:0.5px solid rgba(0,0,0,0.1)'+(r.status==='Pending'?';border-left:3px solid '+gs.bar:'')+'">'
+          +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'
+          +'<div><div style="font-size:13px;font-weight:600"><i class="ti ti-package"></i> Parts received'+(r.parsed&&r.parsed.lines?' \u00B7 '+r.parsed.lines.length+' item(s)':'')+'</div>'
+          +'<div style="font-size:11px;color:#888">'+r.techName+(r.woTicket?' \u00B7 SO #'+r.woTicket:'')+(r.truck?' \u00B7 '+_rcEsc(r.truck):'')+' \u00B7 '+r.time+'</div></div>'
+          +'<span style="background:'+gs.bg+';color:'+gs.c+';border-radius:6px;padding:2px 8px;font-size:11px;font-weight:500">'+r.status+'</span></div>'
+          +((r.parsed&&r.parsed.vendor)?'<div style="font-size:12px;color:#888;margin-bottom:8px">'+_rcEsc(r.parsed.vendor)+(r.parsed.invoice?' \u00B7 Inv '+_rcEsc(r.parsed.invoice):'')+'</div>':'')
+          +(r.status==='Pending'?'<div style="display:flex;gap:8px">'+(r.receiptPath?'<button onclick="ownerViewGotPhoto(this.dataset.p)" data-p="'+r.receiptPath+'" class="btn xs">View receipt</button>':'')+'<button onclick="ownerReviewGot(this.dataset.rid)" data-rid="'+r.id+'" style="flex:1;padding:7px 0;background:#534AB7;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">Review &amp; route</button></div>':(r.receiptPath?'<button onclick="ownerViewGotPhoto(this.dataset.p)" data-p="'+r.receiptPath+'" class="btn xs">View receipt</button>':''))
+          +'</div>';
+        return;
+      }
       var rc=r.status==='Approved'?{bg:'#EAF3DE',c:'#27500A'}:r.status==='Denied'?{bg:'#FCEBEB',c:'#501313'}:{bg:'#FAEEDA',c:'#633806'};
       var pc=r.priority==='High'?{bg:'#FAEEDA',c:'#633806'}:r.priority==='Urgent'?{bg:'#FCEBEB',c:'#501313'}:{bg:'#E6F1FB',c:'#0C447C'};
       h+='<div style="background:#fff;border-radius:10px;padding:10px 12px;margin-bottom:7px;border:0.5px solid rgba(0,0,0,0.1)'+(r.status==='Pending'?';border-left:3px solid #BA7517':'')+'">'
@@ -6524,6 +6547,7 @@ async function scanReceipt(input){
     oM('Couldn\u2019t read that one','<div style="font-size:13px;color:#888;line-height:1.5;padding:6px 2px">Claude couldn\u2019t pull clean details off that photo. Try again with better lighting and the whole receipt flat in frame \u2014 or just add it by hand.</div>','<button class="btn bl" onclick="expManager()">Back</button>');
     return;
   }
+  _rsExistingPath='';_rsQueueReqId='';_rsPrefillCust='';_rsDefaultDest='stock';
   if(d.lines&&d.lines.length){receiptSplitPreview(d,small);}else{receiptPreview(d,small);}
 }
 function receiptPreview(d,imgURL){
@@ -6534,7 +6558,7 @@ function receiptPreview(d,imgURL){
   var inS='padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%';
   oM('Receipt \u2014 Review & Save',
     '<div style="display:flex;gap:12px;margin-bottom:14px;align-items:flex-start">'
-    +'<img src="'+imgURL+'" style="width:88px;height:118px;object-fit:cover;border-radius:8px;border:0.5px solid var(--bd);flex:none">'
+    +((imgURL&&imgURL.indexOf('data:')===0)?'<img src="'+imgURL+'" style="width:88px;height:118px;object-fit:cover;border-radius:8px;border:0.5px solid var(--bd);flex:none">':'<div style="width:88px;height:118px;border-radius:8px;border:0.5px solid var(--bd);background:#f5f5f7;display:flex;align-items:center;justify-content:center;flex:none"><i class="ti ti-receipt" style="font-size:26px;color:#aaa"></i></div>')
     +'<div style="font-size:12px;color:#888;line-height:1.5">Claude read this receipt. Check the fields and fix anything that\u2019s off, then save. It logs as a one-time operating expense and the photo is stored with it.</div>'
     +'</div>'
     +'<div class="g2">'
@@ -6556,26 +6580,28 @@ async function receiptSave(ev){
   if(!n)n=c;
   var btn=ev&&ev.target?ev.target:null;if(btn&&btn.tagName!=='BUTTON')btn=btn.closest('button');
   if(btn)aiLoading(btn,'Saving\u2026');
-  var url='';
-  try{
+  var url=_rsExistingPath||'';
+  if(!url){try{
     if(_pendingReceiptImg){
       var fname=Date.now()+'-'+Math.floor(Math.random()*10000)+'.jpg';
       url=(await uploadReceiptPrivate(_pendingReceiptImg,fname))||'';
     }
-  }catch(e){url='';}
+  }catch(e){url='';}}
   EXPENSES.push({id:Date.now(),date:d||_rcISO(''),category:c,name:n,amount:a,freq:f,tax:t,note:note,invoice:invn,receipt:url});
-  _pendingReceiptImg=null;
+  if(_rsQueueReqId){var rq=TECH_REQS.find(function(x){return x.id===_rsQueueReqId;});if(rq)rq.status='Routed';}
+  _pendingReceiptImg=null;_rsExistingPath='';_rsQueueReqId='';_rsPrefillCust='';_rsDefaultDest='stock';
   await saveAll();
   expManager();
 }
 
 // ── ITEMIZED RECEIPT: split each line to Stock / Customer invoice / Overhead ──
-var _rsData=null,_rsPending=null;
+var _rsData=null,_rsPending=null,_rsExistingPath='',_rsQueueReqId='',_rsPrefillCust='',_rsDefaultDest='stock';
 function receiptSplitPreview(d,imgURL){
   _pendingReceiptImg=imgURL;_rsData=d;
   var inS='padding:7px 9px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%';
-  var custOpts='<option value="">- pick customer -</option>'+(((typeof CUST!=='undefined'&&CUST)||[]).map(function(c){return '<option>'+_rcEsc(c.name)+'</option>';}).join(''));
+  var custOpts='<option value="">- pick customer -</option>'+(((typeof CUST!=='undefined'&&CUST)||[]).map(function(c){return '<option'+(c.name===_rsPrefillCust?' selected':'')+'>'+_rcEsc(c.name)+'</option>';}).join(''));
   var catOpts=EXP_CATS.map(function(c){return '<option'+(c==='Shop Supplies'?' selected':'')+'>'+c+'</option>';}).join('');
+  var dOpt=function(v){return _rsDefaultDest===v?' selected':'';};
   var lines=d.lines||[];
   var rows=lines.map(function(l,i){
     var cost=parseFloat(l.cost)||0,qty=parseFloat(l.qty)||1;
@@ -6585,12 +6611,13 @@ function receiptSplitPreview(d,imgURL){
       +'<div style="flex:1"><div style="font-size:10px;color:#888">Qty</div><input id="rs-qty-'+i+'" type="number" inputmode="decimal" value="'+qty+'" style="'+inS+'"></div>'
       +'<div style="flex:1"><div style="font-size:10px;color:#888">Unit cost $</div><input id="rs-cost-'+i+'" type="number" inputmode="decimal" value="'+cost+'" style="'+inS+'"></div>'
       +'</div>'
-      +'<select id="rs-dest-'+i+'" onchange="_rsToggleCust()" style="'+inS+';font-family:inherit"><option value="stock">Add to stock (inventory)</option><option value="customer">Bill to a customer</option><option value="overhead">Shop overhead (expense)</option></select>'
+      +'<select id="rs-dest-'+i+'" onchange="_rsToggleCust()" style="'+inS+';font-family:inherit"><option value="stock"'+dOpt('stock')+'>Add to stock (inventory)</option><option value="customer"'+dOpt('customer')+'>Bill to a customer</option><option value="overhead"'+dOpt('overhead')+'>Shop overhead (expense)</option></select>'
       +'</div>';
   }).join('');
+  var thumb=(imgURL&&imgURL.indexOf('data:')===0)?'<img src="'+imgURL+'" style="width:74px;height:100px;object-fit:cover;border-radius:8px;border:0.5px solid var(--bd);flex:none">':'<div style="width:74px;height:100px;border-radius:8px;border:0.5px solid var(--bd);background:#f5f5f7;display:flex;align-items:center;justify-content:center;flex:none"><i class="ti ti-receipt" style="font-size:24px;color:#aaa"></i></div>';
   oM('Receipt - Split & Route',
     '<div style="display:flex;gap:12px;margin-bottom:12px;align-items:flex-start">'
-    +'<img src="'+imgURL+'" style="width:74px;height:100px;object-fit:cover;border-radius:8px;border:0.5px solid var(--bd);flex:none">'
+    +thumb
     +'<div style="font-size:12px;color:#888;line-height:1.5">Claude found '+lines.length+' item(s). For each one, pick where it goes - your stock, a customer invoice, or shop overhead. The photo and invoice # are saved with all of them.</div>'
     +'</div>'
     +'<div class="g2" style="margin-bottom:12px">'
@@ -6608,6 +6635,7 @@ function receiptSplitPreview(d,imgURL){
     '<button class="btn bl" onclick="receiptSplitSave(event)"><i class="ti ti-check"></i>Save All</button><button class="btn" onclick="receiptPreview(_rsData,_pendingReceiptImg)">Whole receipt as 1 expense</button><button class="btn" onclick="expManager()">Cancel</button>'
   );
   _rsToggleCust();
+  if(_rsPrefillCust)_rsInvOpts();
 }
 function _rsToggleCust(){
   var lines=(_rsData&&_rsData.lines)||[];var any=false;
@@ -6651,7 +6679,7 @@ function receiptSplitSave(ev){
   });
   var needCust=parsed.some(function(p){return p.dest==='customer';}),custName='';
   if(needCust){custName=el('rs-cust')?el('rs-cust').value:'';if(!custName){alert('Pick a customer for the items you are billing, or switch those items to Stock or Overhead.');return;}}
-  _rsPending={parsed:parsed,vendor:gv('rs-vendor'),invn:gv('rs-inv'),date:gv('rs-date')||_rcISO(''),ohCat:(el('rs-cat')?el('rs-cat').value:'Shop Supplies'),needCust:needCust,custName:custName,invChoice:(el('rs-invsel')?el('rs-invsel').value:'new'),img:_pendingReceiptImg};
+  _rsPending={parsed:parsed,vendor:gv('rs-vendor'),invn:gv('rs-inv'),date:gv('rs-date')||_rcISO(''),ohCat:(el('rs-cat')?el('rs-cat').value:'Shop Supplies'),needCust:needCust,custName:custName,invChoice:(el('rs-invsel')?el('rs-invsel').value:'new'),img:_pendingReceiptImg,existingPath:_rsExistingPath,queueReqId:_rsQueueReqId};
   if(parsed.some(function(p){return p.dest==='stock';})){_rsStockConfirm();}
   else{_rsCommit(ev);}
 }
@@ -6687,8 +6715,8 @@ function _rsStockConfirm(){
 async function _rsCommit(ev){
   var P=_rsPending;if(!P)return;
   var btn=ev&&ev.target?ev.target:null;if(btn&&btn.tagName!=='BUTTON')btn=btn.closest('button');if(btn)aiLoading(btn,'Saving\u2026');
-  var url='';
-  try{if(P.img){var fn=Date.now()+'-'+Math.floor(Math.random()*10000)+'.jpg';url=(await uploadReceiptPrivate(P.img,fn))||'';}}catch(e){url='';}
+  var url=P.existingPath||'';
+  if(!url){try{if(P.img){var fn=Date.now()+'-'+Math.floor(Math.random()*10000)+'.jpg';url=(await uploadReceiptPrivate(P.img,fn))||'';}}catch(e){url='';}}
   var invTarget=null;
   if(P.needCust){
     if(P.invChoice==='new'){
@@ -6713,7 +6741,8 @@ async function _rsCommit(ev){
     }
   });
   if(invTarget!=null)recalcInv(invTarget);
-  _pendingReceiptImg=null;_rsData=null;_rsPending=null;
+  if(P.queueReqId){var rq=TECH_REQS.find(function(x){return x.id===P.queueReqId;});if(rq)rq.status='Routed';}
+  _pendingReceiptImg=null;_rsData=null;_rsPending=null;_rsExistingPath='';_rsQueueReqId='';_rsPrefillCust='';_rsDefaultDest='stock';
   await saveAll();
   var bits=[];if(nStock)bits.push(nStock+' to stock');if(nCust)bits.push(nCust+' to invoice'+(invTarget!=null?' #'+INV[invTarget].num:''));if(nOh)bits.push(nOh+' to overhead');
   expManager();
@@ -6751,6 +6780,46 @@ function expCPAExport(range){
   a.download='MT_Truck_Expenses_'+label+'_'+new Date().toISOString().split('T')[0]+'.csv';
   document.body.appendChild(a);a.click();document.body.removeChild(a);
   setTimeout(function(){alert('\u2705 Exported '+rows.length+' expense(s), total $'+total.toFixed(2)+'.\n\nSaved to your downloads - hand it to your CPA or import into QuickBooks. Receipt photos stay in the app; the "Receipt on file" column flags which expenses have one.');},300);
+}
+
+function _receiptPrompt(){
+  return 'This is a photo of a business receipt, invoice, or bill for a heavy-duty diesel truck & trailer repair shop. Read it and return ONLY valid JSON - no markdown, no commentary. Format exactly: {"vendor":"","invoice":"","date":"YYYY-MM-DD","subtotal":0,"tax":0,"total":0,"category":"","note":"","lines":[{"partNum":"","desc":"","qty":1,"cost":0}]}. Rules: "vendor" is the seller/store name. "invoice" is the vendor invoice or receipt number printed on it (often labeled Invoice #, INV, Ticket, or Order #); use "" if none. "total" is the final amount paid including tax. "date" is the purchase date as YYYY-MM-DD (if the year is missing assume the current year; if unreadable use ""). "category" MUST be exactly one of these strings: '+EXP_CATS.join(' | ')+'. Choose the closest fit (a fuel/diesel receipt is Fuel; counter parts are Shop Supplies unless clearly tools/equipment; eating out is Other; a phone or internet bill is Phone / Internet, etc). "note" is one short line naming the main item(s) or purpose. "lines" is the itemized list of parts/products purchased: one object per line item with partNum (part number if shown, else ""), desc (short part name), qty (quantity, default 1), and cost (UNIT cost before tax - the price paid per single item). If this is NOT an itemized parts receipt (for example a utility bill, fuel, rent, or a single service charge), return "lines":[]. Use 0 for any number you cannot read and "" for any text you cannot read.';
+}
+async function tpGotParts(inp,woId){
+  var f=inp.files&&inp.files[0];if(!f)return;inp.value='';
+  var w=WO[woId]||null;
+  var origURL;
+  try{origURL=await new Promise(function(res,rej){var rd=new FileReader();rd.onload=function(e){res(e.target.result);};rd.onerror=rej;rd.readAsDataURL(f);});}
+  catch(e){alert('Could not read that photo.');return;}
+  oM('Sending to owner\u2026','<div style="text-align:center;padding:30px 10px"><div class="spin" style="margin:0 auto 14px"></div><div style="font-size:13px;color:#888">Saving your parts receipt\u2026</div></div>','');
+  var small=await _rcResize(origURL,1400,0.7);
+  var parsed=null;
+  if(shop.aiKey){
+    try{var raw=await callClaude(_receiptPrompt(),small.split(',')[1],'image/jpeg');if(raw!=null){raw=raw.replace(/```json|```/g,'').trim();parsed=JSON.parse(raw);}}catch(e){parsed=null;}
+  }
+  var path='';
+  try{var fn=Date.now()+'-'+Math.floor(Math.random()*10000)+'.jpg';path=(await uploadReceiptPrivate(small,fn))||'';}catch(e){path='';}
+  var req={id:'GP-'+Date.now(),type:'got',techName:(TP_USER&&TP_USER.name)||'Tech',woId:woId,woTicket:w?w.ticket:'',truck:w?(w.vehicle||''):'',customer:w?(w.customer||''):'',receiptPath:path,parsed:parsed,status:'Pending',priority:'Normal',time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),date:td()};
+  TECH_REQS.unshift(req);
+  await saveAll();updTechBadge();
+  if(shop.phone){var msg='Parts receipt from '+req.techName+(w?' (SO #'+w.ticket+(w.vehicle?', '+w.vehicle:'')+')':'')+'. Open app Techs tab to review and route.';try{window.open('sms:'+shop.phone.replace(/\D/g,'')+'?body='+encodeURIComponent(msg));}catch(e){}}
+  oM('Sent \u2705','<div style="font-size:13px;color:#555;line-height:1.55;padding:6px 2px">Your parts receipt went to '+_rcEsc(shop.name||'the owner')+(parsed&&parsed.lines?'. Claude read '+parsed.lines.length+' item(s) off it.':'.')+' They\u2019ll add it to the job and inventory.</div>','<button class="btn bl" onclick="cM();tpRenderWO()">Done</button>');
+}
+async function ownerViewGotPhoto(path){
+  if(!path)return;
+  try{var res=await fetch(SB+'/storage/v1/object/sign/receipts/'+path,{method:'POST',headers:{'Content-Type':'application/json','apikey':SK,'Authorization':'Bearer '+SK},body:JSON.stringify({expiresIn:3600})});var d=await res.json();var su=d&&(d.signedURL||d.signedUrl);if(su)window.open(SB+'/storage/v1'+su,'_blank','noopener');else alert('Could not open the receipt.');}catch(e){alert('Could not open the receipt.');}
+}
+function ownerReviewGot(id){
+  var r=TECH_REQS.find(function(x){return x.id===id;});if(!r)return;
+  if(!r.parsed||!r.parsed.lines||!r.parsed.lines.length){
+    alert('No itemized parts were read from this receipt photo. Tap "View receipt" to see it, then add it by hand from Operating Expenses or an invoice.');
+    return;
+  }
+  _rsExistingPath=r.receiptPath||'';
+  _rsQueueReqId=r.id;
+  _rsPrefillCust=r.customer||'';
+  _rsDefaultDest=r.customer?'customer':'stock';
+  receiptSplitPreview(r.parsed,null);
 }
 
 function finSummary(){
