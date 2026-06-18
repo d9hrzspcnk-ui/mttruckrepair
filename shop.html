@@ -3800,6 +3800,10 @@ function buildWorkbook(){
   });
   // Vendors
   var vendRows=vend.map(function(v){return (typeof v==='string')?{Name:v}:{Name:v.name||'',Phone:v.phone||'',Email:v.email||'',Account:v.account||v.acct||'',Notes:v.notes||''};});
+  var exps=(typeof EXPENSES!=='undefined'&&EXPENSES)||[];
+  var expRows=exps.slice().sort(function(a,b){return (a.date||'').localeCompare(b.date||'');}).map(function(e){
+    return {Date:e.date||'',Vendor:e.name||'','Invoice#':e.invoice||'',Category:e.category||'',Frequency:e.freq||'',Amount:xnum(e.amount),Tax:xnum(e.tax||0),Note:e.note||'',Receipt:(e.receipt?'yes':'')};
+  });
 
   var add=function(name,rows){if(!rows||!rows.length)rows=[{'(empty)':'No data yet'}];var ws=X.utils.json_to_sheet(rows);X.utils.book_append_sheet(wb,ws,name.slice(0,31));};
   var wb=X.utils.book_new();
@@ -3811,6 +3815,7 @@ function buildWorkbook(){
   add('Vehicles',vehRows);
   add('Inventory',partRows);
   add('Vendors',vendRows);
+  add('Expenses',expRows);
   add('Appointments',xflat(appts));
   add('PM Schedule',xflat(pms));
 
@@ -6532,7 +6537,7 @@ function expManager(){
   var rows=E.length?E.slice().reverse().map(function(e){
     var idx=E.indexOf(e);
     var fl=e.freq==='monthly'?'/mo':(e.freq==='annual'?'/yr':'');
-    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:0.5px solid var(--bd)"><div style="min-width:0"><div style="font-size:13px;font-weight:600">'+(e.name||e.category)+'</div><div style="font-size:11px;color:#888">'+e.category+(e.date?' \u00B7 '+e.date:'')+' \u00B7 '+e.freq+(e.note?' \u00B7 '+_rcEsc(e.note):'')+'</div></div><div style="display:flex;align-items:center;gap:10px;flex:none">'+(e.receipt?'<a href="#" onclick="viewReceipt('+idx+');return false;" title="View receipt" style="color:#534AB7;font-size:17px;text-decoration:none;cursor:pointer"><i class="ti ti-paperclip"></i></a>':'')+'<div style="font-size:14px;font-weight:600;color:#A32D2D">'+fm(parseFloat(e.amount)||0)+fl+'</div><button onclick="expDel('+idx+')" style="background:transparent;border:none;color:#888;cursor:pointer;font-size:18px">\u00D7</button></div></div>';
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:0.5px solid var(--bd)"><div style="min-width:0"><div style="font-size:13px;font-weight:600">'+(e.name||e.category)+'</div><div style="font-size:11px;color:#888">'+e.category+(e.date?' \u00B7 '+e.date:'')+' \u00B7 '+e.freq+(e.invoice?' \u00B7 Inv '+_rcEsc(e.invoice):'')+(e.note?' \u00B7 '+_rcEsc(e.note):'')+'</div></div><div style="display:flex;align-items:center;gap:10px;flex:none">'+(e.receipt?'<a href="#" onclick="viewReceipt('+idx+');return false;" title="View receipt" style="color:#534AB7;font-size:17px;text-decoration:none;cursor:pointer"><i class="ti ti-paperclip"></i></a>':'')+'<div style="font-size:14px;font-weight:600;color:#A32D2D">'+fm(parseFloat(e.amount)||0)+fl+'</div><button onclick="expDel('+idx+')" style="background:transparent;border:none;color:#888;cursor:pointer;font-size:18px">\u00D7</button></div></div>';
   }).join(''):'<div style="font-size:13px;color:#888;padding:12px;text-align:center">No expenses entered yet. Add your monthly costs below.</div>';
   oM('Operating Expenses',
     '<div style="background:#E6F1FB;border-radius:10px;padding:12px 14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:11px;color:#0C447C;text-transform:uppercase;font-weight:600">Monthly Overhead</div><div style="font-size:22px;font-weight:700;color:#185FA5">'+fm(mo)+'</div></div><div style="text-align:right"><div style="font-size:11px;color:#888">Annualized</div><div style="font-size:16px;font-weight:600">'+fm(mo*12)+'</div></div></div>'
@@ -6548,7 +6553,7 @@ function expManager(){
     +'</div>'
     +'<button class="btn bl" style="width:100%;margin-bottom:14px" onclick="expAdd()"><i class="ti ti-plus"></i>Add Expense</button>'
     +'<div style="font-size:12px;font-weight:600;margin-bottom:4px">Your expenses ('+E.length+')</div>'+rows,
-    '<button class="btn" onclick="finAssistant()"><i class="ti ti-calculator"></i>Ask the CFO</button><button class="btn" onclick="cM()">Close</button>');
+    '<button class="btn" onclick="finAssistant()"><i class="ti ti-calculator"></i>Ask the CFO</button><button class="btn" onclick="expCPAMenu()"><i class="ti ti-file-export"></i>CPA Export</button><button class="btn" onclick="cM()">Close</button>');
 }
 function expAdd(){
   if(typeof EXPENSES==='undefined')window.EXPENSES=[];
@@ -6578,7 +6583,7 @@ async function scanReceipt(input){
   oM('Reading receipt\u2026','<div style="text-align:center;padding:34px 10px"><div class="spin" style="margin:0 auto 14px"></div><div style="font-size:13px;color:#888">Claude is reading the receipt\u2026</div></div>','');
   var small=await _rcResize(origURL,1400,0.7);
   var b64=small.split(',')[1];
-  var prompt='This is a photo of a business receipt or bill for a heavy-duty diesel truck & trailer repair shop. Read it and return ONLY valid JSON \u2014 no markdown, no commentary. Format exactly: {"vendor":"","date":"YYYY-MM-DD","subtotal":0,"tax":0,"total":0,"category":"","note":""}. Rules: "total" is the final amount paid including tax. "date" is the purchase date as YYYY-MM-DD (if the year is missing assume the current year; if unreadable use ""). "category" MUST be exactly one of these strings: '+EXP_CATS.join(' | ')+'. Choose the closest fit (a fuel/diesel receipt is Fuel; counter parts are Shop Supplies unless clearly tools/equipment; eating out is Other; a phone or internet bill is Phone / Internet, etc). "note" is one short line naming the main item(s) or purpose. Use 0 for any number you cannot read and "" for any text you cannot read.';
+  var prompt='This is a photo of a business receipt, invoice, or bill for a heavy-duty diesel truck & trailer repair shop. Read it and return ONLY valid JSON - no markdown, no commentary. Format exactly: {"vendor":"","invoice":"","date":"YYYY-MM-DD","subtotal":0,"tax":0,"total":0,"category":"","note":"","lines":[{"partNum":"","desc":"","qty":1,"cost":0}]}. Rules: "vendor" is the seller/store name. "invoice" is the vendor invoice or receipt number printed on it (often labeled Invoice #, INV, Ticket, or Order #); use "" if none. "total" is the final amount paid including tax. "date" is the purchase date as YYYY-MM-DD (if the year is missing assume the current year; if unreadable use ""). "category" MUST be exactly one of these strings: '+EXP_CATS.join(' | ')+'. Choose the closest fit (a fuel/diesel receipt is Fuel; counter parts are Shop Supplies unless clearly tools/equipment; eating out is Other; a phone or internet bill is Phone / Internet, etc). "note" is one short line naming the main item(s) or purpose. "lines" is the itemized list of parts/products purchased: one object per line item with partNum (part number if shown, else ""), desc (short part name), qty (quantity, default 1), and cost (UNIT cost before tax - the price paid per single item). If this is NOT an itemized parts receipt (for example a utility bill, fuel, rent, or a single service charge), return "lines":[]. Use 0 for any number you cannot read and "" for any text you cannot read.';
   var raw=await callClaude(prompt,b64,'image/jpeg');
   if(raw==null){cM();return;}
   raw=raw.replace(/```json|```/g,'').trim();
@@ -6586,7 +6591,7 @@ async function scanReceipt(input){
     oM('Couldn\u2019t read that one','<div style="font-size:13px;color:#888;line-height:1.5;padding:6px 2px">Claude couldn\u2019t pull clean details off that photo. Try again with better lighting and the whole receipt flat in frame \u2014 or just add it by hand.</div>','<button class="btn bl" onclick="expManager()">Back</button>');
     return;
   }
-  receiptPreview(d,small);
+  if(d.lines&&d.lines.length){receiptSplitPreview(d,small);}else{receiptPreview(d,small);}
 }
 function receiptPreview(d,imgURL){
   _pendingReceiptImg=imgURL;
@@ -6600,7 +6605,8 @@ function receiptPreview(d,imgURL){
     +'<div style="font-size:12px;color:#888;line-height:1.5">Claude read this receipt. Check the fields and fix anything that\u2019s off, then save. It logs as a one-time operating expense and the photo is stored with it.</div>'
     +'</div>'
     +'<div class="g2">'
-    +'<div class="fg full"><label>Vendor / Name</label><input id="rc-n" value="'+_rcEsc(d.vendor)+'" placeholder="Vendor" style="'+inS+'"></div>'
+    +'<div class="fg"><label>Vendor / Name</label><input id="rc-n" value="'+_rcEsc(d.vendor)+'" placeholder="Vendor" style="'+inS+'"></div>'
+    +'<div class="fg"><label>Invoice #</label><input id="rc-inv" value="'+_rcEsc(d.invoice||'')+'" placeholder="optional" style="'+inS+'"></div>'
     +'<div class="fg"><label>Category</label><select id="rc-c" style="'+inS+';font-family:inherit">'+catOpts+'</select></div>'
     +'<div class="fg"><label>Frequency</label><select id="rc-f" style="'+inS+';font-family:inherit"><option value="onetime" selected>One-time</option><option value="monthly">Monthly</option><option value="annual">Annual</option></select></div>'
     +'<div class="fg"><label>Total ($)</label><input id="rc-a" type="number" inputmode="decimal" value="'+amt+'" style="'+inS+'"></div>'
@@ -6612,7 +6618,7 @@ function receiptPreview(d,imgURL){
   );
 }
 async function receiptSave(ev){
-  var n=gv('rc-n'),c=el('rc-c')?el('rc-c').value:'Other',a=parseFloat(gv('rc-a')),t=parseFloat(gv('rc-t'))||0,d=gv('rc-d'),f=el('rc-f')?el('rc-f').value:'onetime',note=gv('rc-note');
+  var n=gv('rc-n'),c=el('rc-c')?el('rc-c').value:'Other',a=parseFloat(gv('rc-a')),t=parseFloat(gv('rc-t'))||0,d=gv('rc-d'),f=el('rc-f')?el('rc-f').value:'onetime',note=gv('rc-note'),invn=gv('rc-inv');
   if(!a||a<=0){alert('Enter a total greater than 0.');return;}
   if(!n)n=c;
   var btn=ev&&ev.target?ev.target:null;if(btn&&btn.tagName!=='BUTTON')btn=btn.closest('button');
@@ -6624,10 +6630,154 @@ async function receiptSave(ev){
       url=(await uploadReceiptPrivate(_pendingReceiptImg,fname))||'';
     }
   }catch(e){url='';}
-  EXPENSES.push({id:Date.now(),date:d||_rcISO(''),category:c,name:n,amount:a,freq:f,tax:t,note:note,receipt:url});
+  EXPENSES.push({id:Date.now(),date:d||_rcISO(''),category:c,name:n,amount:a,freq:f,tax:t,note:note,invoice:invn,receipt:url});
   _pendingReceiptImg=null;
   await saveAll();
   expManager();
+}
+
+// ── ITEMIZED RECEIPT: split each line to Stock / Customer invoice / Overhead ──
+var _rsData=null;
+function receiptSplitPreview(d,imgURL){
+  _pendingReceiptImg=imgURL;_rsData=d;
+  var inS='padding:7px 9px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%';
+  var custOpts='<option value="">- pick customer -</option>'+(((typeof CUST!=='undefined'&&CUST)||[]).map(function(c){return '<option>'+_rcEsc(c.name)+'</option>';}).join(''));
+  var catOpts=EXP_CATS.map(function(c){return '<option'+(c==='Shop Supplies'?' selected':'')+'>'+c+'</option>';}).join('');
+  var lines=d.lines||[];
+  var rows=lines.map(function(l,i){
+    var cost=parseFloat(l.cost)||0,qty=parseFloat(l.qty)||1;
+    return '<div style="border:0.5px solid var(--bd);border-radius:10px;padding:10px;margin-bottom:8px">'
+      +'<input id="rs-desc-'+i+'" value="'+_rcEsc((l.partNum?l.partNum+' ':'')+(l.desc||''))+'" style="'+inS+';margin-bottom:6px;font-weight:600">'
+      +'<div style="display:flex;gap:6px;margin-bottom:6px">'
+      +'<div style="flex:1"><div style="font-size:10px;color:#888">Qty</div><input id="rs-qty-'+i+'" type="number" inputmode="decimal" value="'+qty+'" style="'+inS+'"></div>'
+      +'<div style="flex:1"><div style="font-size:10px;color:#888">Unit cost $</div><input id="rs-cost-'+i+'" type="number" inputmode="decimal" value="'+cost+'" style="'+inS+'"></div>'
+      +'</div>'
+      +'<select id="rs-dest-'+i+'" onchange="_rsToggleCust()" style="'+inS+';font-family:inherit"><option value="stock">Add to stock (inventory)</option><option value="customer">Bill to a customer</option><option value="overhead">Shop overhead (expense)</option></select>'
+      +'</div>';
+  }).join('');
+  oM('Receipt - Split & Route',
+    '<div style="display:flex;gap:12px;margin-bottom:12px;align-items:flex-start">'
+    +'<img src="'+imgURL+'" style="width:74px;height:100px;object-fit:cover;border-radius:8px;border:0.5px solid var(--bd);flex:none">'
+    +'<div style="font-size:12px;color:#888;line-height:1.5">Claude found '+lines.length+' item(s). For each one, pick where it goes - your stock, a customer invoice, or shop overhead. The photo and invoice # are saved with all of them.</div>'
+    +'</div>'
+    +'<div class="g2" style="margin-bottom:12px">'
+    +'<div class="fg"><label>Vendor</label><input id="rs-vendor" value="'+_rcEsc(d.vendor)+'" style="'+inS+'"></div>'
+    +'<div class="fg"><label>Invoice #</label><input id="rs-inv" value="'+_rcEsc(d.invoice||'')+'" style="'+inS+'"></div>'
+    +'<div class="fg"><label>Date</label><input id="rs-date" type="date" value="'+_rcISO(d.date)+'" style="'+inS+'"></div>'
+    +'<div class="fg"><label>Overhead category</label><select id="rs-cat" style="'+inS+';font-family:inherit">'+catOpts+'</select></div>'
+    +'</div>'
+    +'<div style="font-size:12px;font-weight:600;margin-bottom:8px">Items on this receipt</div>'+rows
+    +'<div id="rs-custwrap" style="display:none;background:#E6F1FB;border-radius:10px;padding:10px;margin-top:4px">'
+    +'<div style="font-size:12px;font-weight:600;margin-bottom:6px;color:#0C447C">For the items you are billing to a customer</div>'
+    +'<div class="fg" style="margin-bottom:6px"><label>Customer</label><select id="rs-cust" onchange="_rsInvOpts()" style="'+inS+';font-family:inherit">'+custOpts+'</select></div>'
+    +'<div class="fg"><label>Invoice</label><select id="rs-invsel" style="'+inS+';font-family:inherit"><option value="new">+ New invoice</option></select></div>'
+    +'</div>',
+    '<button class="btn bl" onclick="receiptSplitSave(event)"><i class="ti ti-check"></i>Save All</button><button class="btn" onclick="receiptPreview(_rsData,_pendingReceiptImg)">Whole receipt as 1 expense</button><button class="btn" onclick="expManager()">Cancel</button>'
+  );
+  _rsToggleCust();
+}
+function _rsToggleCust(){
+  var lines=(_rsData&&_rsData.lines)||[];var any=false;
+  for(var i=0;i<lines.length;i++){var s=el('rs-dest-'+i);if(s&&s.value==='customer')any=true;}
+  var w=el('rs-custwrap');if(w)w.style.display=any?'block':'none';
+}
+function _rsInvOpts(){
+  var cs=el('rs-cust'),sel=el('rs-invsel');if(!cs||!sel)return;
+  var name=cs.value,opts='<option value="new">+ New invoice</option>';
+  ((typeof INV!=='undefined'&&INV)||[]).forEach(function(iv){
+    if(iv.customer===name&&iv.status!=='Paid'){opts+='<option value="'+iv.id+'">#'+iv.num+' - '+(iv.vehicle||'no vehicle')+' - '+fm(parseFloat(iv.total)||0)+'</option>';}
+  });
+  sel.innerHTML=opts;
+}
+function _rsAddStock(p,vendor,invn){
+  if(typeof PARTS==='undefined')window.PARTS=[];
+  var match=null;
+  PARTS.forEach(function(x){
+    if(match)return;
+    if(p.partNum&&x.partNum&&(''+x.partNum).toLowerCase()===(''+p.partNum).toLowerCase())match=x;
+    else if(!p.partNum&&x.name&&p.desc&&x.name.toLowerCase()===p.desc.toLowerCase())match=x;
+  });
+  var mk=getMarkup(p.cost);
+  if(match){
+    match.qty=(parseInt(match.qty)||0)+(parseInt(p.qty)||0);
+    if(p.cost>0){var m2=(match.markup!=null?match.markup:mk);match.cost=p.cost.toFixed(2);match.sell=(p.cost*(1+m2/100)).toFixed(2);match.markup=m2;}
+    if(!match.vendor&&vendor)match.vendor=vendor;match.lastInvoice=invn;
+  }else{
+    PARTS.push({name:p.desc||'Part',partNum:p.partNum||'',cat:'General',vendor:vendor||'',cost:(p.cost||0).toFixed(2),sell:(p.cost*(1+mk/100)).toFixed(2),markup:mk,qty:parseInt(p.qty)||0,min:2,lastInvoice:invn});
+  }
+}
+async function receiptSplitSave(ev){
+  var d=_rsData;if(!d)return;
+  var lines=d.lines||[];
+  var vendor=gv('rs-vendor'),invn=gv('rs-inv'),date=gv('rs-date')||_rcISO(''),ohCat=el('rs-cat')?el('rs-cat').value:'Shop Supplies';
+  var parsed=lines.map(function(l,i){
+    return {desc:gv('rs-desc-'+i)||(l.desc||'Part'),qty:parseFloat(gv('rs-qty-'+i))||1,cost:parseFloat(gv('rs-cost-'+i))||0,dest:(el('rs-dest-'+i)?el('rs-dest-'+i).value:'stock'),partNum:l.partNum||''};
+  });
+  var needCust=parsed.some(function(p){return p.dest==='customer';}),custName='';
+  if(needCust){custName=el('rs-cust')?el('rs-cust').value:'';if(!custName){alert('Pick a customer for the items you are billing, or switch those items to Stock or Overhead.');return;}}
+  var btn=ev&&ev.target?ev.target:null;if(btn&&btn.tagName!=='BUTTON')btn=btn.closest('button');if(btn)aiLoading(btn,'Saving\u2026');
+  var url='';
+  try{if(_pendingReceiptImg){var fn=Date.now()+'-'+Math.floor(Math.random()*10000)+'.jpg';url=(await uploadReceiptPrivate(_pendingReceiptImg,fn))||'';}}catch(e){url='';}
+  var invTarget=null;
+  if(needCust){
+    var sel=el('rs-invsel'),v=sel?sel.value:'new';
+    if(v==='new'){
+      var cu=null;((typeof CUST!=='undefined'&&CUST)||[]).forEach(function(c){if(c.name===custName)cu=c;});
+      var ni={id:INV.length,num:invc++,customer:custName,phone:(cu&&cu.phone)||'',vehicle:'',vin:'',labor:'0.00',parts:'0.00',supplies:0,taxPct:(parseFloat(shop.taxRate)||0),subtotal:'0.00',tax:'0.00',total:'0.00',status:'Unpaid',payment:'',date:td(),lines:[],woTicket:'\u2014'};
+      INV.push(ni);invTarget=ni.id;
+    }else{invTarget=parseInt(v);}
+  }
+  var nStock=0,nCust=0,nOh=0;
+  parsed.forEach(function(p){
+    if(p.dest==='customer'&&invTarget!=null){
+      var mk=getMarkup(p.cost),sell=+(p.cost*(1+mk/100)).toFixed(2);
+      if(!INV[invTarget].lines)INV[invTarget].lines=[];
+      INV[invTarget].lines.push({type:'part',partNum:p.partNum,desc:p.desc,vendor:vendor,qty:p.qty,cost:+p.cost.toFixed(2),markup:mk,sell:sell,tax:true,subtotal:+(p.qty*sell).toFixed(2),srcInvoice:invn});
+      nCust++;
+    }else if(p.dest==='overhead'){
+      EXPENSES.push({id:Date.now()+Math.floor(Math.random()*100000),date:date,category:ohCat,name:vendor||ohCat,amount:+(p.qty*p.cost).toFixed(2),freq:'onetime',tax:0,note:p.desc,invoice:invn,receipt:url});
+      nOh++;
+    }else{_rsAddStock(p,vendor,invn);nStock++;}
+  });
+  if(invTarget!=null)recalcInv(invTarget);
+  _pendingReceiptImg=null;_rsData=null;
+  await saveAll();
+  var bits=[];if(nStock)bits.push(nStock+' to stock');if(nCust)bits.push(nCust+' to invoice'+(invTarget!=null?' #'+INV[invTarget].num:''));if(nOh)bits.push(nOh+' to overhead');
+  expManager();
+  setTimeout(function(){alert('\u2705 Saved: '+bits.join(', ')+'.');},250);
+}
+
+// ── CPA / TAX EXPORT (expenses by date, CSV) ──
+function expCPAMenu(){
+  var y=new Date().getFullYear();
+  oM('Export expenses for your CPA',
+    '<div style="font-size:13px;color:#888;line-height:1.5;margin-bottom:12px">Downloads a spreadsheet (CSV) of your operating expenses sorted by date - vendor, invoice #, category, amount, tax, and whether a receipt photo is on file. Opens in Excel, Numbers, or Google Sheets.</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px">'
+    +'<button class="btn bl" onclick="expCPAExport(\'year\')">This Year ('+y+')</button>'
+    +'<button class="btn bl" onclick="expCPAExport(\'last\')">Last Year ('+(y-1)+')</button>'
+    +'<button class="btn bl" onclick="expCPAExport(\'all\')">All Time</button>'
+    +'</div>','<button class="btn" onclick="expManager()">Back</button>');
+}
+function expCPAExport(range){
+  var E=(typeof EXPENSES!=='undefined'&&EXPENSES)||[];
+  var y=new Date().getFullYear(),from=null,to=null,label='all';
+  if(range==='year'){from=y+'-01-01';to=y+'-12-31';label=''+y;}
+  else if(range==='last'){from=(y-1)+'-01-01';to=(y-1)+'-12-31';label=''+(y-1);}
+  var rows=E.filter(function(e){if(!from)return true;var dt=(e.date||'');return dt>=from&&dt<=to;}).slice().sort(function(a,b){return (a.date||'').localeCompare(b.date||'');});
+  if(!rows.length){alert('No expenses in that range yet.');return;}
+  var esc=function(v){v=(v==null?'':''+v);return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;};
+  var csv=[['Date','Vendor','Invoice #','Category','Frequency','Amount','Tax','Note','Receipt on file'].join(',')];
+  var total=0;
+  rows.forEach(function(e){var amt=parseFloat(e.amount)||0;total+=amt;
+    csv.push([esc(e.date),esc(e.name),esc(e.invoice),esc(e.category),esc(e.freq),amt.toFixed(2),(parseFloat(e.tax)||0).toFixed(2),esc(e.note),(e.receipt?'Yes':'')].join(','));
+  });
+  csv.push(['','','','','','','','',''].join(','));
+  csv.push(['','','','','TOTAL',total.toFixed(2),'','',''].join(','));
+  var blob=new Blob([csv.join('\n')],{type:'text/csv;charset=utf-8;'});
+  var u=URL.createObjectURL(blob),a=document.createElement('a');a.href=u;
+  a.download='MT_Truck_Expenses_'+label+'_'+new Date().toISOString().split('T')[0]+'.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(function(){alert('\u2705 Exported '+rows.length+' expense(s), total $'+total.toFixed(2)+'.\n\nSaved to your downloads - hand it to your CPA or import into QuickBooks. Receipt photos stay in the app; the "Receipt on file" column flags which expenses have one.');},300);
 }
 
 function finSummary(){
