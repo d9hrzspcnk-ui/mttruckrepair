@@ -450,6 +450,44 @@ async function uploadToStorage(base64data, path){
     return null;
   }catch(e){return null;}
 }
+// Receipts go to a PRIVATE bucket ('receipts'). We store only the object path and
+// mint a short-lived signed URL when the owner taps to view it. Returns the path on success.
+async function uploadReceiptPrivate(base64data, filename){
+  try{
+    var parts=base64data.split(',');
+    var mime=parts[0].split(':')[1].split(';')[0];
+    var byteStr=atob(parts[1]);
+    var ab=new ArrayBuffer(byteStr.length);
+    var ia=new Uint8Array(ab);
+    for(var i=0;i<byteStr.length;i++)ia[i]=byteStr.charCodeAt(i);
+    var blob=new Blob([ab],{type:mime});
+    var res=await fetch(SB+'/storage/v1/object/receipts/'+filename,{
+      method:'POST',
+      headers:{'Content-Type':mime,'apikey':SK,'Authorization':'Bearer '+SK},
+      body:blob
+    });
+    if(res.ok)return filename;
+    return null;
+  }catch(e){return null;}
+}
+async function viewReceipt(idx){
+  var e=(typeof EXPENSES!=='undefined'&&EXPENSES)?EXPENSES[idx]:null;
+  if(!e||!e.receipt)return;
+  var r=e.receipt;
+  // Legacy receipts saved as full public URLs still open directly.
+  if(/^https?:\/\//.test(r)){window.open(r,'_blank','noopener');return;}
+  try{
+    var res=await fetch(SB+'/storage/v1/object/sign/receipts/'+r,{
+      method:'POST',
+      headers:{'Content-Type':'application/json','apikey':SK,'Authorization':'Bearer '+SK},
+      body:JSON.stringify({expiresIn:3600})
+    });
+    var d=await res.json();
+    var su=d&&(d.signedURL||d.signedUrl);
+    if(su){window.open(SB+'/storage/v1'+su,'_blank','noopener');}
+    else{alert('Could not open the receipt. If this keeps happening, check that the "receipts" bucket and its policies exist in Supabase.');}
+  }catch(err){alert('Could not open the receipt.');}
+}
 function getWOPhotos(woId,type){
   var saved=(WO[woId]&&WO[woId].tpPhotos&&WO[woId].tpPhotos[type])||[];
   var mem=(TP_PHOTOS[woId]&&TP_PHOTOS[woId][type])||[];
@@ -3781,120 +3819,6 @@ function buildWorkbook(){
   setTimeout(function(){alert('\u2705 Full spreadsheet exported!\n\n'+wo.length+' orders \u00B7 '+inv.length+' invoices \u00B7 '+cust.length+' customers \u00B7 '+parts.length+' parts.\n\nEach data type is on its own tab. Opens in Excel, Numbers, or Google Sheets.');},300);
 }
 
-function scanReceipt(wid){
-  // Create file input for camera/photo
-  var input=document.createElement('input');
-  input.type='file';
-  input.accept='image/*';
-  input.capture='environment'; // Use back camera on mobile
-  input.style.display='none';
-  document.body.appendChild(input);
-  
-  input.onchange=function(){
-    var file=input.files[0];
-    if(!file){document.body.removeChild(input);return;}
-    
-    // Show loading modal
-    oM('Scanning Receipt...','<div style="text-align:center;padding:30px 20px"><div style="width:36px;height:36px;border:3px solid #ddd;border-top-color:#185FA5;border-radius:50%;animation:sp .8s linear infinite;margin:0 auto 16px"></div><div style="font-size:14px;font-weight:600;margin-bottom:6px">Reading your receipt...</div><div style="font-size:13px;color:#888">Claude is scanning the parts and prices</div></div>','');
-    
-    // Convert image to base64
-    var reader=new FileReader();
-    reader.onload=function(e){
-      var base64=e.target.result.split(',')[1];
-      var mediaType=file.type||'image/jpeg';
-      
-      // Call Claude API to extract parts
-      fetch('https://api.anthropic.com/v1/messages',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
-        body:JSON.stringify({
-          model:'claude-sonnet-4-5',
-          max_tokens:1500,
-          messages:[{
-            role:'user',
-            content:[
-              {type:'image',source:{type:'base64',media_type:mediaType,data:base64}},
-              {type:'text',text:'This is a parts invoice/receipt from an auto parts store or truck supplier. Extract ALL parts/items from this receipt. Return ONLY a JSON array, no other text, no markdown, no backticks. Each item should have: {"partNum":"part number or empty string","desc":"part description","qty":1,"cost":unit_cost_as_number,"vendor":"vendor name from receipt"}. Use the NET or actual price paid, not the suggested retail. If quantity is shown use it. Example: [{"partNum":"177.10160","desc":"Discharge Hose","qty":1,"cost":54.93,"vendor":"Cruz Truck Supplies"}]'}
-            ]
-          }]
-        })
-      })
-      .then(function(r){return r.json();})
-      .then(function(data){
-        document.body.removeChild(input);
-        if(data.error){
-          el('m-body').innerHTML='<div style="color:#A32D2D;padding:16px">Error: '+data.error.message+'</div>';
-          el('m-act').innerHTML='<button class="btn" onclick="cM()">Close</button>';
-          return;
-        }
-        var text=data.content&&data.content[0]?data.content[0].text:'';
-        var parts;
-        try{
-          // Clean the response
-          var clean=text.replace(/```json/g,'').replace(/```/g,'').trim();
-          parts=JSON.parse(clean);
-        }catch(e){
-          el('m-body').innerHTML='<div style="padding:14px"><div style="color:#A32D2D;margin-bottom:8px">Could not read receipt automatically.</div><div style="font-size:13px;color:#888">Raw response: '+text.substring(0,200)+'</div></div>';
-          el('m-act').innerHTML='<button class="btn" onclick="cM()">Close</button>';
-          return;
-        }
-        if(!parts||!parts.length){
-          el('m-body').innerHTML='<div style="padding:14px;color:#888">No parts found on this receipt. Try a clearer photo.</div>';
-          el('m-act').innerHTML='<button class="btn" onclick="cM()">Close</button>';
-          return;
-        }
-        // Show preview of extracted parts
-        var preview=parts.map(function(p,i){
-          var sell=getSell(p.cost);
-          return'<div style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:0.5px solid var(--bd)">'
-            +'<input type="checkbox" id="sc'+i+'" checked style="width:18px;height:18px;cursor:pointer">'
-            +'<div style="flex:1"><div style="font-size:13px;font-weight:600">'+(p.partNum?p.partNum+' — ':'')+p.desc+'</div>'
-            +'<div style="font-size:12px;color:#888">Qty: '+p.qty+' | Cost: $'+p.cost.toFixed(2)+' | Sell: $'+sell.toFixed(2)+(p.vendor?' | '+p.vendor:'')+'</div></div></div>';
-        }).join('');
-        
-        el('m-title').textContent='Found '+parts.length+' part(s) — Select to add';
-        el('m-body').innerHTML='<div style="max-height:350px;overflow-y:auto">'+preview+'</div>'
-          +'<div style="margin-top:12px;padding:10px;background:#f5f5f7;border-radius:8px;font-size:12px;color:#888">Markup: '+mkup+'% applied to all parts. Edit after adding if needed.</div>';
-        el('m-act').innerHTML='<button class="btn bl" onclick="addScannedParts('+wid+','+JSON.stringify(parts).replace(/"/g,'"')+')">Add Selected Parts</button><button class="btn" onclick="cM()">Cancel</button>';
-      })
-      .catch(function(err){
-        document.body.removeChild(input);
-        el('m-body').innerHTML='<div style="color:#A32D2D;padding:14px">Scan failed. Check your internet connection and try again.</div>';
-        el('m-act').innerHTML='<button class="btn" onclick="cM()">Close</button>';
-      });
-    };
-    reader.readAsDataURL(file);
-  };
-  
-  input.click();
-}
-
-function addScannedParts(wid,parts){
-  var added=0;
-  parts.forEach(function(p,i){
-    var cb=el('sc'+i);
-    if(cb&&cb.checked){
-      var sell=parseFloat((p.cost*(1+getMarkup(p.cost)/100)).toFixed(2));
-      WO[wid].lines.push({
-        type:'part',
-        partNum:p.partNum||'',
-        desc:p.desc||'',
-        vendor:p.vendor||'',
-        qty:p.qty||1,
-        cost:parseFloat(p.cost)||0,
-        sell:sell,
-        markup:getMarkup(p.cost),
-        tax:true,
-        subtotal:parseFloat(((p.qty||1)*sell).toFixed(2))
-      });
-      added++;
-    }
-  });
-  cM();
-  vWO(wid);
-  if(added>0)setTimeout(function(){alert('Added '+added+' part(s) to the work order!');},300);
-}
-
 
 function scanBarcode(){
   oM('Add Part by Barcode / Part Number',
@@ -6608,11 +6532,13 @@ function expManager(){
   var rows=E.length?E.slice().reverse().map(function(e){
     var idx=E.indexOf(e);
     var fl=e.freq==='monthly'?'/mo':(e.freq==='annual'?'/yr':'');
-    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:0.5px solid var(--bd)"><div><div style="font-size:13px;font-weight:600">'+(e.name||e.category)+'</div><div style="font-size:11px;color:#888">'+e.category+(e.date?' \u00B7 '+e.date:'')+' \u00B7 '+e.freq+'</div></div><div style="display:flex;align-items:center;gap:10px"><div style="font-size:14px;font-weight:600;color:#A32D2D">'+fm(parseFloat(e.amount)||0)+fl+'</div><button onclick="expDel('+idx+')" style="background:transparent;border:none;color:#888;cursor:pointer;font-size:18px">\u00D7</button></div></div>';
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:0.5px solid var(--bd)"><div style="min-width:0"><div style="font-size:13px;font-weight:600">'+(e.name||e.category)+'</div><div style="font-size:11px;color:#888">'+e.category+(e.date?' \u00B7 '+e.date:'')+' \u00B7 '+e.freq+(e.note?' \u00B7 '+_rcEsc(e.note):'')+'</div></div><div style="display:flex;align-items:center;gap:10px;flex:none">'+(e.receipt?'<a href="#" onclick="viewReceipt('+idx+');return false;" title="View receipt" style="color:#534AB7;font-size:17px;text-decoration:none;cursor:pointer"><i class="ti ti-paperclip"></i></a>':'')+'<div style="font-size:14px;font-weight:600;color:#A32D2D">'+fm(parseFloat(e.amount)||0)+fl+'</div><button onclick="expDel('+idx+')" style="background:transparent;border:none;color:#888;cursor:pointer;font-size:18px">\u00D7</button></div></div>';
   }).join(''):'<div style="font-size:13px;color:#888;padding:12px;text-align:center">No expenses entered yet. Add your monthly costs below.</div>';
   oM('Operating Expenses',
     '<div style="background:#E6F1FB;border-radius:10px;padding:12px 14px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center"><div><div style="font-size:11px;color:#0C447C;text-transform:uppercase;font-weight:600">Monthly Overhead</div><div style="font-size:22px;font-weight:700;color:#185FA5">'+fm(mo)+'</div></div><div style="text-align:right"><div style="font-size:11px;color:#888">Annualized</div><div style="font-size:16px;font-weight:600">'+fm(mo*12)+'</div></div></div>'
-    +'<div style="font-size:12px;font-weight:600;margin-bottom:8px">Add an expense</div>'
+    +'<label style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:#534AB7;color:#fff;border-radius:10px;padding:13px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:4px"><i class="ti ti-camera-ai" style="font-size:17px"></i>Scan a Receipt (AI)<input type="file" accept="image/*" capture="environment" style="display:none" onchange="scanReceipt(this)"></label>'
+    +'<div style="font-size:11px;color:#888;text-align:center;margin-bottom:16px">Snap a photo \u2014 Claude fills in the vendor, amount &amp; category</div>'
+    +'<div style="font-size:12px;font-weight:600;margin-bottom:8px">Or add one by hand</div>'
     +'<div class="g2">'
     +'<div class="fg"><label>Name / Vendor</label><input id="ex-n" placeholder="e.g. Shop rent" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>Category</label><select id="ex-c" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;font-family:inherit;background:#f5f5f7;width:100%">'+catOpts+'</select></div>'
@@ -6636,6 +6562,72 @@ function expDel(idx){
   if(typeof EXPENSES==='undefined'||idx<0||idx>=EXPENSES.length)return;
   if(!confirm('Delete this expense?'))return;
   EXPENSES.splice(idx,1);saveAll();expManager();
+}
+
+// ── AI RECEIPT SCANNER ─────────────────────────────────────
+var _pendingReceiptImg=null;
+function _rcEsc(s){return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function _rcISO(s){return (/^\d{4}-\d{2}-\d{2}$/.test(s||''))?s:new Date().toISOString().slice(0,10);}
+function _rcResize(dataURL,maxDim,q){return new Promise(function(res){var img=new Image();img.onload=function(){var w=img.width,h=img.height;if(w>=h&&w>maxDim){h=Math.round(h*maxDim/w);w=maxDim;}else if(h>w&&h>maxDim){w=Math.round(w*maxDim/h);h=maxDim;}var c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);try{res(c.toDataURL('image/jpeg',q||0.7));}catch(e){res(dataURL);}};img.onerror=function(){res(dataURL);};img.src=dataURL;});}
+async function scanReceipt(input){
+  var file=input.files&&input.files[0];if(!file)return;input.value='';
+  if(!shop.aiKey){alert('Add your Anthropic API key in Settings \u2192 AI Features first.');return;}
+  var origURL;
+  try{origURL=await new Promise(function(res,rej){var rd=new FileReader();rd.onload=function(e){res(e.target.result);};rd.onerror=rej;rd.readAsDataURL(file);});}
+  catch(e){alert('Could not read that image.');return;}
+  oM('Reading receipt\u2026','<div style="text-align:center;padding:34px 10px"><div class="spin" style="margin:0 auto 14px"></div><div style="font-size:13px;color:#888">Claude is reading the receipt\u2026</div></div>','');
+  var small=await _rcResize(origURL,1400,0.7);
+  var b64=small.split(',')[1];
+  var prompt='This is a photo of a business receipt or bill for a heavy-duty diesel truck & trailer repair shop. Read it and return ONLY valid JSON \u2014 no markdown, no commentary. Format exactly: {"vendor":"","date":"YYYY-MM-DD","subtotal":0,"tax":0,"total":0,"category":"","note":""}. Rules: "total" is the final amount paid including tax. "date" is the purchase date as YYYY-MM-DD (if the year is missing assume the current year; if unreadable use ""). "category" MUST be exactly one of these strings: '+EXP_CATS.join(' | ')+'. Choose the closest fit (a fuel/diesel receipt is Fuel; counter parts are Shop Supplies unless clearly tools/equipment; eating out is Other; a phone or internet bill is Phone / Internet, etc). "note" is one short line naming the main item(s) or purpose. Use 0 for any number you cannot read and "" for any text you cannot read.';
+  var raw=await callClaude(prompt,b64,'image/jpeg');
+  if(raw==null){cM();return;}
+  raw=raw.replace(/```json|```/g,'').trim();
+  var d;try{d=JSON.parse(raw);}catch(e){
+    oM('Couldn\u2019t read that one','<div style="font-size:13px;color:#888;line-height:1.5;padding:6px 2px">Claude couldn\u2019t pull clean details off that photo. Try again with better lighting and the whole receipt flat in frame \u2014 or just add it by hand.</div>','<button class="btn bl" onclick="expManager()">Back</button>');
+    return;
+  }
+  receiptPreview(d,small);
+}
+function receiptPreview(d,imgURL){
+  _pendingReceiptImg=imgURL;
+  var cat=(d.category&&EXP_CATS.indexOf(d.category)>=0)?d.category:'Other';
+  var catOpts=EXP_CATS.map(function(c){return '<option'+(c===cat?' selected':'')+'>'+c+'</option>';}).join('');
+  var amt=parseFloat(d.total)||parseFloat(d.subtotal)||0;
+  var inS='padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%';
+  oM('Receipt \u2014 Review & Save',
+    '<div style="display:flex;gap:12px;margin-bottom:14px;align-items:flex-start">'
+    +'<img src="'+imgURL+'" style="width:88px;height:118px;object-fit:cover;border-radius:8px;border:0.5px solid var(--bd);flex:none">'
+    +'<div style="font-size:12px;color:#888;line-height:1.5">Claude read this receipt. Check the fields and fix anything that\u2019s off, then save. It logs as a one-time operating expense and the photo is stored with it.</div>'
+    +'</div>'
+    +'<div class="g2">'
+    +'<div class="fg full"><label>Vendor / Name</label><input id="rc-n" value="'+_rcEsc(d.vendor)+'" placeholder="Vendor" style="'+inS+'"></div>'
+    +'<div class="fg"><label>Category</label><select id="rc-c" style="'+inS+';font-family:inherit">'+catOpts+'</select></div>'
+    +'<div class="fg"><label>Frequency</label><select id="rc-f" style="'+inS+';font-family:inherit"><option value="onetime" selected>One-time</option><option value="monthly">Monthly</option><option value="annual">Annual</option></select></div>'
+    +'<div class="fg"><label>Total ($)</label><input id="rc-a" type="number" inputmode="decimal" value="'+amt+'" style="'+inS+'"></div>'
+    +'<div class="fg"><label>Tax ($)</label><input id="rc-t" type="number" inputmode="decimal" value="'+(parseFloat(d.tax)||0)+'" style="'+inS+'"></div>'
+    +'<div class="fg full"><label>Date</label><input id="rc-d" type="date" value="'+_rcISO(d.date)+'" style="'+inS+'"></div>'
+    +'<div class="fg full"><label>Note</label><input id="rc-note" value="'+_rcEsc(d.note)+'" placeholder="optional" style="'+inS+'"></div>'
+    +'</div>',
+    '<button class="btn bl" onclick="receiptSave(event)"><i class="ti ti-check"></i>Save Expense</button><button class="btn" onclick="expManager()">Cancel</button>'
+  );
+}
+async function receiptSave(ev){
+  var n=gv('rc-n'),c=el('rc-c')?el('rc-c').value:'Other',a=parseFloat(gv('rc-a')),t=parseFloat(gv('rc-t'))||0,d=gv('rc-d'),f=el('rc-f')?el('rc-f').value:'onetime',note=gv('rc-note');
+  if(!a||a<=0){alert('Enter a total greater than 0.');return;}
+  if(!n)n=c;
+  var btn=ev&&ev.target?ev.target:null;if(btn&&btn.tagName!=='BUTTON')btn=btn.closest('button');
+  if(btn)aiLoading(btn,'Saving\u2026');
+  var url='';
+  try{
+    if(_pendingReceiptImg){
+      var fname=Date.now()+'-'+Math.floor(Math.random()*10000)+'.jpg';
+      url=(await uploadReceiptPrivate(_pendingReceiptImg,fname))||'';
+    }
+  }catch(e){url='';}
+  EXPENSES.push({id:Date.now(),date:d||_rcISO(''),category:c,name:n,amount:a,freq:f,tax:t,note:note,receipt:url});
+  _pendingReceiptImg=null;
+  await saveAll();
+  expManager();
 }
 
 function finSummary(){
