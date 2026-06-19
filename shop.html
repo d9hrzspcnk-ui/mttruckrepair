@@ -1451,6 +1451,29 @@ function estToWO(id){
   goP('w');
 }
 
+function eiSrchP(id,li,inp){
+  var dd=el('eipd_'+id+'_'+li);if(!dd)return;
+  var q=(inp.value||'').toLowerCase().trim();
+  if(q.length<1){dd.style.display='none';return;}
+  var esc=function(s){return ((s==null?'':''+s)).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');};
+  var m=_invPartPool().filter(function(p){return (p.name||'').toLowerCase().indexOf(q)>-1||(''+(p.partNum||'')).toLowerCase().indexOf(q)>-1;}).slice(0,8);
+  if(!m.length){dd.style.display='none';return;}
+  dd.innerHTML=m.map(function(p){
+    return '<div onmousedown="eiSelP('+id+','+li+',this)" data-nm="'+esc(p.name||'')+'" data-pn="'+esc(p.partNum||'')+'" data-cost="'+(p.cost!=null?p.cost:'')+'" data-mk="'+(p.markup!=null?p.markup:'')+'" data-sell="'+(p.sell!=null?p.sell:'')+'" style="padding:7px 9px;cursor:pointer;border-bottom:0.5px solid var(--bd);font-size:12px;line-height:1.4">'+(p.partNum?'<span style="color:#185FA5;font-weight:600">'+esc(p.partNum)+'</span> ':'')+esc(p.name||'')+(p.cost!=null&&p.cost!==''?' <span style="color:#888">cost $'+p.cost+'</span>':'')+'</div>';
+  }).join('');
+  dd.style.display='block';
+}
+function eiSelP(id,li,elm){
+  var L=INV[id]&&INV[id].lines&&INV[id].lines[li];if(!L)return;
+  L.desc=elm.getAttribute('data-nm')||L.desc;
+  L.partNum=elm.getAttribute('data-pn')||L.partNum||'';
+  var cost=parseFloat(elm.getAttribute('data-cost'));if(isNaN(cost))cost=0;
+  var mkA=elm.getAttribute('data-mk');var mk=(mkA!==''&&mkA!=null)?parseFloat(mkA):getMarkup(cost);if(isNaN(mk))mk=getMarkup(cost);
+  var sellA=elm.getAttribute('data-sell');var sell=(sellA!==''&&sellA!=null)?parseFloat(sellA):NaN;if(isNaN(sell))sell=+(cost*(1+mk/100)).toFixed(2);
+  L.cost=cost;L.markup=mk;L.mkMan=false;L.sell=sell;L.qty=L.qty||1;
+  L.subtotal=+(L.qty*L.sell).toFixed(2);
+  recalcInv(id);eInv(id);
+}
 function eInv(id){
   var inv=INV[id];if(!inv)return;_modLock=true;
   function bRows(){
@@ -1478,7 +1501,7 @@ function eInv(id){
       } else {
         return'<tr>'
           +'<td style="padding:5px 6px"><span style="background:#EAF3DE;color:#27500A;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:600">Part</span></td>'
-          +'<td style="padding:5px 6px"><input value="'+(l.desc||'')+'" onchange="INV['+id+'].lines['+li+'].desc=this.value" style="width:100%;padding:5px;font-size:13px;border:0.5px solid var(--bd);border-radius:5px;font-family:inherit">'
+          +'<td style="padding:5px 6px;position:relative"><input value="'+(l.desc||'')+'" placeholder="Part name or #..." autocomplete="off" oninput="eiSrchP('+id+','+li+',this)" onchange="INV['+id+'].lines['+li+'].desc=this.value" style="width:100%;padding:5px;font-size:13px;border:0.5px solid var(--bd);border-radius:5px;font-family:inherit"><div id="eipd_'+id+'_'+li+'" style="display:none;border:0.5px solid var(--bd);border-radius:5px;max-height:150px;overflow-y:auto;background:#fff;position:relative;z-index:60;margin-top:2px;box-shadow:0 4px 12px rgba(0,0,0,0.12)"></div>'
           +'<div style="display:flex;gap:3px;margin-top:3px;align-items:center"><span style="font-size:10px;color:#888">Cost$</span><input type="number" step="0.01" value="'+(l.cost||0)+'" onchange="var L=INV['+id+'].lines['+li+'];L.cost=parseFloat(this.value)||0;if(!L.mkMan)L.markup=getMarkup(L.cost);L.sell=+(L.cost*(1+(L.markup!==undefined?L.markup:getMarkup(L.cost))/100)).toFixed(2);L.subtotal=+(L.qty*L.sell).toFixed(2);recalcInv('+id+');eInv('+id+')" style="width:58px;padding:3px 4px;font-size:11px;border:0.5px solid var(--bd);border-radius:4px;font-family:inherit"><span style="font-size:10px;color:#888">Mk%</span><input type="number" value="'+(l.markup!==undefined?l.markup:shop.markup)+'" onchange="var L=INV['+id+'].lines['+li+'];L.markup=parseFloat(this.value)||0;L.mkMan=true;if(L.cost){L.sell=+(L.cost*(1+L.markup/100)).toFixed(2);L.subtotal=+(L.qty*L.sell).toFixed(2);}recalcInv('+id+');eInv('+id+')" style="width:44px;padding:3px 4px;font-size:11px;border:0.5px solid var(--bd);border-radius:4px;font-family:inherit"></div></td>'
           +'<td style="padding:5px 6px"><input type="number" value="'+(l.qty||1)+'" onchange="INV['+id+'].lines['+li+'].qty=parseFloat(this.value)||0;INV['+id+'].lines['+li+'].subtotal=+(INV['+id+'].lines['+li+'].qty*INV['+id+'].lines['+li+'].sell).toFixed(2);recalcInv('+id+');eInv('+id+')" style="width:55px;padding:5px;font-size:13px;border:0.5px solid var(--bd);border-radius:5px;font-family:inherit"></td>'
           +'<td style="padding:5px 6px"><input type="number" value="'+(l.sell||0)+'" onchange="INV['+id+'].lines['+li+'].sell=parseFloat(this.value)||0;INV['+id+'].lines['+li+'].subtotal=+(INV['+id+'].lines['+li+'].qty*INV['+id+'].lines['+li+'].sell).toFixed(2);recalcInv('+id+');eInv('+id+')" style="width:65px;padding:5px;font-size:13px;border:0.5px solid var(--bd);border-radius:5px;font-family:inherit"></td>'
