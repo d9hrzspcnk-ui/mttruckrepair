@@ -2245,26 +2245,41 @@ function ni2Add(type){
   ni2Render();
 }
 function ni2Del(i){_ni2L.splice(i,1);ni2Render();}
+function _invPartPool(){
+  var pool=[],seen={};
+  var add=function(o){
+    var name=((o.name||o.desc||'')+'').trim();
+    var pn=((o.partNum||'')+'').trim();
+    if(!name&&!pn)return;
+    var key=(name+'|'+pn).toLowerCase();
+    if(seen[key])return;seen[key]=1;
+    pool.push({name:name,partNum:pn,cost:o.cost,sell:o.sell,markup:o.markup,qty:o.qty});
+  };
+  ((typeof PARTS!=='undefined'&&PARTS)||[]).forEach(add);
+  ((typeof INV!=='undefined'&&INV)||[]).forEach(function(iv){(iv.lines||[]).forEach(function(l){if(l&&l.type==='part')add(l);});});
+  ((typeof WO!=='undefined'&&WO)||[]).forEach(function(w){(w.lines||[]).forEach(function(l){if(l&&(l.type==='part'||l.partNum))add(l);});});
+  return pool;
+}
 function ni2PartPick(i,val){
   var l=_ni2L[i];if(!l||!val)return;
   var v=(''+val).toLowerCase().trim();
-  var P=(typeof PARTS!=='undefined'&&PARTS)||[];
+  var P=_invPartPool();
   var m=null;
   P.forEach(function(x){if(m)return;if((x.name||'').toLowerCase()===v||(x.partNum&&(''+x.partNum).toLowerCase()===v))m=x;});
   if(!m)return;
   l.desc=m.name||l.desc;
   l.partNum=m.partNum||l.partNum||'';
   l.cost=parseFloat(m.cost)||0;
-  l.markup=(m.markup!=null?parseFloat(m.markup):getMarkup(l.cost));
+  l.markup=(m.markup!=null&&m.markup!==''?parseFloat(m.markup):getMarkup(l.cost));
   l._mkMan=false;
-  l.sell=parseFloat(m.sell)||+((l.cost)*(1+(l.markup||0)/100)).toFixed(2);
+  l.sell=parseFloat(m.sell)|| +((l.cost)*(1+(l.markup||0)/100)).toFixed(2);
   ni2Render();
 }
 function ni2Render(){
   var box=el('ni2-lines');if(!box)return;
   if(!_ni2L.length){box.innerHTML='<div style="font-size:12px;color:#888;padding:4px 0 8px">No lines yet \u2014 add labor or parts below.</div>';ni2Tot();return;}
   var _esc=function(s){return (s==null?'':''+s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');};
-  var _P=(typeof PARTS!=='undefined'&&PARTS)||[];
+  var _P=_invPartPool();
   var h='<datalist id="ni2-parts-dl">'+_P.map(function(p){return '<option value="'+_esc(p.name||'')+'">'+(p.partNum?'#'+_esc(p.partNum):'')+(p.qty!=null?(p.partNum?' \u00b7 ':'')+'stock '+p.qty:'')+'</option>';}).join('')+'</datalist>';
   h+='<datalist id="ni2-pn-dl">'+_P.filter(function(p){return p.partNum;}).map(function(p){return '<option value="'+_esc(p.partNum)+'">'+_esc(p.name||'')+'</option>';}).join('')+'</datalist>';
   var inp='padding:7px 9px;font-size:13px;border:0.5px solid var(--bd);border-radius:7px;background:#fff;font-family:inherit';
