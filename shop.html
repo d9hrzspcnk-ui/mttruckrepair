@@ -210,7 +210,7 @@ tr:last-child td{border-bottom:none}
 </div>
 
 <!-- MODAL -->
-<div id="MOD" class="modal-bg" onclick="if(event.target===this)cM()">
+<div id="MOD" class="modal-bg" onclick="if(event.target===this&&!_modLock)cM()">
   <div class="modal">
     <div class="mh"><h2 id="m-title"></h2><button class="btn xs" onclick="cM()"><i class="ti ti-x"></i></button></div>
     <div id="m-body"></div>
@@ -557,8 +557,9 @@ function goP(p){
 function hdrAct(){
   if(curP==='d'||curP==='w')nWO();else if(curP==='e')nEst();else if(curP==='i')nInv();else if(curP==='c')nCust();else if(curP==='p')nPart();else if(curP==='pm')nPM();else if(curP==='a')nAppt();else if(curP==='s')saveSet();
 }
+var _modLock=false;
 function oM(title,body,acts){el('m-title').textContent=title;el('m-body').innerHTML=body;el('m-act').innerHTML=acts||'';el('MOD').style.display='block';}
-function cM(){el('MOD').style.display='none';}
+function cM(){el('MOD').style.display='none';_modLock=false;}
 
 function rDash(){
   var unp=INV.filter(function(i){return i.status==='Unpaid';});
@@ -1451,7 +1452,7 @@ function estToWO(id){
 }
 
 function eInv(id){
-  var inv=INV[id];if(!inv)return;
+  var inv=INV[id];if(!inv)return;_modLock=true;
   function bRows(){
     var rows=(inv.lines||[]).map(function(l,li){
       if(l.type==='fee'){
@@ -2168,7 +2169,7 @@ function fINV(q){var r=el('inv-tb');if(!r)return;r.innerHTML=INV.filter(function
 function vInv(id){var i=INV[id];var ll=(i.lines||[]).filter(function(l){return l.type==='labor';}).map(function(l){return'<tr><td style="padding:6px 9px">'+(l.desc||'')+'</td><td style="padding:6px 9px">'+l.hrs+'hrs @ $'+l.rate+'</td><td style="padding:6px 9px;font-weight:600">'+fm(l.subtotal)+'</td></tr>';}).join('');var pl=(i.lines||[]).filter(function(l){return l.type==='part';}).map(function(l){return'<tr><td style="padding:6px 9px">'+(l.partNum?l.partNum+': ':'')+l.desc+'</td><td style="padding:6px 9px">'+l.qty+' x '+fm(l.sell)+'</td><td style="padding:6px 9px;font-weight:600">'+fm(l.subtotal)+'</td></tr>';}).join('');oM('Invoice #'+i.num,'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-bottom:10px;margin-bottom:10px;border-bottom:0.5px solid var(--bd)"><div><strong>'+shop.name+'</strong><br>'+shop.phone+'<br>'+shop.addr+'</div><div style="text-align:right">Invoice #'+i.num+'<br>'+i.date+'<br>'+bdg(i.status)+'</div></div><div style="background:#f5f5f7;padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:10px"><strong>Bill To:</strong> '+i.customer+' | '+(i.vehicle||'—')+(invVIN(i)?'<br><strong>VIN:</strong> '+invVIN(i):'')+'</div>'+(ll?'<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;margin-bottom:5px">Labor</div><div class="tbl"><table><thead><tr><th>Description</th><th>Detail</th><th>Total</th></tr></thead><tbody>'+ll+'</tbody></table></div>':'')+(pl?'<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;margin:8px 0 5px">Parts</div><div class="tbl"><table><thead><tr><th>Part</th><th>Qty/Price</th><th>Total</th></tr></thead><tbody>'+pl+'</tbody></table></div>':'')+'<div style="text-align:right;padding-top:8px;border-top:0.5px solid var(--bd);margin-top:8px"><div style="font-size:13px;color:#888">Labor: '+fm(parseFloat(i.labor)||0)+' | Parts: '+fm(parseFloat(i.parts)||0)+(parseFloat(i.supplies)>0?' | Supplies: '+fm(parseFloat(i.supplies)):'')+(parseFloat(i.discountAmt)>0?' | Discount: −'+fm(parseFloat(i.discountAmt)):'')+' | Tax: '+fm(parseFloat(i.tax)||0)+'</div><div style="font-size:18px;font-weight:700;color:#185FA5;margin-top:3px">Total: '+fm(parseFloat(i.total)||0)+'</div></div>','<button class="btn" onclick="cM();eInv('+id+')"><i class="ti ti-edit"></i>Edit</button><button class="btn gr" onclick="prtInv('+id+')"><i class="ti ti-printer"></i>Print</button><button class="btn bl" onclick="sndInv('+id+')"><i class="ti ti-send"></i>Send</button>'+(i.status!=='Paid'?'<button class="btn bl" onclick="cM();markPaid('+id+')">Mark Paid</button>':'')+'<button class="btn" onclick="cM()">Close</button>');}
 var _ni2L=[],_ni2SupMan=false;
 function nInv(){
-  _ni2L=[];_ni2SupMan=false;
+  _ni2L=[];_ni2SupMan=false;_modLock=true;
   var cO='<option value="">\u2014 Select Customer \u2014</option>'+CUST.map(function(c,i){return'<option value="'+i+'">'+c.name+'</option>';}).join('');
   var F='style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#fff;width:100%;font-family:inherit"';
   oM('New Invoice',
@@ -2244,10 +2245,28 @@ function ni2Add(type){
   ni2Render();
 }
 function ni2Del(i){_ni2L.splice(i,1);ni2Render();}
+function ni2PartPick(i,val){
+  var l=_ni2L[i];if(!l||!val)return;
+  var v=(''+val).toLowerCase().trim();
+  var P=(typeof PARTS!=='undefined'&&PARTS)||[];
+  var m=null;
+  P.forEach(function(x){if(m)return;if((x.name||'').toLowerCase()===v||(x.partNum&&(''+x.partNum).toLowerCase()===v))m=x;});
+  if(!m)return;
+  l.desc=m.name||l.desc;
+  l.partNum=m.partNum||l.partNum||'';
+  l.cost=parseFloat(m.cost)||0;
+  l.markup=(m.markup!=null?parseFloat(m.markup):getMarkup(l.cost));
+  l._mkMan=false;
+  l.sell=parseFloat(m.sell)||+((l.cost)*(1+(l.markup||0)/100)).toFixed(2);
+  ni2Render();
+}
 function ni2Render(){
   var box=el('ni2-lines');if(!box)return;
   if(!_ni2L.length){box.innerHTML='<div style="font-size:12px;color:#888;padding:4px 0 8px">No lines yet \u2014 add labor or parts below.</div>';ni2Tot();return;}
-  var h='';
+  var _esc=function(s){return (s==null?'':''+s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');};
+  var _P=(typeof PARTS!=='undefined'&&PARTS)||[];
+  var h='<datalist id="ni2-parts-dl">'+_P.map(function(p){return '<option value="'+_esc(p.name||'')+'">'+(p.partNum?'#'+_esc(p.partNum):'')+(p.qty!=null?(p.partNum?' \u00b7 ':'')+'stock '+p.qty:'')+'</option>';}).join('')+'</datalist>';
+  h+='<datalist id="ni2-pn-dl">'+_P.filter(function(p){return p.partNum;}).map(function(p){return '<option value="'+_esc(p.partNum)+'">'+_esc(p.name||'')+'</option>';}).join('')+'</datalist>';
   var inp='padding:7px 9px;font-size:13px;border:0.5px solid var(--bd);border-radius:7px;background:#fff;font-family:inherit';
   _ni2L.forEach(function(l,i){
     if(l.type==='labor'){
@@ -2262,8 +2281,8 @@ function ni2Render(){
     }else{
       h+='<div style="background:#fff;border:0.5px solid var(--bd);border-radius:10px;padding:8px;margin-bottom:7px">'
         +'<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><span style="background:#FBF4E6;color:#8a5a00;padding:2px 7px;border-radius:8px;font-size:10px;font-weight:700">PART</span>'
-        +'<input value="'+(l.partNum||'')+'" placeholder="Part #" oninput="ni2U('+i+',\'partNum\',this.value)" style="width:90px;'+inp+'">'
-        +'<input value="'+(l.desc||'')+'" placeholder="Part description..." oninput="ni2U('+i+',\'desc\',this.value)" style="flex:1;'+inp+'">'
+        +'<input value="'+(l.partNum||'')+'" placeholder="Part #" list="ni2-pn-dl" oninput="ni2U('+i+',\'partNum\',this.value)" onchange="ni2PartPick('+i+',this.value)" style="width:90px;'+inp+'">'
+        +'<input value="'+(l.desc||'')+'" placeholder="Part description..." list="ni2-parts-dl" oninput="ni2U('+i+',\'desc\',this.value)" onchange="ni2PartPick('+i+',this.value)" style="flex:1;'+inp+'">'
         +'<button type="button" onclick="ni2Del('+i+')" style="background:transparent;border:none;color:#A32D2D;font-size:18px;cursor:pointer;padding:0 4px">\u00d7</button></div>'
         +'<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px"><span style="font-size:11px;color:#888">Cost $</span><input type="number" step="0.01" value="'+(l.cost||0)+'" oninput="ni2U('+i+',\'cost\',this.value)" style="width:80px;'+inp+'">'
         +'<span style="font-size:11px;color:#888">Markup %</span><input id="ni2-mk-'+i+'" type="number" value="'+(l.markup!==undefined?l.markup:shop.markup)+'" oninput="ni2U('+i+',\'markup\',this.value)" style="width:60px;'+inp+'"><span style="font-size:10px;color:#3B6D11">auto by tier</span></div>'
