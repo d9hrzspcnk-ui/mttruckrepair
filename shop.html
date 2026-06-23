@@ -2509,15 +2509,31 @@ function sndInvSend(id){
   if(!ph||!ph.value.trim()){alert('Enter phone number');return;}
   var num=ph.value.replace(/[^0-9]/g,'');
   var body=mg?mg.value:'';
-  // Use <a> click to trigger Windows app picker (Phone Link, etc.)
-  var a=document.createElement('a');
-  a.href='sms:'+num+'?body='+encodeURIComponent(body);
-  a.style.display='none';
-  document.body.appendChild(a);
-  a.click();
-  setTimeout(function(){document.body.removeChild(a);},1000);
-  if(INV[id]){INV[id].sent=true;INV[id].sentAt=new Date().toLocaleString();saveAll();}
-  setTimeout(function(){cM();},1500);
+  function markSent(){if(INV[id]){INV[id].sent=true;INV[id].sentAt=new Date().toLocaleString();saveAll();}}
+  var isMobile=/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent||'');
+  if(isMobile){
+    var a=document.createElement('a');
+    a.href='sms:'+num+'?body='+encodeURIComponent(body);
+    a.style.display='none';document.body.appendChild(a);a.click();
+    setTimeout(function(){document.body.removeChild(a);},1000);
+    markSent();
+    setTimeout(function(){cM();},1500);
+    return;
+  }
+  var pretty=(num.length===10)?('('+num.slice(0,3)+') '+num.slice(3,6)+'-'+num.slice(6)):num;
+  function done(){markSent();cM();}
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(body).then(function(){
+      alert('Message copied!\n\nPaste it into Phone Link (or text from your phone) and send to:\n'+pretty);
+      done();
+    }).catch(function(){
+      alert('Select and copy the message above, then text it to:\n'+pretty);
+      done();
+    });
+  } else {
+    alert('Select and copy the message above, then text it to:\n'+pretty);
+    done();
+  }
 }
 function emInv(id,em){if(!em){alert('Enter email');return;}var i=INV[id];var cx=CUST.find(function(c){return c.name===i.customer;});if(cx&&!cx.email&&em){cx.email=em;saveAll();}var rows='';(i.lines||[]).forEach(function(l){if(l.type==='labor')rows+='<tr style="border-bottom:1px solid #eee"><td style="padding:7px 10px;color:#185FA5;font-weight:bold">Labor</td><td style="padding:7px 10px">'+(l.desc||'')+'</td><td style="padding:7px 10px">'+l.hrs+'hrs @ $'+l.rate+'</td><td style="padding:7px 10px;text-align:right;font-weight:bold">$'+parseFloat(l.subtotal).toFixed(2)+'</td></tr>';else if(l.type==='part')rows+='<tr style="border-bottom:1px solid #eee"><td style="padding:7px 10px;color:#3B6D11;font-weight:bold">Part</td><td style="padding:7px 10px">'+l.desc+'</td><td style="padding:7px 10px">'+l.qty+' x $'+parseFloat(l.sell).toFixed(2)+'</td><td style="padding:7px 10px;text-align:right;font-weight:bold">$'+parseFloat(l.subtotal).toFixed(2)+'</td></tr>';});if(!rows)rows='<tr><td colspan="4" style="padding:10px;color:#888">Service on '+(i.vehicle||'vehicle')+'</td></tr>';var params={email:em,invoice_num:i.num,customer_name:i.customer,vehicle:i.vehicle||'',date:i.date,status:i.status,wo_ticket:i.woTicket||'—',invoice_rows:rows,labor:'$'+i.labor,parts:'$'+i.parts,supplies:'$'+(i.supplies||'0.00'),tax:'$'+i.tax,total:'$'+i.total,shop_phone:shop.phone,shop_addr:shop.addr,terms:shop.terms||'Payment due upon receipt.'};if(typeof emailjs!=='undefined'){emailjs.send(ES,ET,params).then(function(){cM();alert('Email sent to '+em+'!');}).catch(function(e){alert('Email error: '+JSON.stringify(e));});}else{alert('Email service not loaded.');}}
 
