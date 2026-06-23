@@ -2484,37 +2484,24 @@ function sndInvEmail(id){
   if(!email){alert('Enter customer email address');return;}
   var invX=INV[id];var invLink=window.location.origin+window.location.pathname+'?inv='+(invX?invX.num:id);
   var total=(parseFloat(inv.total)||0).toFixed(2);
-  var subject='Invoice #'+inv.num+' from '+shop.name+' — $'+total;
+  var subject='Invoice #'+inv.num+' from '+shop.name+' - $'+total;
   var body='Hi '+inv.customer+',\n\nYour invoice #'+inv.num+' from '+shop.name+' is ready.\n\nAmount Due: $'+total+'\n\nView your full invoice here:\n'+invLink+'\n\n';
   if(shop.venmo)body+='Pay via Venmo: '+shop.venmo+'\n';
   if(shop.cashapp)body+='Pay via CashApp: '+shop.cashapp+'\n';
   if(shop.zelle)body+='Pay via Zelle: '+shop.zelle+'\n';
   body+='\nQuestions? Call '+shop.phone+'\n\nThank you,\n'+shop.name;
-  // Try EmailJS first
-  if(typeof emailjs!=='undefined'&&shop.aiKey){
-    emailjs.send(ES,ET,{
-      to_email:email,to_name:inv.customer,
-      subject:subject,message:body,
-      shop_name:shop.name,shop_phone:shop.phone
-    },EK).then(function(){
-      alert('Email sent to '+email+'!');
-      INV[id].sent=true;INV[id].sentAt=new Date().toLocaleString();saveAll();cM();
-    }).catch(function(){
-      // Fallback to mailto
-      var a=document.createElement('a');
-      a.href='mailto:'+email+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
-      a.style.display='none';document.body.appendChild(a);a.click();
-      setTimeout(function(){document.body.removeChild(a);},1000);
-      INV[id].sent=true;saveAll();
-    });
-  } else {
-    // Use mailto link — opens email client
-    var a=document.createElement('a');
-    a.href='mailto:'+email+'?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
-    a.style.display='none';document.body.appendChild(a);a.click();
-    setTimeout(function(){document.body.removeChild(a);},1000);
+  if(typeof emailjs==='undefined'){alert('Email service not loaded. Tap Copy and paste the message into your email app.');return;}
+  emailjs.send(ES,ET,{
+    email:email,to_name:inv.customer,from_name:shop.name,
+    subject:subject,message:body.replace(/\n/g,'<br>'),
+    shop_name:shop.name,shop_phone:shop.phone,shop_addr:shop.addr
+  }).then(function(){
+    alert('Email sent to '+email+'!');
     INV[id].sent=true;INV[id].sentAt=new Date().toLocaleString();saveAll();cM();
-  }
+  }).catch(function(e){
+    var msg=(e&&e.text)?e.text:JSON.stringify(e);
+    alert('Could not send automatically. Tap Copy to grab the message, or check Settings > AI/Email setup.\n\n('+msg+')');
+  });
 }
 function sndInvSend(id){
   var ph=document.getElementById('si-ph');
