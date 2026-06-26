@@ -2512,8 +2512,9 @@ function sndInvSend(id){
   function markSent(){if(INV[id]){INV[id].sent=true;INV[id].sentAt=new Date().toLocaleString();saveAll();}}
   var isMobile=/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent||'');
   if(isMobile){
+    var tel=(num.length===10)?('+1'+num):((num.length===11&&num.charAt(0)==='1')?('+'+num):num);
     var a=document.createElement('a');
-    a.href='sms:'+num+'?body='+encodeURIComponent(body);
+    a.href='sms:'+tel+'?&body='+encodeURIComponent(body);
     a.style.display='none';document.body.appendChild(a);a.click();
     setTimeout(function(){document.body.removeChild(a);},1000);
     markSent();
