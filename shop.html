@@ -324,7 +324,7 @@ function migrateVendors(){
   VENDORS=VENDORS.map(function(v){return typeof v==='string'?{id:Date.now()+Math.random(),name:v,phone:'',email:'',rep:'',address:'',account:'',notes:''}:v;});
 }
 var woc=1000,invc=3000,estc=5000,curP='d';
-var shop={name:'MT Truck And Trailer Repair',phone:'909-600-8440',email:'mttruckandtrailer@gmail.com',addr:'12200 Hibiscus Rd, Adelanto CA',laborRate:125,markup:45,suppliesRate:7.4,taxRate:8,terms:'Payment due upon receipt.',markupTiers:[{max:300,pct:45},{max:1000,pct:35},{max:2500,pct:25},{max:9999999,pct:15}]};
+var shop={name:'MT Truck And Trailer Repair',phone:'909-600-8440',email:'mttruckandtrailer@gmail.com',addr:'12200 Hibiscus Rd, Adelanto CA',laborRate:125,markup:45,suppliesRate:7.4,taxRate:8,terms:'Payment due upon receipt.',warranty:'Any warranties on parts and accessories sold are made solely by their manufacturer. Unless expressly stated in writing, we make no warranty of any kind. You authorize us and our employees to perform the repair work described on this invoice and to obtain the parts and materials necessary to complete that work. We are not responsible for loss or damage to vehicles or to articles left in vehicles in case of fire, theft, or any cause beyond our control, nor for delays caused by parts availability or shipment by suppliers or transporters. You grant our employees permission to operate the vehicle on streets, highways, or elsewhere for the purpose of testing and inspection. You acknowledge and agree that an express mechanic’s lien is granted on the vehicle to secure payment of the amount of repairs detailed on this invoice.',markupTiers:[{max:300,pct:45},{max:1000,pct:35},{max:2500,pct:25},{max:9999999,pct:15}]};
 var LC=['Chassis/Cab','Engine','Transmission','Drive Axle','Steer Axle','Brakes','Air System','Electrical','A/C & Heating','Tires & Wheels','Suspension','Fuel System','Exhaust','PM Maintenance','Other'];
 
 
@@ -2405,22 +2405,105 @@ function svNI(){
   saveAll();cM();rINV();rDash();}
 function prtInv(id){
   var i=INV[id];var vin=invVIN(i);
-  var meta='Date: '+i.date+(i.woTicket&&i.woTicket!=='\u2014'?'<br>Service Order #'+i.woTicket:'');
-  var body=prtHdr('INVOICE',i.num,meta,i.status,prtBadge(i.status));
-  body+='<div class="boxes"><div class="box"><div class="lbl">Bill To</div><div class="big">'+i.customer+'</div><div class="row">'+(i.phone||'')+'</div></div>'
-    +'<div class="box"><div class="lbl">Vehicle</div><div class="big">'+(i.vehicle||'\u2014')+'</div><div class="row">'+(vin?'VIN: '+vin:'')+'</div></div></div>';
-  body+=prtLines(i.lines,0,false);
-  body+='<div class="totwrap"><div class="tot">'
-    +'<div class="ln"><span>Labor</span><span>'+fm(parseFloat(i.labor)||0)+'</span></div>'
-    +'<div class="ln"><span>Parts</span><span>'+fm(parseFloat(i.parts)||0)+'</span></div>'
-    +(parseFloat(i.supplies)>0?'<div class="ln"><span>Shop Supplies</span><span>'+fm(parseFloat(i.supplies))+'</span></div>':'')
-    +(parseFloat(i.discountAmt)>0?'<div class="ln"><span>Discount</span><span>\u2212'+fm(parseFloat(i.discountAmt))+'</span></div>':'')
-    +'<div class="ln"><span>Tax</span><span>'+fm(parseFloat(i.tax)||0)+'</span></div>'
-    +'<div class="gd"><span>'+(i.status==='Paid'?'PAID':'TOTAL DUE')+'</span><span>'+fm(parseFloat(i.total)||0)+'</span></div></div></div>';
-  if(i.status==='Paid'&&i.payment)body+='<div style="text-align:right;font-size:11.5px;color:#27500A;font-weight:600;margin-top:6px">Paid via '+i.payment+'</div>';
-  body+='<div style="margin-top:16px;font-size:12.5px;color:#0F2A47;font-weight:600">Thank you for your business!</div>';
-  body+='<div class="terms">'+(shop.terms||'')+'</div>';
-  prtOpen('Invoice #'+i.num+' \u2014 '+shop.name,body);
+  var w=null;if(i.woTicket&&i.woTicket!=='\u2014'){w=WO.find(function(x){return x.ticket===i.woTicket;});}
+  var u=(w&&w.unit)?w.unit:{};
+  var auth=(w&&w.authorizer)?w.authorizer:'';
+  var po=(w&&w.poNum)?w.poNum:'';
+  var unitNum=u.num||'';
+  var miles=u.miles||'';
+  var paid=(i.status==='Paid');
+  var so=(i.woTicket&&i.woTicket!=='\u2014')?('SO-'+i.woTicket):'\u2014';
+  var bc=paid?{c:'#27500A'}:{c:'#A32D2D'};
+  // line rows
+  var rows='';var lineSum=0;
+  (i.lines||[]).forEach(function(l){
+    var item,qty,rate,amt;
+    if(l.type==='labor'){item='Labor';qty=(parseFloat(l.hrs)||0).toFixed(2);rate=fm(l.rate);amt=parseFloat(l.subtotal)||0;}
+    else if(l.type==='part'){item='Part';qty=(parseFloat(l.qty)||0).toFixed(2);rate=fm(l.sell);amt=parseFloat(l.subtotal)||0;}
+    else {item='Service';qty='1.00';rate=fm(l.rate);amt=parseFloat(l.subtotal)||0;}
+    lineSum+=amt;
+    var tx=(l.tax!==false)?'Y':'N';
+    rows+='<tr class="ln"><td>'+item+'</td><td>'+(l.desc||'')+'</td><td class="r">'+qty+'</td><td class="r">'+rate+'</td><td class="r b">'+fm(amt)+'</td><td class="c">'+tx+'</td></tr>';
+  });
+  if(!rows)rows='<tr class="ln"><td colspan="6" style="color:#888">Service on '+(i.vehicle||'vehicle')+'</td></tr>';
+  rows+='<tr class="sub"><td colspan="4" class="r b nv">Subtotal</td><td class="r b nv">'+fm(lineSum)+'</td><td></td></tr>';
+  var sub=parseFloat(i.subtotal)||lineSum;
+  var taxPct=(i.taxPct!=null?i.taxPct:shop.taxRate);
+  var pay=paid?(parseFloat(i.total)||0):0;
+  var bal=paid?0:(parseFloat(i.total)||0);
+  var warr=(shop.warranty||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  var doc='<!DOCTYPE html><html><head><title>Invoice '+i.num+' \u2014 '+shop.name+'</title><meta charset="utf-8"><style>'
+  +'*{margin:0;padding:0;box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+  +'body{font-family:Arial,Helvetica,sans-serif;color:#1d1d1f;font-size:12px;line-height:1.5;padding:30px 34px}'
+  +'.hd{display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid #555;padding-bottom:12px;margin-bottom:16px}'
+  +'.hd .nm{font-size:17px;font-weight:bold;color:#0F2A47;letter-spacing:.3px}'
+  +'.hd .sub{font-size:11.5px;color:#444;line-height:1.7;margin-top:4px}'
+  +'.hd .doc{text-align:right}.hd .ti2{font-size:24px;font-weight:800;color:#0F2A47;letter-spacing:1px}'
+  +'.hd .nu{font-size:13px;font-weight:bold;color:#B5341C;margin-top:2px}'
+  +'.hd .dt{font-size:11.5px;color:#444;margin-top:3px}'
+  +'.bdg{display:inline-block;margin-top:6px;border:1px solid '+bc.c+';color:'+bc.c+';font-size:10px;font-weight:bold;letter-spacing:1px;padding:2px 10px;border-radius:3px}'
+  +'.two{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:16px}'
+  +'.lbl{font-size:9.5px;font-weight:bold;letter-spacing:1px;color:#888;text-transform:uppercase;margin-bottom:3px}'
+  +'.big{font-size:13px;font-weight:bold;color:#0F2A47}'
+  +'.rw{font-size:11.5px;color:#444}'
+  +'table{width:100%;border-collapse:collapse}'
+  +'.sobar{margin-bottom:16px;font-size:11px}'
+  +'.sobar th{text-align:left;padding:6px 8px;color:#0F2A47;font-size:10px;letter-spacing:.5px;border-top:1px solid #aaa;border-bottom:1px solid #aaa}'
+  +'.sobar td{padding:6px 8px}'
+  +'.items{margin-bottom:14px;font-size:11.5px}'
+  +'.items thead th{text-align:left;padding:7px 8px;font-size:10px;letter-spacing:.5px;color:#0F2A47;border-bottom:1.5px solid #0F2A47}'
+  +'.items th.r{text-align:right}.items th.c{text-align:center}'
+  +'.items td{padding:7px 8px}.items td.r{text-align:right}.items td.c{text-align:center}.items td.b{font-weight:bold}.items .nv{color:#0F2A47}'
+  +'.items tr.ln td{border-bottom:1px solid #e8e8ee}'
+  +'.items tr.sub td{border-bottom:1.5px solid #0F2A47}'
+  +'.tw{display:grid;grid-template-columns:1fr 270px;gap:20px;margin-bottom:18px}'
+  +'.unit{font-size:11px;color:#333;line-height:1.8;align-self:start}.unit .h{font-weight:bold;color:#0F2A47;margin-bottom:3px}'
+  +'.tot .ln2{display:flex;justify-content:space-between;padding:5px 4px;font-size:11.5px;border-bottom:1px solid #eee}'
+  +'.tot .b{font-weight:bold}'
+  +'.tot .gd{display:flex;justify-content:space-between;padding:7px 4px;font-size:14px;font-weight:800;color:#0F2A47;border-top:1.5px solid #0F2A47;border-bottom:1.5px solid #0F2A47}'
+  +'.tot .bal{display:flex;justify-content:space-between;padding:7px 4px;font-size:13px;font-weight:800;color:#A32D2D}'
+  +'.warr{font-size:10px;color:#555;line-height:1.6;border-top:1px solid #ddd;padding-top:10px;margin-bottom:18px;text-align:justify;page-break-inside:avoid}'
+  +'.warr b{color:#0F2A47}'
+  +'.sigs{display:grid;grid-template-columns:1.6fr 1fr;gap:30px;margin-top:6px;page-break-inside:avoid}'
+  +'.sig .ln3{border-bottom:1px solid #333;height:38px}.sig .cap{font-size:9.5px;color:#666;margin-top:4px;letter-spacing:.5px}'
+  +'@media print{body{padding:14px 18px}}@page{margin:11mm}'
+  +'</style></head><body>'
+  +'<div class="hd"><div><div class="nm">'+shop.name.toUpperCase()+'</div><div class="sub">'+shop.addr+'<br>'+shop.phone+(shop.email?'<br>'+shop.email:'')+'</div></div>'
+  +'<div class="doc"><div class="ti2">INVOICE</div><div class="nu">INV-'+i.num+'</div><div class="dt">Date: '+i.date+'</div>'
+  +'<span class="bdg">'+(paid?'PAID':'UNPAID')+'</span></div></div>'
+  +'<div class="two"><div><div class="lbl">Bill To</div><div class="big">'+i.customer+'</div><div class="rw">'+(i.phone||'')+'</div></div>'
+  +'<div><div class="lbl">Remit Payment To</div><div class="big">'+shop.name+'</div><div class="rw">'+shop.addr+'</div></div></div>'
+  +'<table class="sobar"><thead><tr><th>SERVICE ORDER</th><th>TERMS</th><th>DUE DATE</th><th>AUTHORIZER</th><th>CUSTOMER PO</th><th>UNIT #</th></tr></thead>'
+  +'<tbody><tr><td>'+so+'</td><td>'+(shop.terms||'Due on receipt')+'</td><td>'+i.date+'</td>'
+  +'<td>'+(auth||'<span style="color:#aaa">__________</span>')+'</td><td>'+(po||'<span style="color:#aaa">__________</span>')+'</td>'
+  +'<td>'+(unitNum||'<span style="color:#aaa">\u2014</span>')+'</td></tr></tbody></table>'
+  +'<table class="items"><thead><tr><th>ITEM</th><th style="width:40%">DESCRIPTION</th><th class="r">QTY/HRS</th><th class="r">RATE</th><th class="r">AMOUNT</th><th class="c">TAX</th></tr></thead><tbody>'+rows+'</tbody></table>'
+  +'<div class="tw"><div class="unit"><div class="h">Unit Details</div>'
+  +'Unit #: '+(unitNum||'<span style="color:#aaa">__________</span>')+'<br>'
+  +'Vehicle: '+(i.vehicle||'\u2014')+'<br>'
+  +'VIN: '+(vin||'<span style="color:#aaa">____________________</span>')+'<br>'
+  +'Mileage: '+(miles||'<span style="color:#aaa">____________</span>')+'</div>'
+  +'<div class="tot">'
+  +'<div class="ln2"><span>Labor</span><span>'+fm(i.labor)+'</span></div>'
+  +'<div class="ln2"><span>Parts</span><span>'+fm(i.parts)+'</span></div>'
+  +(parseFloat(i.supplies)>0?'<div class="ln2"><span>Shop Supplies</span><span>'+fm(i.supplies)+'</span></div>':'')
+  +(parseFloat(i.discountAmt)>0?'<div class="ln2"><span>Discount</span><span>\u2212'+fm(i.discountAmt)+'</span></div>':'')
+  +'<div class="ln2 b"><span>Pre-Charge Subtotal</span><span>'+fm(sub)+'</span></div>'
+  +'<div class="ln2"><span>Local ('+taxPct+'% of '+fm(sub)+')</span><span>'+fm(i.tax)+'</span></div>'
+  +'<div class="gd"><span>Total</span><span>'+fm(i.total)+'</span></div>'
+  +'<div class="ln2"><span>Payments &amp; Credits</span><span>'+fm(pay)+'</span></div>'
+  +'<div class="bal"><span>Balance Due</span><span>'+fm(bal)+'</span></div>'
+  +(paid&&i.payment?'<div style="text-align:right;font-size:11px;color:#27500A;font-weight:bold;margin-top:5px">Paid via '+i.payment+'</div>':'')
+  +'</div></div>'
+  +(warr?'<div class="warr"><b>Warranty &amp; Authorization.</b> '+warr+'</div>':'')
+  +'<div class="sigs"><div class="sig"><div class="ln3"></div><div class="cap">CUSTOMER SIGNATURE</div></div>'
+  +'<div class="sig"><div class="ln3"></div><div class="cap">DATE</div></div></div>'
+  +'<div style="margin-top:14px"><div style="border-bottom:1px solid #333;height:38px;width:60%"></div><div style="font-size:9.5px;color:#666;margin-top:4px;letter-spacing:.5px">PRINTED NAME</div></div>'
+  +'<scr'+'ipt>setTimeout(function(){window.print();},250);<\/scr'+'ipt></body></html>';
+  var win=window.open('','_blank');
+  win.document.write(doc);
+  win.document.close();
 }
 function prtEst(id){
   var est=ESTIMATES[id];if(!est)return;
@@ -3185,6 +3268,7 @@ function rSet(){
     +'<div class="card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><div style="font-size:14px;font-weight:600">Parts Markup Tiers</div><button class="btn xs bl" onclick="shop.markupTiers=shop.markupTiers||[];shop.markupTiers.push({max:5000,pct:20});rMarkupTiers()"><i class="ti ti-plus"></i>Add Tier</button></div><div style="font-size:12px;color:#888;margin-bottom:10px">Auto markup based on part cost.</div><div id=\"mk-tiers\"></div><button class="btn bl xs" style="margin-top:8px" onclick="saveAll()">Save Tiers</button></div>'
     +'<div class="card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><div style="font-size:14px;font-weight:600">Parts Vendors <span style="font-size:11px;color:#888;font-weight:400">(internal — not shown on invoices)</span></div><button class="btn xs bl" onclick="addVendor()"><i class="ti ti-plus"></i>Add</button></div><div id="vend-lst"></div></div>'
     +'<div class="card"><div style="font-size:14px;font-weight:600;margin-bottom:8px">Invoice Terms</div><textarea id="ster" style="width:100%;padding:8px 10px;font-size:13px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;font-family:inherit;resize:vertical;min-height:60px">'+shop.terms+'</textarea></div>'
+    +'<div class="card"><div style="font-size:14px;font-weight:600;margin-bottom:4px">Invoice Warranty Text</div><div style="font-size:12px;color:#888;margin-bottom:8px">Printed at the bottom of every invoice. Edit anytime.</div><textarea id="swar" style="width:100%;padding:8px 10px;font-size:13px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;font-family:inherit;resize:vertical;min-height:120px">'+(shop.warranty||'')+'</textarea></div>'
     +'<div class="card" style="border:1.5px solid #BA7517;margin-bottom:12px">'
     +'<div style="font-size:14px;font-weight:600;margin-bottom:8px;color:#633806"><i class="ti ti-credit-card" style="font-size:16px;vertical-align:-2px"></i> Payment Links</div>'
     +'<div style="font-size:12px;color:#888;margin-bottom:10px">Customers will see these on their invoice page with a Pay Now button.</div>'
@@ -3499,7 +3583,7 @@ function sendAllLowAlerts(){
     '<button class="btn" onclick="cM()">Close</button>'
   );
 }
-function saveSet(){shop.name=gv('sn')||shop.name;shop.phone=gv('sp');shop.email=gv('se');shop.addr=gv('sa');shop.laborRate=parseFloat(el('slr').value)||125;shop.markup=parseFloat(el('smk').value)||45;shop.suppliesRate=parseFloat(el('ssu').value)||7.4;shop.taxRate=parseFloat(el('stx').value)||8;shop.terms=el('ster').value;
+function saveSet(){shop.name=gv('sn')||shop.name;shop.phone=gv('sp');shop.email=gv('se');shop.addr=gv('sa');shop.laborRate=parseFloat(el('slr').value)||125;shop.markup=parseFloat(el('smk').value)||45;shop.suppliesRate=parseFloat(el('ssu').value)||7.4;shop.taxRate=parseFloat(el('stx').value)||8;shop.terms=el('ster').value;if(el('swar'))shop.warranty=el('swar').value;
   var sv=el('s-venmo');if(sv)shop.venmo=sv.value.trim();
   var sz=el('s-zelle');if(sz)shop.zelle=sz.value.trim();
   var sc=el('s-cashapp');if(sc)shop.cashapp=sc.value.trim();
