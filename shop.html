@@ -361,6 +361,8 @@ var TR={
     tpSignOut:'Sign out',tpMain:'Main',
     tpClockIn:'Clock In',tpClockOut:'Clock Out',tpClockedIn:'Clocked in',tpNotClockedIn:'Not clocked in',
     tpLunch:'Start Lunch Break',tpEndLunch:'End Lunch — Back to Work',tpOnLunch:'On Lunch Break',
+    tpPreShift:'Pre-Shift Checklist',tpPostShift:'End-of-Shift Checklist',tpChkSave:'Done',tpChkSkip:'Skip for now',
+    tpRestroom:'Restroom duty this week',tpRestroomYou:'You have restroom duty this week',tpCleanRestroom:'Clean the restroom (your week)',
     tpMyOrders:'My Work Orders',tpNoOrders:'No open orders assigned to you',
     tpBack:'Back to My Orders',
     tpJob:'Job',tpPhotos:'Photos',tpCodes:'Diag Codes',tpParts:'Parts',
@@ -403,6 +405,8 @@ var TR={
     tpSignOut:'Cerrar sesion',tpMain:'Inicio',
     tpClockIn:'Marcar Entrada',tpClockOut:'Marcar Salida',tpClockedIn:'Entrada marcada',tpNotClockedIn:'Sin marcar entrada',
     tpLunch:'Iniciar Descanso',tpEndLunch:'Fin de Descanso — Regresar al trabajo',tpOnLunch:'En Descanso',
+    tpPreShift:'Lista de Inicio de Turno',tpPostShift:'Lista de Fin de Turno',tpChkSave:'Listo',tpChkSkip:'Omitir por ahora',
+    tpRestroom:'Turno de limpieza del ba\u00F1o esta semana',tpRestroomYou:'Le toca limpiar el ba\u00F1o esta semana',tpCleanRestroom:'Limpiar el ba\u00F1o (su semana)',
     tpMyOrders:'Mis Ordenes de Trabajo',tpNoOrders:'No tiene ordenes asignadas',
     tpBack:'Regresar a Mis Ordenes',
     tpJob:'Trabajo',tpPhotos:'Fotos',tpCodes:'Codigos Diag',tpParts:'Piezas',
@@ -429,7 +433,7 @@ function el(id){return document.getElementById(id);}
 function gv(id){var e=el(id);return e?e.value.trim():'';}
 function fm(n){return '$'+parseFloat(n||0).toFixed(2);}
 function td(){return new Date().toLocaleDateString();}
-function bdg(s,p){var m={'Open':'#E6F1FB,#0C447C','In Progress':'#FFF3CD,#664D03','Completed':'#D1E7DD,#0A3622','Waiting Parts':'#F8D7DA,#58151C','Paid':'#D1E7DD,#0A3622','Unpaid':'#F8D7DA,#58151C'};var c=(m[s]||'#E6F1FB,#0C447C').split(',');return'<span style="background:'+c[0]+';color:'+c[1]+';padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600">'+s+'</span>';}
+function bdg(s,p){var m={'Open':'#E6F1FB,#0C447C','In Progress':'#FFF3CD,#664D03','Completed':'#D1E7DD,#0A3622','Waiting Parts':'#F8D7DA,#58151C','Paid':'#D1E7DD,#0A3622','Unpaid':'#F8D7DA,#58151C','Partial':'#FFF3CD,#664D03'};var c=(m[s]||'#E6F1FB,#0C447C').split(',');return'<span style="background:'+c[0]+';color:'+c[1]+';padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600">'+s+'</span>';}
 
 async function dbS(k,v){try{await fetch(SB+'/rest/v1/shop_data',{method:'POST',headers:{'Content-Type':'application/json','apikey':SK,'Authorization':'Bearer '+SK,'Prefer':'resolution=merge-duplicates'},body:JSON.stringify({key:k,value:v,updated_at:new Date().toISOString()})});}catch(e){}}
 async function dbL(k){try{var r=await fetch(SB+'/rest/v1/shop_data?key=eq.'+k+'&select=value',{headers:{'apikey':SK,'Authorization':'Bearer '+SK}});var d=await r.json();return(d&&d.length)?d[0].value:null;}catch(e){return null;}}
@@ -564,7 +568,7 @@ function oM(title,body,acts){el('m-title').textContent=title;el('m-body').innerH
 function cM(){el('MOD').style.display='none';_modLock=false;}
 
 function rDash(){
-  var unp=INV.filter(function(i){return i.status==='Unpaid';});
+  var unp=INV.filter(function(i){return i.status!=='Paid';});
   var low=PARTS.filter(function(p){return p.qty<=p.min;});
   var rev=INV.reduce(function(s,i){return s+parseFloat(i.total||0);},0);
   var ow=WO.filter(function(w){return w.status!=='Completed';});
@@ -580,9 +584,9 @@ function rDash(){
   if(ROLE==='office'){h+=st('Open Orders',ow.length)+st('Unpaid',unp.length,unp.length?'#A32D2D':null)+st('Low Stock',low.length,low.length?'#A32D2D':null)+st('Customers',CUST.length)+st('Total Orders',INV.length)+st('Due PMs',PMS.filter(isDue).length);}else{h+=st('Revenue',fm(rev),'#185FA5')+st('Open Orders',ow.length)+st('Unpaid',unp.length,unp.length?'#A32D2D':null)+st('Low Stock',low.length,low.length?'#A32D2D':null)+st('Customers',CUST.length)+st('Rev/Customer',fm(CUST.length?rev/CUST.length:0))+st('Total Orders',INV.length)+st('Rev/Order',fm(INV.length?rev/INV.length:0));}
   h+='</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
   var wR=WO.length?WO.slice(-5).reverse().map(function(w){return'<tr><td style="padding:7px 9px;color:#185FA5;cursor:pointer;font-weight:600" onclick="vWO('+w.id+')">#'+w.ticket+(w.isNew?'<span style="background:#FFF3CD;color:#664D03;padding:1px 5px;border-radius:10px;font-size:9px;margin-left:4px">New</span>':'')+'</td><td style="padding:7px 9px;font-size:11px">'+w.customer+'</td><td style="padding:7px 9px">'+bdg(w.status)+'</td></tr>';}).join(''):'<tr><td colspan="3" style="padding:12px;color:#888;font-size:11px">None yet</td></tr>';
-  var iR=unp.length?unp.slice(-5).map(function(i){return'<tr><td style="padding:7px 9px;color:#185FA5;font-weight:600">#'+i.num+'</td><td style="padding:7px 9px;font-size:11px">'+i.customer+'</td><td style="padding:7px 9px;color:#A32D2D;font-weight:600">'+fm(parseFloat(i.total)||0)+'</td></tr>';}).join(''):'<tr><td colspan="3" style="padding:12px;color:#888;font-size:11px">All paid</td></tr>';
+  var iR=unp.length?unp.slice(-5).map(function(i){return'<tr><td style="padding:7px 9px;color:#185FA5;font-weight:600">#'+i.num+(i.status==='Partial'?'<span style="background:#FFF3CD;color:#664D03;padding:1px 5px;border-radius:10px;font-size:9px;margin-left:4px">Partial</span>':'')+'</td><td style="padding:7px 9px;font-size:11px">'+i.customer+'</td><td style="padding:7px 9px;color:#A32D2D;font-weight:600">'+fm(invBal(i))+'</td></tr>';}).join(''):'<tr><td colspan="3" style="padding:12px;color:#888;font-size:11px">All paid</td></tr>';
   h+='<div class="card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><div style="font-size:13px;font-weight:600">Recent Orders</div><button class="btn xs" onclick="goP(\'w\')">All</button></div><div class="tbl"><table><thead><tr><th>SO#</th><th>Customer</th><th>Status</th></tr></thead><tbody>'+wR+'</tbody></table></div></div>';
-  h+='<div class="card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><div style="font-size:13px;font-weight:600">Unpaid Invoices</div><button class="btn xs" onclick="goP(\'i\')">All</button></div><div class="tbl"><table><thead><tr><th>Inv#</th><th>Customer</th><th>Total</th></tr></thead><tbody>'+iR+'</tbody></table></div></div>';
+  h+='<div class="card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><div style="font-size:13px;font-weight:600">Unpaid Invoices</div><button class="btn xs" onclick="goP(\'i\')">All</button></div><div class="tbl"><table><thead><tr><th>Inv#</th><th>Customer</th><th>Balance</th></tr></thead><tbody>'+iR+'</tbody></table></div></div>';
   h+='</div>';
   el('pg-body').innerHTML=h;
 }
@@ -1150,7 +1154,7 @@ function prtHdr(docTitle, num, metaHtml, badgeTxt, bc){
   +(badgeTxt?'<span class="badge" style="background:'+bc.bg+';color:'+bc.c+'">'+badgeTxt+'</span>':'')+'</div></div>';
 }
 function prtBadge(st){
-  var m={'Paid':{bg:'#EAF3DE',c:'#27500A'},'Unpaid':{bg:'#FCEBEB',c:'#A32D2D'},'Open':{bg:'#E6F1FB',c:'#0C447C'},'In Progress':{bg:'#FBF4E6',c:'#8a5a00'},'Completed':{bg:'#EAF3DE',c:'#27500A'},'Draft':{bg:'#eee',c:'#555'},'Sent':{bg:'#E6F1FB',c:'#0C447C'},'Approved':{bg:'#EAF3DE',c:'#27500A'},'Declined':{bg:'#FCEBEB',c:'#A32D2D'},'Converted':{bg:'#EEEDFE',c:'#3C3489'}};
+  var m={'Paid':{bg:'#EAF3DE',c:'#27500A'},'Unpaid':{bg:'#FCEBEB',c:'#A32D2D'},'Partial':{bg:'#FBF4E6',c:'#8a5a00'},'Open':{bg:'#E6F1FB',c:'#0C447C'},'In Progress':{bg:'#FBF4E6',c:'#8a5a00'},'Completed':{bg:'#EAF3DE',c:'#27500A'},'Draft':{bg:'#eee',c:'#555'},'Sent':{bg:'#E6F1FB',c:'#0C447C'},'Approved':{bg:'#EAF3DE',c:'#27500A'},'Declined':{bg:'#FCEBEB',c:'#A32D2D'},'Converted':{bg:'#EEEDFE',c:'#3C3489'}};
   return m[st]||{bg:'#eee',c:'#555'};
 }
 function prtLines(lines, blanks, showPN){
@@ -2107,6 +2111,7 @@ function recalcInv(id){
   inv.parts=+parts.toFixed(2);
   inv.tax=+tax.toFixed(2);
   inv.total=+(labor+parts+sup-discAmt+tax).toFixed(2);
+  if(inv.payments&&inv.payments.length)syncInvStatus(inv);
 }
 
 
@@ -2187,11 +2192,11 @@ function svEInv(id){
   if(bar&&msg){msg.textContent='✓ Invoice #'+inv.num+' saved';bar.style.background='#3B6D11';bar.style.display='flex';setTimeout(function(){if(bar)bar.style.display='none';if(bar)bar.style.background='#185FA5';},3000);}
 }
 function rINV(){
-  var rows=INV.length?INV.map(function(i){var paid=i.status==='Paid';return'<tr><td style="padding:7px 9px;color:#185FA5;cursor:pointer;font-weight:600" onclick="vInv('+i.id+')">#'+i.num+'</td><td style="padding:7px 9px">'+i.customer+'</td><td style="padding:7px 9px;font-size:11px">'+(i.vehicle||'—')+'</td><td style="padding:7px 9px">'+fm(parseFloat(i.labor)||0)+'</td><td style="padding:7px 9px">'+fm(parseFloat(i.parts)||0)+'</td><td style="padding:7px 9px">'+fm(parseFloat(i.tax)||0)+'</td><td style="padding:7px 9px;font-weight:600">'+fm(parseFloat(i.total)||0)+'</td><td style="padding:7px 9px"><select style="font-size:11px;padding:3px 5px;border:0.5px solid var(--bd);border-radius:4px;font-family:inherit" onchange="INV['+i.id+'].payment=this.value;saveAll()"><option value="">—</option><option'+(i.payment==='Cash'?' selected':'')+'>Cash</option><option'+(i.payment==='Card'?' selected':'')+'>Card</option><option'+(i.payment==='Check'?' selected':'')+'>Check</option><option'+(i.payment==='Net-30'?' selected':'')+'>Net-30</option></select></td><td style="padding:7px 9px">'+bdg(i.status)+'</td><td style="padding:7px 9px;display:flex;gap:3px">'+(paid?'':'<button class="btn xs bl" onclick="markPaid('+i.id+')">Paid</button>')+'<button class="btn xs" onclick="eInv('+i.id+')"><i class="ti ti-edit"></i></button><button class="btn xs gr" onclick="prtInv('+i.id+')"><i class="ti ti-printer"></i></button><button class="btn xs bl" onclick="sndInv('+i.id+')"><i class="ti ti-send"></i></button></td></tr>';}).join(''):'<tr><td colspan="10" style="padding:16px;color:#888;font-size:12px">No invoices yet.</td></tr>';
-  el('pg-body').innerHTML='<div class="sr"><i class="ti ti-search" style="color:#888"></i><input placeholder="Search..." oninput="fINV(this.value)"></div><div class="tbl"><table><thead><tr><th>Inv#</th><th>Customer</th><th>Vehicle</th><th>Labor</th><th>Parts</th><th>Tax</th><th>Total</th><th>Payment</th><th>Status</th><th></th></tr></thead><tbody id="inv-tb">'+rows+'</tbody></table></div>';
+  var rows=INV.length?INV.map(function(i){var paid=i.status==='Paid';var bal=invBal(i);var rowSt=i.status==='Unpaid'?' style="background:#FDF2F2;border-left:3px solid #A32D2D"':i.status==='Partial'?' style="background:#FFFBEB;border-left:3px solid #BA7517"':'';return'<tr'+rowSt+'><td style="padding:7px 9px;color:#185FA5;cursor:pointer;font-weight:600" onclick="vInv('+i.id+')">#'+i.num+'</td><td style="padding:7px 9px">'+i.customer+'</td><td style="padding:7px 9px;font-size:11px">'+(i.vehicle||'—')+'</td><td style="padding:7px 9px">'+fm(parseFloat(i.labor)||0)+'</td><td style="padding:7px 9px">'+fm(parseFloat(i.parts)||0)+'</td><td style="padding:7px 9px">'+fm(parseFloat(i.tax)||0)+'</td><td style="padding:7px 9px;font-weight:600">'+fm(parseFloat(i.total)||0)+'</td><td style="padding:7px 9px;font-weight:700;color:'+(bal>0.005?'#A32D2D':'#27500A')+'">'+(bal>0.005?fm(bal):'—')+'</td><td style="padding:7px 9px"><select style="font-size:11px;padding:3px 5px;border:0.5px solid var(--bd);border-radius:4px;font-family:inherit" onchange="INV['+i.id+'].payment=this.value;saveAll()"><option value="">—</option><option'+(i.payment==='Cash'?' selected':'')+'>Cash</option><option'+(i.payment==='Card'?' selected':'')+'>Card</option><option'+(i.payment==='Check'?' selected':'')+'>Check</option><option'+(i.payment==='Zelle'?' selected':'')+'>Zelle</option><option'+(i.payment==='Net-30'?' selected':'')+'>Net-30</option></select></td><td style="padding:7px 9px">'+bdg(i.status)+'</td><td style="padding:7px 9px;display:flex;gap:3px"><button class="btn xs'+(paid?'':' bl')+'" onclick="payInv('+i.id+')" title="Payments"><i class="ti ti-cash"></i></button><button class="btn xs" onclick="eInv('+i.id+')"><i class="ti ti-edit"></i></button><button class="btn xs gr" onclick="prtInv('+i.id+')"><i class="ti ti-printer"></i></button><button class="btn xs bl" onclick="sndInv('+i.id+')"><i class="ti ti-send"></i></button></td></tr>';}).join(''):'<tr><td colspan="11" style="padding:16px;color:#888;font-size:12px">No invoices yet.</td></tr>';
+  el('pg-body').innerHTML='<div class="sr"><i class="ti ti-search" style="color:#888"></i><input placeholder="Search..." oninput="fINV(this.value)"></div><div class="tbl"><table><thead><tr><th>Inv#</th><th>Customer</th><th>Vehicle</th><th>Labor</th><th>Parts</th><th>Tax</th><th>Total</th><th>Balance</th><th>Payment</th><th>Status</th><th></th></tr></thead><tbody id="inv-tb">'+rows+'</tbody></table></div>';
 }
-function fINV(q){var r=el('inv-tb');if(!r)return;r.innerHTML=INV.filter(function(i){return i.customer.toLowerCase().includes(q.toLowerCase())||String(i.num).includes(q);}).map(function(i){return'<tr><td style="padding:7px 9px;color:#185FA5;font-weight:600">#'+i.num+'</td><td style="padding:7px 9px">'+i.customer+'</td><td style="padding:7px 9px;font-size:11px">'+(i.vehicle||'—')+'</td><td style="padding:7px 9px">'+fm(parseFloat(i.labor)||0)+'</td><td style="padding:7px 9px">'+fm(parseFloat(i.parts)||0)+'</td><td style="padding:7px 9px">'+fm(parseFloat(i.tax)||0)+'</td><td style="padding:7px 9px;font-weight:600">'+fm(parseFloat(i.total)||0)+'</td><td style="padding:7px 9px">'+(i.payment||'—')+'</td><td style="padding:7px 9px">'+bdg(i.status)+'</td><td style="padding:7px 9px"><button class="btn xs" onclick="vInv('+i.id+')">View</button></td></tr>';}).join('');}
-function vInv(id){var i=INV[id];var ll=(i.lines||[]).filter(function(l){return l.type==='labor';}).map(function(l){return'<tr><td style="padding:6px 9px">'+(l.desc||'')+'</td><td style="padding:6px 9px">'+l.hrs+'hrs @ $'+l.rate+'</td><td style="padding:6px 9px;font-weight:600">'+fm(l.subtotal)+'</td></tr>';}).join('');var pl=(i.lines||[]).filter(function(l){return l.type==='part';}).map(function(l){return'<tr><td style="padding:6px 9px">'+(l.partNum?l.partNum+': ':'')+l.desc+'</td><td style="padding:6px 9px">'+l.qty+' x '+fm(l.sell)+'</td><td style="padding:6px 9px;font-weight:600">'+fm(l.subtotal)+'</td></tr>';}).join('');oM('Invoice #'+i.num,'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-bottom:10px;margin-bottom:10px;border-bottom:0.5px solid var(--bd)"><div><strong>'+shop.name+'</strong><br>'+shop.phone+'<br>'+shop.addr+'</div><div style="text-align:right">Invoice #'+i.num+'<br>'+i.date+'<br>'+bdg(i.status)+'</div></div><div style="background:#f5f5f7;padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:10px"><strong>Bill To:</strong> '+i.customer+' | '+(i.vehicle||'—')+(invVIN(i)?'<br><strong>VIN:</strong> '+invVIN(i):'')+'</div>'+(ll?'<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;margin-bottom:5px">Labor</div><div class="tbl"><table><thead><tr><th>Description</th><th>Detail</th><th>Total</th></tr></thead><tbody>'+ll+'</tbody></table></div>':'')+(pl?'<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;margin:8px 0 5px">Parts</div><div class="tbl"><table><thead><tr><th>Part</th><th>Qty/Price</th><th>Total</th></tr></thead><tbody>'+pl+'</tbody></table></div>':'')+'<div style="text-align:right;padding-top:8px;border-top:0.5px solid var(--bd);margin-top:8px"><div style="font-size:13px;color:#888">Labor: '+fm(parseFloat(i.labor)||0)+' | Parts: '+fm(parseFloat(i.parts)||0)+(parseFloat(i.supplies)>0?' | Supplies: '+fm(parseFloat(i.supplies)):'')+(parseFloat(i.discountAmt)>0?' | Discount: −'+fm(parseFloat(i.discountAmt)):'')+' | Tax: '+fm(parseFloat(i.tax)||0)+'</div><div style="font-size:18px;font-weight:700;color:#185FA5;margin-top:3px">Total: '+fm(parseFloat(i.total)||0)+'</div></div>','<button class="btn" onclick="cM();eInv('+id+')"><i class="ti ti-edit"></i>Edit</button><button class="btn gr" onclick="prtInv('+id+')"><i class="ti ti-printer"></i>Print</button><button class="btn bl" onclick="sndInv('+id+')"><i class="ti ti-send"></i>Send</button>'+(i.status!=='Paid'?'<button class="btn bl" onclick="cM();markPaid('+id+')">Mark Paid</button>':'')+'<button class="btn" onclick="cM()">Close</button>');}
+function fINV(q){var r=el('inv-tb');if(!r)return;r.innerHTML=INV.filter(function(i){return i.customer.toLowerCase().includes(q.toLowerCase())||String(i.num).includes(q);}).map(function(i){var bal=invBal(i);var rowSt=i.status==='Unpaid'?' style="background:#FDF2F2;border-left:3px solid #A32D2D"':i.status==='Partial'?' style="background:#FFFBEB;border-left:3px solid #BA7517"':'';return'<tr'+rowSt+'><td style="padding:7px 9px;color:#185FA5;font-weight:600">#'+i.num+'</td><td style="padding:7px 9px">'+i.customer+'</td><td style="padding:7px 9px;font-size:11px">'+(i.vehicle||'—')+'</td><td style="padding:7px 9px">'+fm(parseFloat(i.labor)||0)+'</td><td style="padding:7px 9px">'+fm(parseFloat(i.parts)||0)+'</td><td style="padding:7px 9px">'+fm(parseFloat(i.tax)||0)+'</td><td style="padding:7px 9px;font-weight:600">'+fm(parseFloat(i.total)||0)+'</td><td style="padding:7px 9px;font-weight:700;color:'+(bal>0.005?'#A32D2D':'#27500A')+'">'+(bal>0.005?fm(bal):'—')+'</td><td style="padding:7px 9px">'+(i.payment||'—')+'</td><td style="padding:7px 9px">'+bdg(i.status)+'</td><td style="padding:7px 9px"><button class="btn xs" onclick="vInv('+i.id+')">View</button></td></tr>';}).join('');}
+function vInv(id){var i=INV[id];var ll=(i.lines||[]).filter(function(l){return l.type==='labor';}).map(function(l){return'<tr><td style="padding:6px 9px">'+(l.desc||'')+'</td><td style="padding:6px 9px">'+l.hrs+'hrs @ $'+l.rate+'</td><td style="padding:6px 9px;font-weight:600">'+fm(l.subtotal)+'</td></tr>';}).join('');var pl=(i.lines||[]).filter(function(l){return l.type==='part';}).map(function(l){return'<tr><td style="padding:6px 9px">'+(l.partNum?l.partNum+': ':'')+l.desc+'</td><td style="padding:6px 9px">'+l.qty+' x '+fm(l.sell)+'</td><td style="padding:6px 9px;font-weight:600">'+fm(l.subtotal)+'</td></tr>';}).join('');oM('Invoice #'+i.num,'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-bottom:10px;margin-bottom:10px;border-bottom:0.5px solid var(--bd)"><div><strong>'+shop.name+'</strong><br>'+shop.phone+'<br>'+shop.addr+'</div><div style="text-align:right">Invoice #'+i.num+'<br>'+i.date+'<br>'+bdg(i.status)+'</div></div><div style="background:#f5f5f7;padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:10px"><strong>Bill To:</strong> '+i.customer+' | '+(i.vehicle||'—')+(invVIN(i)?'<br><strong>VIN:</strong> '+invVIN(i):'')+'</div>'+(ll?'<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;margin-bottom:5px">Labor</div><div class="tbl"><table><thead><tr><th>Description</th><th>Detail</th><th>Total</th></tr></thead><tbody>'+ll+'</tbody></table></div>':'')+(pl?'<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;margin:8px 0 5px">Parts</div><div class="tbl"><table><thead><tr><th>Part</th><th>Qty/Price</th><th>Total</th></tr></thead><tbody>'+pl+'</tbody></table></div>':'')+'<div style="text-align:right;padding-top:8px;border-top:0.5px solid var(--bd);margin-top:8px"><div style="font-size:13px;color:#888">Labor: '+fm(parseFloat(i.labor)||0)+' | Parts: '+fm(parseFloat(i.parts)||0)+(parseFloat(i.supplies)>0?' | Supplies: '+fm(parseFloat(i.supplies)):'')+(parseFloat(i.discountAmt)>0?' | Discount: −'+fm(parseFloat(i.discountAmt)):'')+' | Tax: '+fm(parseFloat(i.tax)||0)+'</div><div style="font-size:18px;font-weight:700;color:#185FA5;margin-top:3px">Total: '+fm(parseFloat(i.total)||0)+'</div>'+(invPaidAmt(i)>0.005?'<div style="font-size:13px;color:#27500A;margin-top:2px">Paid: '+fm(invPaidAmt(i))+'</div>':'')+(invBal(i)>0.005?'<div style="font-size:15px;font-weight:700;color:#A32D2D;margin-top:1px">Balance Due: '+fm(invBal(i))+'</div>':(invPaidAmt(i)>0.005?'<div style="font-size:12px;font-weight:600;color:#27500A;margin-top:1px">\u2713 Paid in full</div>':''))+'</div>','<button class="btn" onclick="cM();eInv('+id+')"><i class="ti ti-edit"></i>Edit</button><button class="btn gr" onclick="prtInv('+id+')"><i class="ti ti-printer"></i>Print</button><button class="btn bl" onclick="sndInv('+id+')"><i class="ti ti-send"></i>Send</button><button class="btn'+(i.status==='Paid'?'':' bl')+'" onclick="cM();payInv('+id+')"><i class="ti ti-cash"></i>Payments</button><button class="btn" onclick="cM()">Close</button>');}
 var _ni2L=[],_ni2SupMan=false;
 function nInv(){
   _ni2L=[];_ni2SupMan=false;_modLock=true;
@@ -2415,7 +2420,7 @@ function prtInv(id){
   var miles=u.miles||'';
   var paid=(i.status==='Paid');
   var so=(i.woTicket&&i.woTicket!=='\u2014')?('SO-'+i.woTicket):'\u2014';
-  var bc=paid?{c:'#27500A'}:{c:'#A32D2D'};
+  var bc=paid?{c:'#27500A'}:i.status==='Partial'?{c:'#8a5a00'}:{c:'#A32D2D'};
   // line rows
   var rows='';var lineSum=0;
   (i.lines||[]).forEach(function(l){
@@ -2431,8 +2436,8 @@ function prtInv(id){
   rows+='<tr class="sub"><td colspan="4" class="r b nv">Subtotal</td><td class="r b nv">'+fm(lineSum)+'</td><td></td></tr>';
   var sub=parseFloat(i.subtotal)||lineSum;
   var taxPct=(i.taxPct!=null?i.taxPct:shop.taxRate);
-  var pay=paid?(parseFloat(i.total)||0):0;
-  var bal=paid?0:(parseFloat(i.total)||0);
+  var pay=invPaidAmt(i);
+  var bal=invBal(i);
   var warr=(shop.warranty||'').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 
   var doc='<!DOCTYPE html><html><head><title>Invoice '+i.num+' \u2014 '+shop.name+'</title><meta charset="utf-8"><style>'
@@ -2473,7 +2478,7 @@ function prtInv(id){
   +'</style></head><body>'
   +'<div class="hd"><div><img src="'+MTLOGO+'" alt="" style="height:60px;display:block;margin-bottom:7px"><div class="sub">'+shop.addr+'<br>'+shop.phone+(shop.email?'<br>'+shop.email:'')+'</div></div>'
   +'<div class="doc"><div class="ti2">INVOICE</div><div class="nu">INV-'+i.num+'</div><div class="dt">Date: '+i.date+'</div>'
-  +'<span class="bdg">'+(paid?'PAID':'UNPAID')+'</span></div></div>'
+  +'<span class="bdg">'+(paid?'PAID':i.status==='Partial'?'PARTIALLY PAID':'UNPAID')+'</span></div></div>'
   +'<div class="two"><div><div class="lbl">Bill To</div><div class="big">'+i.customer+'</div><div class="rw">'+(i.phone||'')+'</div></div>'
   +'<div><div class="lbl">Remit Payment To</div><div class="big">'+shop.name+'</div><div class="rw">'+shop.addr+'</div></div></div>'
   +'<table class="sobar"><thead><tr><th>SERVICE ORDER</th><th>TERMS</th><th>DUE DATE</th><th>AUTHORIZER</th><th>CUSTOMER PO</th><th>UNIT #</th></tr></thead>'
@@ -2496,6 +2501,9 @@ function prtInv(id){
   +'<div class="gd"><span>Total</span><span>'+fm(i.total)+'</span></div>'
   +'<div class="ln2"><span>Payments &amp; Credits</span><span>'+fm(pay)+'</span></div>'
   +'<div class="bal"><span>Balance Due</span><span>'+fm(bal)+'</span></div>'
+  +((i.payments&&i.payments.length)?'<div style="margin-top:6px;padding-top:5px;border-top:0.5px solid #ccc;font-size:9.5px;color:#555">'
+    +i.payments.map(function(p){return'<div style="display:flex;justify-content:space-between"><span>'+(p.date||'')+' \u2014 '+(p.method||'Payment')+(p.note?' ('+String(p.note).replace(/</g,'&lt;').replace(/>/g,'&gt;')+')':'')+'</span><span>'+fm(parseFloat(p.amt)||0)+'</span></div>';}).join('')
+    +'</div>':'')
   +(paid&&i.payment?'<div style="text-align:right;font-size:11px;color:#27500A;font-weight:bold;margin-top:5px">Paid via '+i.payment+'</div>':'')
   +'</div></div>'
   +(warr?'<div class="warr"><b>Warranty &amp; Authorization.</b> '+warr+'</div>':'')
@@ -2624,13 +2632,13 @@ function sndInvSend(id){
 function emInv(id,em){if(!em){alert('Enter email');return;}var i=INV[id];var cx=CUST.find(function(c){return c.name===i.customer;});if(cx&&!cx.email&&em){cx.email=em;saveAll();}var rows='';(i.lines||[]).forEach(function(l){if(l.type==='labor')rows+='<tr style="border-bottom:1px solid #eee"><td style="padding:7px 10px;color:#185FA5;font-weight:bold">Labor</td><td style="padding:7px 10px">'+(l.desc||'')+'</td><td style="padding:7px 10px">'+l.hrs+'hrs @ $'+l.rate+'</td><td style="padding:7px 10px;text-align:right;font-weight:bold">$'+parseFloat(l.subtotal).toFixed(2)+'</td></tr>';else if(l.type==='part')rows+='<tr style="border-bottom:1px solid #eee"><td style="padding:7px 10px;color:#3B6D11;font-weight:bold">Part</td><td style="padding:7px 10px">'+l.desc+'</td><td style="padding:7px 10px">'+l.qty+' x $'+parseFloat(l.sell).toFixed(2)+'</td><td style="padding:7px 10px;text-align:right;font-weight:bold">$'+parseFloat(l.subtotal).toFixed(2)+'</td></tr>';});if(!rows)rows='<tr><td colspan="4" style="padding:10px;color:#888">Service on '+(i.vehicle||'vehicle')+'</td></tr>';var params={email:em,invoice_num:i.num,customer_name:i.customer,vehicle:i.vehicle||'',date:i.date,status:i.status,wo_ticket:i.woTicket||'—',invoice_rows:rows,labor:'$'+i.labor,parts:'$'+i.parts,supplies:'$'+(i.supplies||'0.00'),tax:'$'+i.tax,total:'$'+i.total,shop_phone:shop.phone,shop_addr:shop.addr,terms:shop.terms||'Payment due upon receipt.'};if(typeof emailjs!=='undefined'){emailjs.send(ES,ET,params).then(function(){cM();alert('Email sent to '+em+'!');}).catch(function(e){alert('Email error: '+JSON.stringify(e));});}else{alert('Email service not loaded.');}}
 
 function rCUST(){
-  var rows=CUST.length?CUST.map(function(c,i){var unp=INV.filter(function(iv){return iv.customer===c.name&&iv.status==='Unpaid';}).reduce(function(s,iv){return s+parseFloat(iv.total||0);},0);return'<tr><td style="padding:7px 9px;color:#185FA5;cursor:pointer;font-weight:600" onclick="vCust('+i+')">'+c.name+'</td><td style="padding:7px 9px;font-size:11px">'+(c.phone||'—')+'</td><td style="padding:7px 9px;font-size:11px">'+(c.dot||'—')+'</td><td style="padding:7px 9px">'+(c.units||[]).length+'</td><td style="padding:7px 9px">'+(c.jobs||0)+'</td><td style="padding:7px 9px;'+(unp?'color:#A32D2D;font-weight:600':'')+'">'+( unp?fm(unp):'—')+'</td><td style="padding:7px 9px;font-size:11px">'+(c.lastVisit||'—')+'</td><td style="padding:7px 9px"><button class="btn xs" onclick="vCust('+i+')">View</button></td></tr>';}).join(''):'<tr><td colspan="8" style="padding:16px;color:#888;font-size:12px">No customers yet. Added automatically on check-in.</td></tr>';
+  var rows=CUST.length?CUST.map(function(c,i){var unp=INV.filter(function(iv){return iv.customer===c.name&&iv.status!=='Paid';}).reduce(function(s,iv){return s+invBal(iv);},0);return'<tr><td style="padding:7px 9px;color:#185FA5;cursor:pointer;font-weight:600" onclick="vCust('+i+')">'+c.name+'</td><td style="padding:7px 9px;font-size:11px">'+(c.phone||'—')+'</td><td style="padding:7px 9px;font-size:11px">'+(c.dot||'—')+'</td><td style="padding:7px 9px">'+(c.units||[]).length+'</td><td style="padding:7px 9px">'+(c.jobs||0)+'</td><td style="padding:7px 9px;'+(unp?'color:#A32D2D;font-weight:600':'')+'">'+( unp?fm(unp):'—')+'</td><td style="padding:7px 9px;font-size:11px">'+(c.lastVisit||'—')+'</td><td style="padding:7px 9px"><button class="btn xs" onclick="vCust('+i+')">View</button></td></tr>';}).join(''):'<tr><td colspan="8" style="padding:16px;color:#888;font-size:12px">No customers yet. Added automatically on check-in.</td></tr>';
   el('pg-body').innerHTML='<div style="display:flex;gap:8px;margin-bottom:10px"><button onclick="rFleetAccounts()" style="background:#185FA5;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:5px"><i class="ti ti-building-factory"></i> Fleet Accounts</button></div>'+'<div class="sr"><i class="ti ti-search" style="color:#888"></i><input placeholder="Search customers..." oninput="fCUST(this.value)"></div><div class="tbl"><table><thead><tr><th>Name</th><th>Phone</th><th>DOT</th><th>Units</th><th>Jobs</th><th>Balance</th><th>Last Visit</th><th></th></tr></thead><tbody id="cust-tb">'+rows+'</tbody></table></div>';
 }
 function fCUST(q){var r=el('cust-tb');if(!r)return;r.innerHTML=CUST.filter(function(c){return c.name.toLowerCase().includes(q.toLowerCase())||(c.phone||'').includes(q);}).map(function(c,i){var ri=CUST.indexOf(c);return'<tr><td style="padding:7px 9px;color:#185FA5;cursor:pointer;font-weight:600" onclick="vCust('+ri+')">'+c.name+'</td><td style="padding:7px 9px;font-size:11px">'+(c.phone||'—')+'</td><td style="padding:7px 9px;font-size:11px">'+(c.dot||'—')+'</td><td style="padding:7px 9px">'+(c.units||[]).length+'</td><td style="padding:7px 9px">'+(c.jobs||0)+'</td><td style="padding:7px 9px">—</td><td style="padding:7px 9px;font-size:11px">'+(c.lastVisit||'—')+'</td><td style="padding:7px 9px"><button class="btn xs" onclick="vCust('+ri+')">View</button></td></tr>';}).join('');}
 function vCust(i){
   var c=CUST[i];var jobs=WO.filter(function(w){return w.customer===c.name;});var invs=INV.filter(function(iv){return iv.customer===c.name;});
-  var rev=invs.reduce(function(s,iv){return s+parseFloat(iv.total||0);},0);var unp=invs.filter(function(iv){return iv.status==='Unpaid';}).reduce(function(s,iv){return s+parseFloat(iv.total||0);},0);
+  var rev=invs.reduce(function(s,iv){return s+parseFloat(iv.total||0);},0);var unp=invs.filter(function(iv){return iv.status!=='Paid';}).reduce(function(s,iv){return s+invBal(iv);},0);
   function inp(id,lbl,val,ph,tp){return'<div class="fg"><label>'+lbl+'</label><input id="'+id+'" value="'+(val||'')+'" placeholder="'+(ph||'')+'" '+(tp?'type="'+tp+'"':'')+' style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>';}
   var uRows=buildUnitRows(i);
   var jRows=jobs.length?'<div class="tbl"><table><thead><tr><th>SO#</th><th>Vehicle</th><th>Status</th><th>Date</th></tr></thead><tbody>'+jobs.map(function(w){return'<tr><td style="padding:7px 9px;color:#185FA5;cursor:pointer" onclick="cM();vWO('+w.id+')">#'+w.ticket+'</td><td style="padding:7px 9px;font-size:11px">'+(w.vehicle||'—')+'</td><td style="padding:7px 9px">'+bdg(w.status)+'</td><td style="padding:7px 9px;font-size:11px">'+w.date+'</td></tr>';}).join('')+'</tbody></table></div>':'<p style="font-size:13px;color:#888;padding:8px 0">No service orders.</p>';
@@ -2825,7 +2833,7 @@ function rFleetAccounts(){
         return inv.customer===cx.name&&d.getMonth()===m&&d.getFullYear()===y;
       }).reduce(function(s,inv){return s+(inv.total||0);},0);
       var unpaidInvs=INV.filter(function(inv){return inv.customer===cx.name&&inv.status!=='Paid';});
-      var unpaidAmt=unpaidInvs.reduce(function(s,inv){return s+(inv.total||0);},0);
+      var unpaidAmt=unpaidInvs.reduce(function(s,inv){return s+invBal(inv);},0);
       return'<div style="background:#fff;border-radius:12px;padding:14px;margin-bottom:10px;border:0.5px solid rgba(0,0,0,0.1);border-left:3px solid #185FA5">'
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">'
         +'<div><div style="font-size:16px;font-weight:700">'+cx.name+'</div>'
@@ -2871,8 +2879,8 @@ function genFleetStatement(cxIdx){
   }
   var unpaid=monthInvs.filter(function(inv){return inv.status!=='Paid';});
   var paid=monthInvs.filter(function(inv){return inv.status==='Paid';});
-  var totalUnpaid=unpaid.reduce(function(s,inv){return s+(inv.total||0);},0);
-  var totalPaid=paid.reduce(function(s,inv){return s+(inv.total||0);},0);
+  var totalUnpaid=unpaid.reduce(function(s,inv){return s+invBal(inv);},0);
+  var totalPaid=monthInvs.reduce(function(s,inv){return s+invPaidAmt(inv);},0);
   var totalMonth=monthInvs.reduce(function(s,inv){return s+(inv.total||0);},0);
   var dueDate=new Date(now);
   if(cx.fleetTerms==='net30')dueDate.setDate(dueDate.getDate()+30);
@@ -2884,7 +2892,7 @@ function genFleetStatement(cxIdx){
       +'<td style="padding:8px;border:0.5px solid rgba(0,0,0,0.1)">'+(inv.vehicle||'—')+'</td>'
       +'<td style="padding:8px;border:0.5px solid rgba(0,0,0,0.1)">'+(inv.notes||'—')+'</td>'
       +'<td style="padding:8px;border:0.5px solid rgba(0,0,0,0.1);text-align:right">'+fm(parseFloat(inv.total)||0)+'</td>'
-      +'<td style="padding:8px;border:0.5px solid rgba(0,0,0,0.1);text-align:center"><span style="background:'+(inv.status==='Paid'?'#EAF3DE':'#FCEBEB')+';color:'+(inv.status==='Paid'?'#27500A':'#A32D2D')+';padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">'+inv.status+'</span></td>'
+      +'<td style="padding:8px;border:0.5px solid rgba(0,0,0,0.1);text-align:center"><span style="background:'+(inv.status==='Paid'?'#EAF3DE':inv.status==='Partial'?'#FBF4E6':'#FCEBEB')+';color:'+(inv.status==='Paid'?'#27500A':inv.status==='Partial'?'#8a5a00':'#A32D2D')+';padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">'+inv.status+(inv.status==='Partial'?' \u00B7 '+fm(invBal(inv))+' due':'')+'</span></td>'
       +'</tr>';
   }).join('');
   oM('Monthly Statement — '+cx.name,
@@ -3683,11 +3691,11 @@ function rReports(){
   var now=new Date(),tm=now.getMonth(),ty=now.getFullYear();
   var mInv=INV.filter(function(i){var d=new Date(i.date);return d.getMonth()===tm&&d.getFullYear()===ty;});
   var mRev=mInv.reduce(function(s,i){return s+parseFloat(i.total||0);},0);
-  var out=INV.filter(function(i){return i.status==='Unpaid';}).reduce(function(s,i){return s+parseFloat(i.total||0);},0);
+  var out=INV.filter(function(i){return i.status!=='Paid';}).reduce(function(s,i){return s+invBal(i);},0);
   var allRev=INV.reduce(function(s,i){return s+parseFloat(i.total||0);},0);
   var cr={};INV.forEach(function(i){cr[i.customer]=(cr[i.customer]||0)+parseFloat(i.total||0);});
   var topC=Object.entries(cr).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
-  var iRows=INV.length?[...INV].reverse().map(function(i){return'<tr><td style="padding:7px 9px;color:#185FA5;font-weight:600">#'+i.num+'</td><td style="padding:7px 9px;font-size:11px">'+i.date+'</td><td style="padding:7px 9px">'+i.customer+'</td><td style="padding:7px 9px">'+(i.vehicle||'—')+'</td><td style="padding:7px 9px;font-weight:600">'+fm(parseFloat(i.total)||0)+'</td><td style="padding:7px 9px"><span style="background:'+(i.status==='Paid'?'#D1E7DD':'#F8D7DA')+';color:'+(i.status==='Paid'?'#0A3622':'#58151C')+';padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600">'+i.status+'</span></td><td style="padding:7px 9px">'+(i.payment||'—')+'</td></tr>';}).join(''):'<tr><td colspan="7" style="padding:14px;color:#888;font-size:12px">No invoices yet.</td></tr>';
+  var iRows=INV.length?[...INV].reverse().map(function(i){return'<tr><td style="padding:7px 9px;color:#185FA5;font-weight:600">#'+i.num+'</td><td style="padding:7px 9px;font-size:11px">'+i.date+'</td><td style="padding:7px 9px">'+i.customer+'</td><td style="padding:7px 9px">'+(i.vehicle||'—')+'</td><td style="padding:7px 9px;font-weight:600">'+fm(parseFloat(i.total)||0)+'</td><td style="padding:7px 9px"><span style="background:'+(i.status==='Paid'?'#D1E7DD':i.status==='Partial'?'#FFF3CD':'#F8D7DA')+';color:'+(i.status==='Paid'?'#0A3622':i.status==='Partial'?'#664D03':'#58151C')+';padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600">'+i.status+'</span></td><td style="padding:7px 9px">'+(i.payment||'—')+'</td></tr>';}).join(''):'<tr><td colspan="7" style="padding:14px;color:#888;font-size:12px">No invoices yet.</td></tr>';
   el('pg-body').innerHTML=
     '<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">'
     +'<button class="btn bl" onclick="expQB()"><i class="ti ti-file-export"></i>Export to QuickBooks</button>'
@@ -3780,7 +3788,8 @@ function doExpQB(){
   var filtered=INV.filter(function(i){
     var d=new Date(i.date);
     if(d<range.from||d>range.to)return false;
-    if(statusF!=='all'&&i.status!==statusF)return false;
+    if(statusF==='Unpaid'){if(i.status==='Paid')return false;}
+    else if(statusF!=='all'&&i.status!==statusF)return false;
     return true;
   });
   if(!filtered.length){alert('No invoices found for the selected range/filter.');return;}
@@ -4951,7 +4960,7 @@ async function genInvPDF(id, sendSMS){
     // Date, status, PO
     doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(80,80,80);
     doc.text('Date: '+(inv.date||td()),margin,y);
-    var sc=inv.status==='Paid'?[39,80,10]:[163,45,45];
+    var sc=inv.status==='Paid'?[39,80,10]:inv.status==='Partial'?[138,90,0]:[163,45,45];
     doc.setTextColor(sc[0],sc[1],sc[2]);
     doc.text('Status: '+inv.status,margin+150,y);
     doc.setTextColor(80,80,80);
@@ -5180,8 +5189,8 @@ function showSharedInvoice(invId){
   if(shop.paypal)payBtns+='<a href="https://'+shop.paypal+'" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#003087;color:#fff;border-radius:10px;padding:14px;font-size:15px;font-weight:600;text-decoration:none;margin-bottom:10px">💙 Pay with PayPal</a>';
   if(!payBtns)payBtns='<div style="padding:12px;background:#f5f5f7;border-radius:8px;font-size:13px;color:#888;text-align:center">Call '+shop.phone+' to arrange payment</div>';
 
-  var statusColor=inv.status==='Paid'?'#27500A':'#A32D2D';
-  var statusBg=inv.status==='Paid'?'#EAF3DE':'#FCEBEB';
+  var statusColor=inv.status==='Paid'?'#27500A':inv.status==='Partial'?'#8a5a00':'#A32D2D';
+  var statusBg=inv.status==='Paid'?'#EAF3DE':inv.status==='Partial'?'#FBF4E6':'#FCEBEB';
 
   el('sin-body').innerHTML=
     '<div style="background:#185FA5;padding:20px 16px 24px">'
@@ -5207,7 +5216,9 @@ function showSharedInvoice(invId){
     +(parseFloat(inv.supplies)>0?'<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:14px"><span>Shop Supplies</span><span>$'+parseFloat(inv.supplies).toFixed(2)+'</span></div>':'')
     +(parseFloat(inv.discountAmt)>0?'<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:14px;color:#27500A"><span>Discount</span><span>\u2212$'+parseFloat(inv.discountAmt).toFixed(2)+'</span></div>':'')
     +'<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:14px"><span>Tax ('+(inv.taxPct||inv.taxRate||0)+'%)</span><span>$'+parseFloat(inv.tax||0).toFixed(2)+'</span></div>'
-    +'<div style="display:flex;justify-content:space-between;padding:8px 0 4px;font-size:18px;font-weight:800;border-top:1px solid rgba(0,0,0,0.1);margin-top:4px"><span>Total Due</span><span style="color:#185FA5">$'+(parseFloat(inv.total||0)).toFixed(2)+'</span></div>'
+    +'<div style="display:flex;justify-content:space-between;padding:8px 0 4px;font-size:18px;font-weight:800;border-top:1px solid rgba(0,0,0,0.1);margin-top:4px"><span>Total</span><span style="color:#185FA5">$'+(parseFloat(inv.total||0)).toFixed(2)+'</span></div>'
+    +(invPaidAmt(inv)>0.005?'<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:14px;color:#27500A"><span>Payments Received</span><span>\u2212$'+invPaidAmt(inv).toFixed(2)+'</span></div>'
+    +'<div style="display:flex;justify-content:space-between;padding:6px 0 2px;font-size:17px;font-weight:800;border-top:1px solid rgba(0,0,0,0.1)"><span>Balance Due</span><span style="color:'+(invBal(inv)>0.005?'#A32D2D':'#27500A')+'">$'+invBal(inv).toFixed(2)+'</span></div>':'')
     +'</div>'
     +(inv.status!=='Paid'?'<div style="margin-bottom:16px">'+payBtns+'</div>':'<div style="background:#EAF3DE;border-radius:10px;padding:14px;text-align:center;font-size:15px;font-weight:700;color:#27500A;margin-bottom:16px">✓ This invoice has been paid. Thank you!</div>')
     +(inv.notes?'<div style="background:#FFF3CD;border-radius:8px;padding:10px 12px;font-size:13px;color:#633806;margin-bottom:16px">'+inv.notes+'</div>':'')
@@ -5431,6 +5442,11 @@ function tpRenderDash(){
     +'</div>'
     +(clkd?'<button onclick="tpLunchToggle()" style="width:100%;padding:9px;background:'+(onLunch?'#3B6D11':'#BA7517')+';color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px"><i class="ti ti-'+(onLunch?'player-play':'coffee')+'"></i>'+(onLunch?t('tpEndLunch'):t('tpLunch'))+'</button>':'')
     +'</div>';
+  var rTech=restroomDutyTech();
+  if(rTech){
+    var isMe=rTech.name===TP_USER.name;
+    h+='<div style="background:'+(isMe?'#FAEEDA':'#fff')+';border:0.5px solid '+(isMe?'#BA7517':'rgba(0,0,0,0.1)')+';border-radius:10px;padding:9px 12px;margin-bottom:10px;font-size:12px;color:'+(isMe?'#633806':'#888')+';display:flex;align-items:center;gap:8px"><i class="ti ti-spray" style="font-size:15px"></i><span>'+(isMe?'<strong>'+t('tpRestroomYou')+'</strong>':t('tpRestroom')+': <strong style="color:#1d1d1f">'+rTech.name+'</strong>')+'</span></div>';
+  }
   h+='<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin:12px 0 6px">My Work Orders ('+myWOs.length+')</div>';
   if(!myWOs.length)h+='<div style="background:#fff;border-radius:10px;padding:12px;font-size:13px;color:#888;margin-bottom:8px">No open orders assigned to you</div>';
   // Show available jobs if any of their WOs are in waiting status
@@ -5504,31 +5520,95 @@ function calcHrs(e){
   if(e.lunchStart){var le=e.lunchEnd||(e.clockOut?e.clockOut:Date.now());tot-=(le-e.lunchStart)/3600000;}
   return Math.max(0,tot);
 }
+var TP_GREET_WORDS={en:{m:'Good morning',a:'Good afternoon',e:'Good evening'},es:{m:'Buenos dias',a:'Buenas tardes',e:'Buenas noches'}};
+var TP_GREET_LINES={
+  en:['Let\'s make it a great day in the shop.','Safety first — check your PPE.','Another day, another truck back on the road.','Quality work keeps them coming back.','Take care of your tools and they\'ll take care of you.','Stay hydrated out there.'],
+  es:['Que sea un gran dia en el taller.','La seguridad es primero — revise su EPP.','Otro dia, otro camion de regreso al camino.','El trabajo de calidad hace que regresen.','Cuide sus herramientas y ellas lo cuidaran.','Tome agua, no se deshidrate.']
+};
+var TP_PRE_ITEMS={
+  en:['Safety glasses & PPE on','Walk your bay — check for leaks or hazards','Review your assigned work orders','Tools & equipment ready'],
+  es:['Lentes de seguridad y EPP puestos','Revise su bahia — fugas o peligros','Revise sus ordenes de trabajo asignadas','Herramientas y equipo listos']
+};
+var TP_POST_ITEMS={
+  en:['Tools cleaned & put away','Bay swept, floor dry','Work orders updated (notes & photos)','Old parts & cores staged or returned'],
+  es:['Herramientas limpias y guardadas','Bahia barrida, piso seco','Ordenes actualizadas (notas y fotos)','Piezas viejas y cores devueltos']
+};
+function restroomDutyTech(){
+  var list=getTechList();
+  if(!list.length)return null;
+  var wk=Math.floor((Date.now()-new Date(2024,0,1).getTime())/604800000);
+  return list[((wk%list.length)+list.length)%list.length];
+}
+function tpGreeting(cb){
+  var hr=new Date().getHours();
+  var g=TP_GREET_WORDS[APP_LANG]||TP_GREET_WORDS.en;
+  var word=hr<12?g.m:hr<17?g.a:g.e;
+  var lines=TP_GREET_LINES[APP_LANG]||TP_GREET_LINES.en;
+  var line=lines[Math.floor(Math.random()*lines.length)];
+  var first=TP_USER.name.split(' ')[0];
+  var d=document.createElement('div');
+  d.style.cssText='position:fixed;inset:0;z-index:9999;background:rgba(24,95,165,0.96);display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;text-align:center;padding:24px;opacity:0;transition:opacity .3s';
+  d.innerHTML='<div style="font-size:44px;margin-bottom:10px">'+(hr<12?'\u2600\uFE0F':hr<17?'\uD83D\uDD27':'\uD83C\uDF19')+'</div>'
+    +'<div style="font-size:26px;font-weight:700;margin-bottom:6px">'+word+', '+first+'!</div>'
+    +'<div style="font-size:15px;opacity:.85;max-width:280px">'+line+'</div>';
+  document.body.appendChild(d);
+  requestAnimationFrame(function(){d.style.opacity='1';});
+  setTimeout(function(){d.style.opacity='0';setTimeout(function(){d.remove();if(cb)cb();},320);},2600);
+}
+function getShiftItems(kind){
+  var custom=shop[kind==='pre'?'preShiftItems':'postShiftItems'];
+  var defs=kind==='pre'?TP_PRE_ITEMS:TP_POST_ITEMS;
+  var items=(custom&&custom.length)?custom.slice():(defs[APP_LANG]||defs.en).slice();
+  if(kind==='post'){
+    var rt=restroomDutyTech();
+    if(rt&&TP_USER&&rt.name===TP_USER.name)items.push(t('tpCleanRestroom'));
+  }
+  return items;
+}
+function tpShiftChecklist(kind,entryId){
+  var items=getShiftItems(kind);
+  var rows=items.map(function(item,i){
+    return'<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:0.5px solid var(--bd)">'
+      +'<input type="checkbox" id="sc'+i+'" style="width:20px;height:20px;cursor:pointer;accent-color:#185FA5">'
+      +'<label for="sc'+i+'" style="font-size:14px;cursor:pointer;flex:1">'+item+'</label></div>';
+  }).join('');
+  oM(t(kind==='pre'?'tpPreShift':'tpPostShift'),rows,
+    '<button class="btn bl" onclick="svShiftChecklist(this.dataset.k,this.dataset.eid)" data-k="'+kind+'" data-eid="'+entryId+'"><i class="ti ti-circle-check"></i>'+t('tpChkSave')+'</button><button class="btn" onclick="cM()">'+t('tpChkSkip')+'</button>');
+}
+function svShiftChecklist(kind,entryId){
+  var items=getShiftItems(kind);
+  var res=items.map(function(item,i){var cb=el('sc'+i);return{item:item,done:cb?cb.checked:false};});
+  var entry=TECH_TIMELOG.find(function(e){return e.id===entryId;});
+  if(entry)entry[kind==='pre'?'preShift':'postShift']=res;
+  saveAll();cM();
+}
 function tpClockToggle(){
   if(!TP_USER)return;
   var clk=TECH_CLOCKS[TP_USER.name];
-  var today=new Date().toLocaleDateString();
   if(clk){
-    var entry=TECH_TIMELOG.find(function(e){return e.techName===TP_USER.name&&e.date===today&&!e.clockOut;});
+    var entry=TECH_TIMELOG.find(function(e){return e.techName===TP_USER.name&&!e.clockOut;});
     if(entry){
       entry.clockOut=Date.now();
       if(entry.lunchStart&&!entry.lunchEnd)entry.lunchEnd=Date.now();
     }
     delete TECH_CLOCKS[TP_USER.name];
+    saveAll();tpShowDash();
+    if(entry)tpShiftChecklist('post',entry.id);
   } else {
     var ts=Date.now();
+    var today=new Date().toLocaleDateString();
     TECH_CLOCKS[TP_USER.name]={clockIn:ts,onLunch:false,lunchStart:null,lunchEnd:null};
     TECH_TIMELOG.unshift({id:'TL-'+ts,techName:TP_USER.name,date:today,clockIn:ts,clockOut:null,lunchStart:null,lunchEnd:null});
+    saveAll();tpShowDash();
+    tpGreeting(function(){tpShiftChecklist('pre','TL-'+ts);});
   }
-  saveAll();tpShowDash();
 }
 function tpLunchToggle(){
   if(!TP_USER)return;
   var clk=TECH_CLOCKS[TP_USER.name];
   if(!clk)return;
   if(typeof clk==='number')clk=TECH_CLOCKS[TP_USER.name]={clockIn:clk,onLunch:false,lunchStart:null,lunchEnd:null};
-  var today=new Date().toLocaleDateString();
-  var entry=TECH_TIMELOG.find(function(e){return e.techName===TP_USER.name&&e.date===today&&!e.clockOut;});
+  var entry=TECH_TIMELOG.find(function(e){return e.techName===TP_USER.name&&!e.clockOut;});
   if(clk.onLunch){
     clk.onLunch=false;clk.lunchEnd=Date.now();
     if(entry){entry.lunchEnd=Date.now();}
@@ -6041,6 +6121,8 @@ function rOwnerTechs(tab){
   h+='</div>';
 
   if(_ownerTechsTab==='live'){
+    var rT=restroomDutyTech();
+    if(rT)h+='<div style="font-size:12px;color:#888;margin-bottom:8px;display:flex;align-items:center;gap:6px"><i class="ti ti-spray"></i>Restroom duty this week: <strong style="color:#1d1d1f">'+rT.name+'</strong></div>';
     h+='<div class="card" style="padding:0;overflow:hidden">';
     techs.forEach(function(t,i,arr){
       var clk=TECH_CLOCKS[t.name];
@@ -6050,20 +6132,27 @@ function rOwnerTechs(tab){
       var rawSecs=clkd?Math.floor((now-clkTs)/1000):0;
       var netSecs=rawSecs;
       if(clkd&&typeof clk==='object'&&clk.lunchStart){var le=clk.lunchEnd||now;netSecs=Math.max(0,rawSecs-Math.floor((le-clk.lunchStart)/1000));}
+      var stale=clkd&&(now-clkTs)>57600000;
       var initials=t.name.split(' ').map(function(n){return n[0];}).join('').slice(0,2).toUpperCase();
       h+='<div style="display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border-bottom:'+(i<arr.length-1?'0.5px solid rgba(0,0,0,0.08)':'none')+'">'
         +'<div style="display:flex;align-items:center;gap:10px">'
         +'<div style="width:36px;height:36px;border-radius:50%;background:'+(onL?'#FAEEDA':clkd?'#EAF3DE':'#f5f5f7')+';color:'+(onL?'#633806':clkd?'#27500A':'#888')+';display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">'+initials+'</div>'
         +'<div><div style="font-size:14px;font-weight:500">'+t.name+'</div>'
         +'<div style="font-size:11px;color:#888">'+(clkd?'In: '+fmtTS(clkTs)+(clk.lunchStart?'  |  Lunch: '+fmtTS(clk.lunchStart):''):'Not clocked in')+'</div>'
-        +(clkd?'<div style="font-size:12px;color:'+(onL?'#BA7517':'#3B6D11')+';font-weight:500">'+(onL?'⏸ On lunch':'⏱ '+fmtClk(netSecs)+' worked')+'</div>':'')
+        +(clkd?'<div style="font-size:12px;color:'+(onL?'#BA7517':'#3B6D11')+';font-weight:500">'+(onL?'\u23F8 On lunch':'\u23F1 '+fmtClk(netSecs)+' worked')+'</div>':'')
+        +(stale?'<div style="font-size:11px;color:#A32D2D;font-weight:500">\u26A0 Clocked in over 16 hrs — forgot to clock out?</div>':'')
         +'</div></div>'
-        +'<span style="background:'+(onL?'#FAEEDA':clkd?'#EAF3DE':'#F1EFE8')+';color:'+(onL?'#633806':clkd?'#27500A':'#444')+';border-radius:6px;padding:2px 8px;font-size:11px;font-weight:500">'+(onL?'Lunch':clkd?'In':'Out')+'</span></div>';
+        +'<div style="display:flex;align-items:center;gap:8px">'
+        +(clkd?'<button onclick="forceClockOut(this.dataset.n)" data-n="'+i+'" style="background:#FCEBEB;color:#A32D2D;border:1px solid #A32D2D;border-radius:8px;padding:5px 9px;font-size:11px;font-weight:500;cursor:pointer;font-family:inherit;white-space:nowrap">Force Out</button>':'')
+        +'<span style="background:'+(onL?'#FAEEDA':clkd?'#EAF3DE':'#F1EFE8')+';color:'+(onL?'#633806':clkd?'#27500A':'#444')+';border-radius:6px;padding:2px 8px;font-size:11px;font-weight:500">'+(onL?'Lunch':clkd?'In':'Out')+'</span>'
+        +'</div></div>';
     });
     h+='</div>';
   }
 
   if(_ownerTechsTab==='timesheet'){
+    // Backfill ids on legacy entries so editing works
+    TECH_TIMELOG.forEach(function(e){if(!e.id)e.id='TL-'+e.clockIn;});
     // Filter & group by date
     var filter=el('ts-filter')?el('ts-filter').value:'';
     var logs=TECH_TIMELOG.filter(function(e){return !filter||e.techName===filter;});
@@ -6085,16 +6174,27 @@ function rOwnerTechs(tab){
         dayLogs.forEach(function(e){
           var hrs=calcHrs(e);
           var lunchMin=e.lunchStart?(Math.floor(((e.lunchEnd||Date.now())-(e.lunchStart))/60000)):0;
+          var preDone=e.preShift?e.preShift.filter(function(x){return x.done;}).length:0;
+          var postDone=e.postShift?e.postShift.filter(function(x){return x.done;}).length:0;
           h+='<div style="background:#fff;border-radius:10px;padding:10px 12px;margin-bottom:6px;border:0.5px solid rgba(0,0,0,0.1)'+(e.clockOut?'':';border-left:3px solid #3B6D11')+'">'
             +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
             +'<div style="font-size:13px;font-weight:600">'+e.techName+'</div>'
+            +'<div style="display:flex;align-items:center;gap:6px">'
             +'<div style="font-size:13px;font-weight:600;color:#185FA5">'+hrs.toFixed(2)+' hrs</div>'
+            +'<button onclick="editTimelog(this.dataset.id)" data-id="'+e.id+'" title="Edit entry" style="background:none;border:none;color:#888;cursor:pointer;padding:2px 4px;font-size:15px;line-height:1"><i class="ti ti-pencil"></i></button>'
+            +'</div>'
             +'</div>'
             +'<div style="display:flex;gap:14px;font-size:12px;color:#888;flex-wrap:wrap">'
             +'<span><i class="ti ti-login" style="font-size:12px;vertical-align:-1px"></i> In: '+fmtTS(e.clockIn)+'</span>'
             +(e.lunchStart?'<span><i class="ti ti-coffee" style="font-size:12px;vertical-align:-1px"></i> Lunch: '+lunchMin+' min</span>':'')
             +'<span><i class="ti ti-logout" style="font-size:12px;vertical-align:-1px"></i> Out: '+(e.clockOut?fmtTS(e.clockOut):'<span style="color:#3B6D11;font-weight:500">Active</span>')+'</span>'
             +'</div>'
+            +((e.forced||e.edited||e.preShift||e.postShift)?'<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">'
+              +(e.forced?'<span style="background:#FCEBEB;color:#A32D2D;border-radius:6px;padding:1px 7px;font-size:10px;font-weight:600">FORCED OUT</span>':'')
+              +(e.edited&&!e.forced?'<span style="background:#FAEEDA;color:#633806;border-radius:6px;padding:1px 7px;font-size:10px;font-weight:600">EDITED</span>':'')
+              +(e.preShift?'<span style="background:#E6F1FB;color:#0C447C;border-radius:6px;padding:1px 7px;font-size:10px;font-weight:600">PRE '+preDone+'/'+e.preShift.length+'</span>':'')
+              +(e.postShift?'<span style="background:#E6F1FB;color:#0C447C;border-radius:6px;padding:1px 7px;font-size:10px;font-weight:600">POST '+postDone+'/'+e.postShift.length+'</span>':'')
+            +'</div>':'')
             +'</div>';
         });
         var dayTot=dayLogs.reduce(function(s,e){return s+calcHrs(e);},0);
@@ -6310,13 +6410,94 @@ function expFindings(){
   document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
 }
 function tsTechFilter(){rOwnerTechs('timesheet');}
+function timeVal(ts){if(!ts)return'';var d=new Date(ts);return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0');}
+function combineDT(baseDate,hhmm){
+  if(!hhmm)return null;
+  var p=hhmm.split(':');
+  return new Date(baseDate.getFullYear(),baseDate.getMonth(),baseDate.getDate(),parseInt(p[0],10)||0,parseInt(p[1],10)||0,0,0).getTime();
+}
+function forceClockOut(idx){
+  var tech=getTechList()[idx];if(!tech)return;
+  var entry=TECH_TIMELOG.find(function(e){return e.techName===tech.name&&!e.clockOut;});
+  var clk=TECH_CLOCKS[tech.name];
+  var inTs=entry?entry.clockIn:(clk?getClkTs(clk):Date.now());
+  var nowD=new Date();
+  var defT=String(nowD.getHours()).padStart(2,'0')+':'+String(nowD.getMinutes()).padStart(2,'0');
+  oM('Force Clock Out — '+tech.name,
+    '<div style="font-size:13px;color:#555;margin-bottom:10px">Clocked in: <strong>'+new Date(inTs).toLocaleString()+'</strong></div>'
+    +'<label style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px">Clock-out time</label>'
+    +'<input type="time" id="fco-time" value="'+defT+'" style="width:100%;padding:9px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;margin:5px 0 10px;font-family:inherit;background:#fff">'
+    +'<div style="font-size:11px;color:#888">Time applies to the day the shift started. If it\'s earlier than clock-in, it rolls to the next day (overnight shift). Entry will be flagged as Forced Out.</div>',
+    '<button class="btn bl" onclick="svForceClockOut(this.dataset.n)" data-n="'+idx+'"><i class="ti ti-logout"></i>Force Out</button><button class="btn" onclick="cM()">Cancel</button>');
+}
+function svForceClockOut(idx){
+  var tech=getTechList()[idx];if(!tech)return;
+  var entry=TECH_TIMELOG.find(function(e){return e.techName===tech.name&&!e.clockOut;});
+  var tv=el('fco-time')?el('fco-time').value:'';
+  if(entry){
+    var out=combineDT(new Date(entry.clockIn),tv)||Date.now();
+    if(out<entry.clockIn)out+=86400000;
+    entry.clockOut=out;
+    if(entry.lunchStart&&!entry.lunchEnd)entry.lunchEnd=Math.min(out,Date.now());
+    entry.forced=true;entry.edited=true;entry.editedAt=new Date().toLocaleString();
+  }
+  delete TECH_CLOCKS[tech.name];
+  saveAll();cM();rOwnerTechs('live');
+}
+function editTimelog(id){
+  var e=TECH_TIMELOG.find(function(x){return x.id===id;});if(!e)return;
+  function fld(l,i,v){return'<label style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px">'+l+'</label><input type="time" id="'+i+'" value="'+v+'" style="width:100%;padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;margin:4px 0 10px;font-family:inherit;background:#fff">';}
+  oM('Edit Timesheet — '+e.techName,
+    '<div style="font-size:12px;color:#888;margin-bottom:10px">'+e.date+(e.editedAt?' \u00B7 Last edited '+e.editedAt:'')+'</div>'
+    +fld('Clock In','et-in',timeVal(e.clockIn))
+    +'<div style="display:flex;gap:10px"><div style="flex:1">'+fld('Lunch Start','et-ls',timeVal(e.lunchStart))+'</div><div style="flex:1">'+fld('Lunch End','et-le',timeVal(e.lunchEnd))+'</div></div>'
+    +fld('Clock Out','et-out',timeVal(e.clockOut))
+    +'<div style="font-size:11px;color:#888">Leave Clock Out blank to make the shift active again. Leave lunch fields blank to remove the break. Times before Clock In roll to the next day.</div>',
+    '<button class="btn bl" onclick="svTimelog(this.dataset.id)" data-id="'+id+'"><i class="ti ti-device-floppy"></i>Save</button>'
+    +'<button class="btn" style="color:#A32D2D" onclick="delTimelog(this.dataset.id)" data-id="'+id+'"><i class="ti ti-trash"></i>Delete</button>'
+    +'<button class="btn" onclick="cM()">Cancel</button>');
+}
+function svTimelog(id){
+  var e=TECH_TIMELOG.find(function(x){return x.id===id;});if(!e)return;
+  var origIn=e.clockIn;
+  var base=new Date(e.clockIn);
+  var vIn=combineDT(base,el('et-in')?el('et-in').value:'');
+  if(vIn)e.clockIn=vIn;
+  var vLs=combineDT(base,el('et-ls')?el('et-ls').value:'');
+  var vLe=combineDT(base,el('et-le')?el('et-le').value:'');
+  e.lunchStart=vLs||null;e.lunchEnd=vLe||null;
+  if(e.lunchStart&&e.lunchStart<e.clockIn)e.lunchStart+=86400000;
+  if(e.lunchEnd&&e.lunchStart&&e.lunchEnd<e.lunchStart)e.lunchEnd+=86400000;
+  var vOut=combineDT(base,el('et-out')?el('et-out').value:'');
+  if(vOut){
+    if(vOut<e.clockIn)vOut+=86400000;
+    e.clockOut=vOut;
+    var clk=TECH_CLOCKS[e.techName];
+    if(clk&&getClkTs(clk)===origIn)delete TECH_CLOCKS[e.techName];
+  } else {
+    e.clockOut=null;
+    if(!TECH_CLOCKS[e.techName])TECH_CLOCKS[e.techName]={clockIn:e.clockIn,onLunch:false,lunchStart:e.lunchStart,lunchEnd:e.lunchEnd};
+  }
+  e.edited=true;e.editedAt=new Date().toLocaleString();
+  saveAll();cM();rOwnerTechs('timesheet');
+}
+function delTimelog(id){
+  var i=TECH_TIMELOG.findIndex(function(x){return x.id===id;});if(i===-1)return;
+  var e=TECH_TIMELOG[i];
+  if(!confirm('Delete this timesheet entry for '+e.techName+' ('+e.date+')? This cannot be undone.'))return;
+  var clk=TECH_CLOCKS[e.techName];
+  if(clk&&getClkTs(clk)===e.clockIn)delete TECH_CLOCKS[e.techName];
+  TECH_TIMELOG.splice(i,1);
+  saveAll();cM();rOwnerTechs('timesheet');
+}
 function expTimesheet(){
   if(!TECH_TIMELOG.length){alert('No timesheet records yet.');return;}
-  var rows=['"Date","Technician","Clock In","Lunch Start","Lunch End","Lunch (min)","Clock Out","Hours Worked"'];
+  var rows=['"Date","Technician","Clock In","Lunch Start","Lunch End","Lunch (min)","Clock Out","Hours Worked","Flags"'];
   TECH_TIMELOG.forEach(function(e){
     var hrs=calcHrs(e).toFixed(2);
     var lunchMin=e.lunchStart?Math.round(((e.lunchEnd||Date.now())-e.lunchStart)/60000):0;
-    rows.push('"'+e.date+'","'+e.techName+'","'+fmtTS(e.clockIn)+'","'+fmtTS(e.lunchStart)+'","'+fmtTS(e.lunchEnd)+'","'+lunchMin+'","'+fmtTS(e.clockOut)+'","'+hrs+'"');
+    var flags=[];if(e.forced)flags.push('Forced Out');else if(e.edited)flags.push('Edited');
+    rows.push('"'+e.date+'","'+e.techName+'","'+fmtTS(e.clockIn)+'","'+fmtTS(e.lunchStart)+'","'+fmtTS(e.lunchEnd)+'","'+lunchMin+'","'+fmtTS(e.clockOut)+'","'+hrs+'","'+flags.join(', ')+'"');
   });
   var csv=rows.join('\n');
   var blob=new Blob([csv],{type:'text/csv'});
@@ -6586,9 +6767,85 @@ function autoNotify(evt,d){
     '<button class="btn bl" onclick="anSendText()"><i class="ti ti-message"></i>Send Text</button><button class="btn" onclick="cM()">Skip</button>');
 }
 function anSendText(){var m=el('an-msg');sms(_anPh,m?m.value:'');cM();}
+function invPaidAmt(i){
+  if(i.payments&&i.payments.length)return i.payments.reduce(function(s,p){return s+(parseFloat(p.amt)||0);},0);
+  return i.status==='Paid'?(parseFloat(i.total)||0):0;
+}
+function invBal(i){return Math.max(0,(parseFloat(i.total)||0)-invPaidAmt(i));}
+function syncInvStatus(i){
+  var tot=parseFloat(i.total)||0,pd=invPaidAmt(i);
+  if(tot>0&&pd>=tot-0.005){if(i.status!=='Paid'){i.status='Paid';i.paidDate=td();}}
+  else if(pd>0.005){i.status='Partial';i.paidDate='';}
+  else{i.status='Unpaid';i.paidDate='';}
+}
+function payInv(id){
+  var i=INV[id];if(!i)return;
+  var bal=invBal(i),pd=invPaidAmt(i);
+  var hist=(i.payments&&i.payments.length)?i.payments.map(function(p,pi){
+    return'<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:0.5px solid var(--bd);font-size:13px">'
+      +'<div><strong>'+fm(parseFloat(p.amt)||0)+'</strong> <span style="color:#888;font-size:12px">'+(p.method||'')+'</span>'
+      +'<div style="font-size:11px;color:#888">'+(p.date||'')+(p.note?' \u00B7 '+p.note:'')+'</div></div>'
+      +'<button onclick="delInvPay(this.dataset.id,this.dataset.pi)" data-id="'+id+'" data-pi="'+pi+'" title="Delete payment" style="background:none;border:none;color:#A32D2D;cursor:pointer;font-size:14px;padding:2px 6px"><i class="ti ti-trash"></i></button>'
+      +'</div>';
+  }).join(''):'<div style="font-size:12px;color:#888;padding:6px 0">No payments recorded yet.</div>';
+  oM('Payments — Invoice #'+i.num+' ('+i.customer+')',
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;text-align:center">'
+    +'<div style="background:#f5f5f7;border-radius:8px;padding:8px"><div style="font-size:15px;font-weight:700">'+fm(parseFloat(i.total)||0)+'</div><div style="font-size:10px;color:#888">TOTAL</div></div>'
+    +'<div style="background:#EAF3DE;border-radius:8px;padding:8px"><div style="font-size:15px;font-weight:700;color:#27500A">'+fm(pd)+'</div><div style="font-size:10px;color:#888">PAID</div></div>'
+    +'<div style="background:'+(bal>0.005?'#FCEBEB':'#f5f5f7')+';border-radius:8px;padding:8px"><div style="font-size:15px;font-weight:700;color:'+(bal>0.005?'#A32D2D':'#888')+'">'+fm(bal)+'</div><div style="font-size:10px;color:#888">BALANCE</div></div>'
+    +'</div>'
+    +(bal>0.005?
+      '<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">Record a Payment</div>'
+      +'<div style="display:flex;gap:8px;margin-bottom:8px">'
+      +'<input type="number" id="pay-amt" step="0.01" min="0" value="'+bal.toFixed(2)+'" placeholder="Amount" style="flex:1;min-width:0;padding:9px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;font-family:inherit;background:#fff">'
+      +'<select id="pay-mth" style="flex:1;min-width:0;padding:9px 8px;font-size:13px;border:0.5px solid var(--bd);border-radius:8px;font-family:inherit;background:#fff"><option'+(i.payment==='Cash'?' selected':'')+'>Cash</option><option'+(i.payment==='Card'?' selected':'')+'>Card</option><option'+(i.payment==='Check'?' selected':'')+'>Check</option><option'+(i.payment==='Zelle'?' selected':'')+'>Zelle</option><option'+(i.payment==='Net-30'?' selected':'')+'>Net-30</option></select>'
+      +'</div>'
+      +'<div style="display:flex;gap:8px;margin-bottom:12px">'
+      +'<input type="date" id="pay-date" value="'+new Date().toISOString().split('T')[0]+'" style="flex:1;min-width:0;padding:8px 10px;font-size:13px;border:0.5px solid var(--bd);border-radius:8px;font-family:inherit;background:#fff">'
+      +'<input id="pay-note" placeholder="Note (check #, ref...)" style="flex:1.4;min-width:0;padding:8px 10px;font-size:13px;border:0.5px solid var(--bd);border-radius:8px;font-family:inherit;background:#fff">'
+      +'</div>'
+      :'<div style="background:#EAF3DE;border-radius:8px;padding:10px;text-align:center;font-size:13px;font-weight:600;color:#27500A;margin-bottom:12px">\u2713 Paid in full</div>')
+    +'<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Payment History</div>'
+    +hist,
+    (bal>0.005?'<button class="btn bl" onclick="svInvPay(this.dataset.id)" data-id="'+id+'"><i class="ti ti-cash"></i>Save Payment</button>':'')
+    +'<button class="btn" onclick="cM()">Close</button>');
+}
+function svInvPay(id){
+  var i=INV[id];if(!i)return;
+  var amt=parseFloat(el('pay-amt')?el('pay-amt').value:'');
+  if(!amt||amt<=0){alert('Enter a payment amount.');return;}
+  var bal=invBal(i);
+  if(amt>bal+0.005&&!confirm('Payment ('+fm(amt)+') is more than the balance due ('+fm(bal)+'). Record anyway?'))return;
+  var dv=el('pay-date')?el('pay-date').value:'';
+  var dstr=dv?new Date(dv+'T12:00:00').toLocaleDateString():td();
+  i.payments=i.payments||[];
+  var mth=el('pay-mth')?el('pay-mth').value:'';
+  i.payments.push({amt:amt,method:mth,date:dstr,note:el('pay-note')?el('pay-note').value.trim():''});
+  if(!i.payment)i.payment=mth;
+  var wasPaid=i.status==='Paid';
+  syncInvStatus(i);
+  saveAll();
+  if(i.status==='Paid'&&!wasPaid)autoNotify('invoice_paid',{customer:i.customer,phone:i.phone,num:i.num,total:parseFloat(i.total)||0,payment:i.payment,vehicle:i.vehicle});
+  payInv(id);
+  if(el('inv-tb'))rINV();
+}
+function delInvPay(id,pi){
+  var i=INV[id];if(!i||!i.payments)return;
+  var p=i.payments[pi];if(!p)return;
+  if(!confirm('Delete payment of '+fm(parseFloat(p.amt)||0)+' ('+(p.date||'')+')?'))return;
+  i.payments.splice(pi,1);
+  syncInvStatus(i);
+  saveAll();
+  payInv(id);
+  if(el('inv-tb'))rINV();
+}
 function markPaid(id){
   var inv=INV[id];if(!inv||inv.status==='Paid')return;
-  inv.status='Paid';inv.paidDate=td();saveAll();rINV();rDash();
+  var bal=invBal(inv);
+  inv.payments=inv.payments||[];
+  if(bal>0)inv.payments.push({amt:bal,method:inv.payment||'',date:td(),note:'Paid in full'});
+  syncInvStatus(inv);
+  saveAll();rINV();rDash();
   autoNotify('invoice_paid',{customer:inv.customer,phone:inv.phone,num:inv.num,total:parseFloat(inv.total)||0,payment:inv.payment,vehicle:inv.vehicle});
 }
 function woSetStatus(id,st){
@@ -6793,7 +7050,7 @@ function _rsInvOpts(){
   var cs=el('rs-cust'),sel=el('rs-invsel');if(!cs||!sel)return;
   var name=cs.value,opts='<option value="new">+ New invoice</option>';
   ((typeof INV!=='undefined'&&INV)||[]).forEach(function(iv){
-    if(iv.customer===name&&iv.status!=='Paid'){opts+='<option value="'+iv.id+'">#'+iv.num+' - '+(iv.vehicle||'no vehicle')+' - '+fm(parseFloat(iv.total)||0)+'</option>';}
+    if(iv.customer===name&&iv.status!=='Paid'){opts+='<option value="'+iv.id+'">#'+iv.num+' - '+(iv.vehicle||'no vehicle')+' - '+fm(invBal(iv))+' due</option>';}
   });
   sel.innerHTML=opts;
 }
