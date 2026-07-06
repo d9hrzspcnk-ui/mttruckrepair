@@ -569,6 +569,7 @@ function cM(){el('MOD').style.display='none';_modLock=false;}
 
 function rDash(){
   var unp=INV.filter(function(i){return i.status!=='Paid';});
+  var unpBal=unp.reduce(function(s,i){return s+invBal(i);},0);
   var low=PARTS.filter(function(p){return p.qty<=p.min;});
   var rev=INV.reduce(function(s,i){return s+parseFloat(i.total||0);},0);
   var ow=WO.filter(function(w){return w.status!=='Completed';});
@@ -581,7 +582,7 @@ function rDash(){
   if(nc.length)h+='<div style="background:#E6F1FB;border:0.5px solid #B5D4F4;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px"><i class="ti ti-bell" style="color:#185FA5;font-size:18px"></i><div style="font-size:13px;color:#0C447C"><strong>'+nc.length+'</strong> new check-in(s) — <span style="text-decoration:underline;cursor:pointer" onclick="goP(\'w\')">view orders</span></div></div>';
   h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">';
   function st(l,v,c){return'<div class="stat"><div class="sl">'+l+'</div><div class="sv"'+(c?' style="color:'+c+'"':'')+'">'+v+'</div></div>';}
-  if(ROLE==='office'){h+=st('Open Orders',ow.length)+st('Unpaid',unp.length,unp.length?'#A32D2D':null)+st('Low Stock',low.length,low.length?'#A32D2D':null)+st('Customers',CUST.length)+st('Total Orders',INV.length)+st('Due PMs',PMS.filter(isDue).length);}else{h+=st('Revenue',fm(rev),'#185FA5')+st('Open Orders',ow.length)+st('Unpaid',unp.length,unp.length?'#A32D2D':null)+st('Low Stock',low.length,low.length?'#A32D2D':null)+st('Customers',CUST.length)+st('Rev/Customer',fm(CUST.length?rev/CUST.length:0))+st('Total Orders',INV.length)+st('Rev/Order',fm(INV.length?rev/INV.length:0));}
+  if(ROLE==='office'){h+=st('Open Orders',ow.length)+st('Unpaid',unp.length,unp.length?'#A32D2D':null)+st('Low Stock',low.length,low.length?'#A32D2D':null)+st('Customers',CUST.length)+st('Total Orders',INV.length)+st('Due PMs',PMS.filter(isDue).length);}else{h+=st('Revenue',fm(rev),'#185FA5')+st('Open Orders',ow.length)+st('Unpaid',unp.length,unp.length?'#A32D2D':null)+st('Unpaid Balance',fm(unpBal),'#A32D2D')+st('Low Stock',low.length,low.length?'#A32D2D':null)+st('Customers',CUST.length)+st('Rev/Customer',fm(CUST.length?rev/CUST.length:0))+st('Total Orders',INV.length)+st('Rev/Order',fm(INV.length?rev/INV.length:0));}
   h+='</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">';
   var wR=WO.length?WO.slice(-5).reverse().map(function(w){return'<tr><td style="padding:7px 9px;color:#185FA5;cursor:pointer;font-weight:600" onclick="vWO('+w.id+')">#'+w.ticket+(w.isNew?'<span style="background:#FFF3CD;color:#664D03;padding:1px 5px;border-radius:10px;font-size:9px;margin-left:4px">New</span>':'')+'</td><td style="padding:7px 9px;font-size:11px">'+w.customer+'</td><td style="padding:7px 9px">'+bdg(w.status)+'</td></tr>';}).join(''):'<tr><td colspan="3" style="padding:12px;color:#888;font-size:11px">None yet</td></tr>';
   var iR=unp.length?unp.slice(-5).map(function(i){return'<tr><td style="padding:7px 9px;color:#185FA5;font-weight:600">#'+i.num+(i.status==='Partial'?'<span style="background:#FFF3CD;color:#664D03;padding:1px 5px;border-radius:10px;font-size:9px;margin-left:4px">Partial</span>':'')+'</td><td style="padding:7px 9px;font-size:11px">'+i.customer+'</td><td style="padding:7px 9px;color:#A32D2D;font-weight:600">'+fm(invBal(i))+'</td></tr>';}).join(''):'<tr><td colspan="3" style="padding:12px;color:#888;font-size:11px">All paid</td></tr>';
@@ -1567,23 +1568,17 @@ async function scanVendorInvoice(input, invId){
   if(status)status.style.display='block';
 
   try{
-    // Convert file to base64
-    var base64=await new Promise(function(res,rej){
+    // Convert file to base64, downscaled so the upload is small
+    var origURL=await new Promise(function(res,rej){
       var rd=new FileReader();
-      rd.onload=function(e){res(e.target.result.split(',')[1]);};
+      rd.onload=function(e){res(e.target.result);};
       rd.onerror=rej;
       rd.readAsDataURL(file);
     });
+    var small=await _rcResize(origURL,1568,0.8);
+    var base64=small.split(',')[1];
+    var mime='image/jpeg';
 
-    var mime=file.type||'image/jpeg';
-
-    // Call Claude API to extract line items
-    var apiKey='proxied';
-    if(!apiKey){
-      if(status)status.style.display='none';
-      alert('Add your Anthropic API key in Settings → AI Features first.');
-      return;
-    }
     var response=await fetch(AIPROXY,{
       method:'POST',
       headers:{'Content-Type':'application/json'},
@@ -1603,8 +1598,13 @@ async function scanVendorInvoice(input, invId){
     var data=await response.json();
     if(status)status.style.display='none';
 
+    if(data.error){
+      alert('AI error: '+(data.error.message||JSON.stringify(data.error)));
+      return;
+    }
+
     if(!data.content||!data.content[0]){
-      alert('Could not read the invoice. Please try a clearer photo.');
+      alert('Could not read the invoice: the AI returned no content. Raw reply: '+JSON.stringify(data).slice(0,300));
       return;
     }
 
@@ -1615,7 +1615,7 @@ async function scanVendorInvoice(input, invId){
     var items;
     try{items=JSON.parse(raw);}
     catch(e){
-      alert('AI could not parse the invoice. Try a clearer photo with good lighting.');
+      alert('AI could not parse the invoice ('+e.message+'). Try a clearer photo, or raw reply was: '+raw.slice(0,300));
       return;
     }
 
@@ -1630,7 +1630,7 @@ async function scanVendorInvoice(input, invId){
   }catch(err){
     if(status)status.style.display='none';
     console.error(err);
-    alert('Error scanning invoice: '+err.message);
+    alert('Error scanning invoice: '+(err&&err.message?err.message:err));
   }
 }
 
