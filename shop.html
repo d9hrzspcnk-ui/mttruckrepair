@@ -2559,7 +2559,7 @@ function sndInv(id){
   );
 }
 
-function txtInv(id){
+async function txtInv(id){
   var inv=INV[id];
   if(!inv){alert('Invoice not found');return;}
   var cx=CUST.find(function(c){return c.name===inv.customer;});
@@ -2568,9 +2568,10 @@ function txtInv(id){
   var tel=(digits.length===10)?('+1'+digits):((digits.length===11&&digits.charAt(0)==='1')?('+'+digits):'');
   if(!tel){alert('No phone on file for this customer.');return;}
   var total=(parseFloat(inv.total)||0).toFixed(2);
-  var msg='MT Truck & Trailer Repair: Invoice #'+inv.num+' for $'+total+' is ready. Questions? Call (909) 550-5331.';
   var btn=event&&event.target?event.target.closest('button'):null;
   if(btn){btn._orig=btn.innerHTML;btn.disabled=true;btn.innerHTML='<i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i> Sending...';}
+  var pdfUrl=await buildInvoicePdfUrl(id);
+  var msg='MT Truck & Trailer Repair: Invoice #'+inv.num+' for $'+total+' is ready.'+(pdfUrl?' View/download: '+pdfUrl:'')+' Questions? Call (909) 550-5331.';
   fetch(AIPROXY+'/send-sms',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
@@ -2581,7 +2582,7 @@ function txtInv(id){
     if(btn){btn.disabled=false;btn.innerHTML=btn._orig;}
     if(!inv.history)inv.history=[];
     if(res.ok&&res.data&&res.data.success){
-      inv.history.push({type:'text-invoice',at:new Date().toLocaleString(),to:tel,status:'sent'});
+      inv.history.push({type:'text-invoice',at:new Date().toLocaleString(),to:tel,status:'sent',pdfUrl:pdfUrl||null});
       inv.textSent=true;inv.textSentAt=new Date().toLocaleString();
       saveAll();
       invToast('Invoice #'+inv.num+' texted to '+tel,true);
@@ -4964,29 +4965,11 @@ function wrapSubmitCITranslate(){
 // ── SHARED INVOICE PAGE ─────────────────────────────────────
 
 // ── PDF INVOICE GENERATOR ─────────────────────────────────
-async function genInvPDF(id, sendSMS){
-  var inv=INV[id];if(!inv){alert('Invoice not found.');return null;}
-
-  // If jsPDF not available, fall back to SMS with link only
-  if(typeof window.jspdf==='undefined'||!window.jspdf.jsPDF){
-    var inv2=INV[id];if(!inv2)return null;
-    var appUrl2=window.location.origin+window.location.pathname;
-    var link2=appUrl2+'?inv='+id;
-    var payInfo2=shop.venmo?' Venmo: '+shop.venmo:shop.cashapp?' CashApp: '+shop.cashapp:shop.zelle?' Zelle: '+shop.zelle:'';
-    var phone2=inv2.phone||inv2.custPhone||'';
-    if(!phone2){var cx4=CUST.find(function(cc){return cc.name===inv2.customer;});if(cx4)phone2=cx4.phone||'';}
-    var msg2='Hi '+inv2.customer+'! Invoice #'+inv2.num+' from '+shop.name+'. Amount: $'+(parseFloat(inv2.total)||0).toFixed(2)+'.'+payInfo2+' View here: '+link2+' Call '+shop.phone;
-    if(sendSMS&&phone2)window.open('sms:'+phone2.replace(/[^0-9]/g,'')+'?body='+encodeURIComponent(msg2));
-    else if(sendSMS)navigator.clipboard.writeText(link2).then(function(){alert('Link copied! Send to customer: '+link2);}).catch(function(){});
-    INV[id].sent=true;INV[id].sentAt=new Date().toLocaleString();saveAll();
-    return link2;
-  }
-
+async function buildInvoicePdfUrl(id){
+  var inv=INV[id];if(!inv)return null;
+  if(typeof window.jspdf==='undefined'||!window.jspdf.jsPDF)return null;
   try{
     var jsPDF=window.jspdf.jsPDF;
-    if(!jsPDF){alert('PDF library error. Try refreshing the page.');return null;}
-    var doc=new jsPDF({orientation:'p',unit:'pt',format:'letter'});
-    var W=612, margin=40, y=margin, colR=W-margin;
     var doc=new jsPDF({orientation:'portrait',unit:'mm',format:'letter'});
     var W=215.9, margin=15, y=margin, colR=W-margin;
 
@@ -5099,73 +5082,56 @@ async function genInvPDF(id, sendSMS){
     doc.text('Thank you for your business!   Questions? Call '+(shop.phone||'909-600-8440'),margin,750);
     doc.text(shop.name+' · '+(shop.addr||''),margin,763);
 
-    // Always open PDF in new tab so you can see it
     var pdfBlob=doc.output('blob');
-    var blobUrl=URL.createObjectURL(pdfBlob);
-    window.open(blobUrl,'_blank');
-
-    if(sendSMS){
-      // Upload to Supabase Storage
-      var filename='invoice-'+inv.num+'-'+Date.now()+'.pdf';
-      var path='invoices/'+filename;
-      try{
-        var uploadRes=await fetch(SB+'/storage/v1/object/mt%20photos/'+path,{
-          method:'POST',
-          headers:{'Content-Type':'application/pdf','apikey':SK,'Authorization':'Bearer '+SK},
-          body:pdfBlob
-        });
-        var pdfUrl='';
-        if(uploadRes.ok){
-          pdfUrl=SB+'/storage/v1/object/public/mt%20photos/'+path;
-          INV[id].pdfUrl=pdfUrl;
-        }
-        // Find customer phone
-        var custPhone=inv.phone||inv.custPhone||'';
-        if(!custPhone){
-          var cx2=CUST.find(function(cc){return cc.name===inv.customer;});
-          if(cx2)custPhone=cx2.phone||'';
-        }
-        var invX=INV[id];var invLink=window.location.origin+window.location.pathname+'?inv='+(invX?invX.num:id);
-        var payInfo='';
-        if(shop.venmo)payInfo+=' Venmo: '+shop.venmo+'.';
-        else if(shop.cashapp)payInfo+=' CashApp: '+shop.cashapp+'.';
-        else if(shop.zelle)payInfo+=' Zelle: '+shop.zelle+'.';
-        var msg='Hi '+inv.customer+'! Invoice #'+inv.num+' from '+shop.name+'.'
-          +' Amount due: $'+(inv.total||0).toFixed(2)+'.'
-          +' View full invoice: '+(pdfUrl||invLink)
-          +payInfo
-          +' Questions? Call '+shop.phone;
-        if(custPhone){
-          window.open('sms:'+custPhone.replace(/[^0-9]/g,'')+'?body='+encodeURIComponent(msg));
-        } else {
-          var copyTxt=pdfUrl||invLink;
-          navigator.clipboard.writeText(copyTxt).then(function(){
-            alert('PDF link copied! No phone saved for this customer — paste it manually.');
-          }).catch(function(){alert('Send this link to customer: '+copyTxt);});
-        }
-        INV[id].sent=true;INV[id].sentAt=new Date().toLocaleString();
-        saveAll();
-        return pdfUrl||invLink;
-      }catch(uploadErr){
-        console.log('Upload error:',uploadErr);
-        // SMS with invoice viewer link instead
-        var custPhone2=inv.phone||inv.custPhone||'';
-        if(!custPhone2){var cx3=CUST.find(function(cc){return cc.name===inv.customer;});if(cx3)custPhone2=cx3.phone||'';}
-        var link2=window.location.origin+window.location.pathname+'?inv='+id;
-        var msg2='Hi '+inv.customer+'! Invoice #'+inv.num+' from '+shop.name+'. Amount: $'+(inv.total||0).toFixed(2)+'. View here: '+link2+' Call '+shop.phone+' to pay.';
-        if(custPhone2)window.open('sms:'+custPhone2.replace(/[^0-9]/g,'')+'?body='+encodeURIComponent(msg2));
-        INV[id].sent=true;INV[id].sentAt=new Date().toLocaleString();saveAll();
-        return link2;
-      }
-    } else {
-      doc.save('Invoice-'+inv.num+'.pdf');
-      return null;
-    }
+    var filename='invoice-'+inv.num+'-'+Date.now()+'.pdf';
+    var path='invoices/'+filename;
+    var uploadRes=await fetch(SB+'/storage/v1/object/mt%20photos/'+path,{
+      method:'POST',
+      headers:{'Content-Type':'application/pdf','apikey':SK,'Authorization':'Bearer '+SK},
+      body:pdfBlob
+    });
+    if(!uploadRes.ok)return null;
+    var pdfUrl=SB+'/storage/v1/object/public/mt%20photos/'+path;
+    inv.pdfUrl=pdfUrl;
+    return pdfUrl;
   }catch(err){
     console.error('PDF error:',err);
-    alert('PDF generation failed: '+err.message);
     return null;
   }
+}
+async function genInvPDF(id, sendSMS){
+  var inv=INV[id];if(!inv){alert('Invoice not found.');return null;}
+  var custPhone=inv.phone||inv.custPhone||'';
+  if(!custPhone){
+    var cx2=CUST.find(function(cc){return cc.name===inv.customer;});
+    if(cx2)custPhone=cx2.phone||'';
+  }
+  var invLink=window.location.origin+window.location.pathname+'?inv='+inv.num;
+  var pdfUrl=await buildInvoicePdfUrl(id);
+  var link=pdfUrl||invLink;
+  if(pdfUrl)window.open(pdfUrl,'_blank');
+
+  if(!sendSMS){saveAll();return link;}
+
+  var payInfo='';
+  if(shop.venmo)payInfo=' Venmo: '+shop.venmo+'.';
+  else if(shop.cashapp)payInfo=' CashApp: '+shop.cashapp+'.';
+  else if(shop.zelle)payInfo=' Zelle: '+shop.zelle+'.';
+  var msg='Hi '+inv.customer+'! Invoice #'+inv.num+' from '+shop.name+'.'
+    +' Amount due: $'+(parseFloat(inv.total)||0).toFixed(2)+'.'
+    +' View full invoice: '+link
+    +payInfo
+    +' Questions? Call '+shop.phone;
+  if(custPhone){
+    window.open('sms:'+custPhone.replace(/[^0-9]/g,'')+'?body='+encodeURIComponent(msg));
+  } else {
+    navigator.clipboard.writeText(link).then(function(){
+      alert('PDF link copied! No phone saved for this customer — paste it manually.');
+    }).catch(function(){alert('Send this link to customer: '+link);});
+  }
+  INV[id].sent=true;INV[id].sentAt=new Date().toLocaleString();
+  saveAll();
+  return link;
 }
 function showSharedInvoice(invId){
   var sb=document.getElementById('sin-body');
