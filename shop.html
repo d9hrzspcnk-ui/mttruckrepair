@@ -1198,7 +1198,46 @@ function prtWO(id){
   body+='<div class="terms">'+(shop.terms||'')+'</div>';
   prtOpen('SO #'+w.ticket+' \u2014 '+shop.name,body);
 }
-function sUpd(wid){var w=WO[wid];var cx=CUST.find(function(c){return c.name===w.customer;});var ph=cx?cx.phone:(w.phone||'');var msgs={'Open':'Hi '+w.customer+', your '+w.vehicle+' has been checked in at '+shop.name+'. We will begin shortly!','In Progress':'Hi '+w.customer+', your '+w.vehicle+' is being worked on at '+shop.name+'. We will update you when complete.','Waiting Parts':'Hi '+w.customer+', we are waiting on parts for your '+w.vehicle+'. Will call when ready. — '+shop.name,'Completed':'Hi '+w.customer+', your '+w.vehicle+' is READY for pickup! Call '+shop.phone+'. — '+shop.name};var def=msgs[w.status]||'Hi '+w.customer+', update on your '+w.vehicle+' at '+shop.name+'. Call '+shop.phone;oM('Send Update — SO #'+w.ticket,'<div style="display:grid;gap:6px;margin-bottom:10px">'+Object.keys(msgs).map(function(s){return'<button class="btn xs" onclick="el(\'upd-msg\').value=\''+msgs[s].replace(/'/g,"\\'")+'\'">'+bdg(s)+' Use this</button>';}).join('')+'</div><div class="fg"><label>Message</label><textarea id="upd-msg" style="padding:8px 10px;font-size:13px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%;min-height:70px;font-family:inherit;resize:vertical">'+def+'</textarea></div>','<button class="btn bl" onclick="sms(\''+ph+'\',el(\'upd-msg\').value);cM()"><i class="ti ti-message"></i>Text</button><button class="btn" onclick="cM()">Close</button>');}
+function sUpd(wid){var w=WO[wid];var cx=CUST.find(function(c){return c.name===w.customer;});var ph=cx?cx.phone:(w.phone||'');var msgs={'Open':'Hi '+w.customer+', your '+w.vehicle+' has been checked in at '+shop.name+'. We will begin shortly!','In Progress':'Hi '+w.customer+', your '+w.vehicle+' is being worked on at '+shop.name+'. We will update you when complete.','Waiting Parts':'Hi '+w.customer+', we are waiting on parts for your '+w.vehicle+'. Will call when ready. — '+shop.name,'Completed':'Hi '+w.customer+', your '+w.vehicle+' is READY for pickup! Call '+shop.phone+'. — '+shop.name};var def=msgs[w.status]||'Hi '+w.customer+', update on your '+w.vehicle+' at '+shop.name+'. Call '+shop.phone;oM('Send Update — SO #'+w.ticket,'<div style="display:grid;gap:6px;margin-bottom:10px">'+Object.keys(msgs).map(function(s){return'<button class="btn xs" onclick="el(\'upd-msg\').value=\''+msgs[s].replace(/'/g,"\\'")+'\'">'+bdg(s)+' Use this</button>';}).join('')+'</div><div class="fg"><label>Message</label><textarea id="upd-msg" style="padding:8px 10px;font-size:13px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%;min-height:70px;font-family:inherit;resize:vertical">'+def+'</textarea></div>','<button class="btn bl" onclick="sndWOText('+wid+')"><i class="ti ti-message"></i>Text</button><button class="btn" onclick="cM()">Close</button>');}
+function sndWOText(wid){
+  var w=WO[wid];if(!w){alert('Work order not found');return;}
+  var mg=document.getElementById('upd-msg');
+  var msg=mg?mg.value:'';
+  var cx=CUST.find(function(c){return c.name===w.customer;});
+  var raw=(cx&&cx.phone)||w.phone||'';
+  var digits=raw.replace(/\D/g,'');
+  var tel=(digits.length===10)?('+1'+digits):((digits.length===11&&digits.charAt(0)==='1')?('+'+digits):'');
+  if(!tel){alert('No phone on file for this customer.');return;}
+  var btn=event&&event.target?event.target.closest('button'):null;
+  if(btn){btn._orig=btn.innerHTML;btn.disabled=true;btn.innerHTML='<i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i> Sending...';}
+  fetch(AIPROXY+'/send-sms',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({to:tel,body:msg})
+  }).then(function(r){
+    return r.json().then(function(data){return{ok:r.ok,data:data};});
+  }).then(function(res){
+    if(btn){btn.disabled=false;btn.innerHTML=btn._orig;}
+    if(!w.history)w.history=[];
+    if(res.ok&&res.data&&res.data.success){
+      w.history.push({type:'text-update',at:new Date().toLocaleString(),to:tel,status:'sent'});
+      saveAll();
+      invToast('Update texted to '+tel,true);
+      cM();
+    }else{
+      var errMsg=(res.data&&(res.data.message||res.data.error))||'Text failed';
+      w.history.push({type:'text-update',at:new Date().toLocaleString(),to:tel,status:'failed',detail:errMsg});
+      saveAll();
+      invToast('Could not text update: '+errMsg,false);
+    }
+  }).catch(function(e){
+    if(btn){btn.disabled=false;btn.innerHTML=btn._orig;}
+    if(!w.history)w.history=[];
+    w.history.push({type:'text-update',at:new Date().toLocaleString(),to:tel,status:'failed',detail:String(e&&e.message||e)});
+    saveAll();
+    invToast('Could not text update: '+(e&&e.message?e.message:e),false);
+  });
+}
 function sendApproval(wid){
   var w=WO[wid];
   var cx=CUST.find(function(c){return c.name===w.customer;});
