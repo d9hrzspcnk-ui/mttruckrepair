@@ -741,6 +741,7 @@ function vWO(id){
     '<button class="btn gr" onclick="toInv('+id+')"><i class="ti ti-receipt"></i>Create Invoice</button>'
     +'<button class="btn bl" onclick="saveAll();rWO();cM()">Save</button>'
     +'<button class="btn bl" onclick="prtWO('+id+')"><i class="ti ti-printer"></i>Print</button>'
+    +'<button class="btn bl" onclick="txtWO('+id+')"><i class="ti ti-message"></i>Text Work Order</button>'
     +'<button class="btn" style="background:#8B4513;color:#fff;border-color:#8B4513" onclick="walkAround('+id+')"><i class="ti ti-camera"></i>Walk-Around</button>'
     +'<button class="btn" style="background:#534AB7;color:#fff;border-color:#534AB7" onclick="ownerAIAssistant('+id+')"><i class="ti ti-robot"></i>AI Help</button>'
     +'<button class="btn" style="background:#A32D2D;color:#fff;border-color:#A32D2D" onclick="saveAll();sendApproval('+id+')"><i class="ti ti-send"></i>Send for Approval</button>'
@@ -5163,6 +5164,203 @@ async function genInvPDF(id, sendSMS){
   INV[id].sent=true;INV[id].sentAt=new Date().toLocaleString();
   saveAll();
   return link;
+}
+async function buildWOPdfUrl(id){
+  var w=WO[id];if(!w)return null;
+  if(typeof window.jspdf==='undefined'||!window.jspdf.jsPDF)return null;
+  try{
+    var jsPDF=window.jspdf.jsPDF;
+    var doc=new jsPDF({orientation:'portrait',unit:'mm',format:'letter'});
+    var W=215.9, margin=15, y=margin, colR=W-margin;
+    var s2=calcS(w);
+    var u=w.unit||{};
+
+    // Header bar
+    doc.setFillColor(24,95,165);
+    doc.rect(0,0,W,60,'F');
+    doc.setTextColor(255,255,255);
+    doc.setFontSize(20);doc.setFont('helvetica','bold');
+    doc.text(shop.name||'MT Truck And Trailer Repair',margin,30);
+    doc.setFontSize(10);doc.setFont('helvetica','normal');
+    doc.text((shop.addr||'12200 Hibiscus Rd, Adelanto CA')+'   |   Tel: '+(shop.phone||'909-600-8440'),margin,45);
+    y=90;
+
+    // Title
+    doc.setTextColor(24,95,165);
+    doc.setFontSize(26);doc.setFont('helvetica','bold');
+    doc.text('SERVICE ORDER #'+w.ticket,margin,y);
+    y+=20;
+
+    // Date, status, tech
+    doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(80,80,80);
+    doc.text('Date: '+(w.date||td()),margin,y);
+    var sc=w.status==='Completed'?[39,80,10]:w.status==='Waiting Parts'?[138,90,0]:[24,95,165];
+    doc.setTextColor(sc[0],sc[1],sc[2]);
+    doc.text('Status: '+w.status,margin+150,y);
+    doc.setTextColor(80,80,80);
+    if(w.tech)doc.text('Tech: '+w.tech,margin+280,y);
+    y+=25;
+
+    // Customer / Vehicle boxes
+    doc.setFillColor(245,245,247);
+    doc.rect(margin,y,88,55,'F');
+    doc.setFontSize(8);doc.setTextColor(130,130,130);doc.setFont('helvetica','bold');
+    doc.text('CUSTOMER',margin+5,y+10);
+    doc.setFontSize(11);doc.setTextColor(29,29,31);doc.setFont('helvetica','bold');
+    doc.text((w.customer||'').substring(0,28),margin+5,y+22);
+    doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(100,100,100);
+    var custY=y+32;
+    if(w.phone){doc.text(w.phone,margin+5,custY);custY+=10;}
+    if(w.authorizer)doc.text(('Auth: '+w.authorizer).substring(0,32),margin+5,custY);
+
+    var vBoxX=margin+94;
+    doc.setFillColor(245,245,247);
+    doc.rect(vBoxX,y,colR-vBoxX,55,'F');
+    doc.setFontSize(8);doc.setTextColor(130,130,130);doc.setFont('helvetica','bold');
+    doc.text('VEHICLE',vBoxX+5,y+10);
+    doc.setFontSize(11);doc.setTextColor(29,29,31);doc.setFont('helvetica','bold');
+    doc.text((w.vehicle||'—').substring(0,32),vBoxX+5,y+22);
+    doc.setFontSize(9);doc.setFont('helvetica','normal');doc.setTextColor(100,100,100);
+    var vY=y+32;
+    if(u.vin){doc.text('VIN: '+u.vin,vBoxX+5,vY);vY+=10;}
+    if(u.miles)doc.text('Miles: '+u.miles,vBoxX+5,vY);
+    y+=70;
+
+    // Complaint
+    doc.setFontSize(9);doc.setTextColor(130,130,130);doc.setFont('helvetica','bold');
+    doc.text('COMPLAINT / SERVICE REQUESTED',margin,y);
+    y+=8;
+    doc.setFontSize(10);doc.setTextColor(29,29,31);doc.setFont('helvetica','normal');
+    var complaintLines=doc.splitTextToSize(w.complaint||'—',W-2*margin);
+    doc.text(complaintLines,margin,y);
+    y+=complaintLines.length*13+10;
+
+    if(w.checklist&&w.checklist.length){
+      doc.setFontSize(9);doc.setTextColor(130,130,130);doc.setFont('helvetica','bold');
+      doc.text('REQUESTED SERVICES',margin,y);
+      y+=8;
+      doc.setFontSize(10);doc.setTextColor(29,29,31);doc.setFont('helvetica','normal');
+      var checkLines=doc.splitTextToSize(w.checklist.join(', '),W-2*margin);
+      doc.text(checkLines,margin,y);
+      y+=checkLines.length*13+10;
+    }
+
+    if(w.techFindings){
+      doc.setFontSize(9);doc.setTextColor(130,130,130);doc.setFont('helvetica','bold');
+      doc.text('TECHNICIAN FINDINGS',margin,y);
+      y+=8;
+      doc.setFontSize(10);doc.setTextColor(29,29,31);doc.setFont('helvetica','normal');
+      var findLines=doc.splitTextToSize(w.techFindings,W-2*margin);
+      doc.text(findLines,margin,y);
+      y+=findLines.length*13+10;
+    }
+
+    if(y>700){doc.addPage();y=margin;}
+
+    // Table header
+    doc.setFillColor(24,95,165);
+    doc.rect(margin,y,W-2*margin,20,'F');
+    doc.setTextColor(255,255,255);doc.setFontSize(10);doc.setFont('helvetica','bold');
+    doc.text('DESCRIPTION',margin+8,y+14);
+    doc.text('TYPE',margin+280,y+14);
+    doc.text('QTY/HRS',margin+340,y+14);
+    doc.text('RATE',margin+400,y+14);
+    doc.text('AMOUNT',colR-8,y+14,{align:'right'});
+    y+=20;
+
+    var lines2=w.lines||[];
+    doc.setFont('helvetica','normal');
+    lines2.forEach(function(l,i2){
+      if(y>720){doc.addPage();y=margin;}
+      var bg=i2%2===0?[255,255,255]:[248,249,252];
+      doc.setFillColor(bg[0],bg[1],bg[2]);
+      doc.rect(margin,y,W-2*margin,18,'F');
+      doc.setTextColor(29,29,31);doc.setFontSize(10);
+      doc.text((l.desc||'').substring(0,38),margin+8,y+13);
+      var tl=l.type==='labor'?'Labor':l.type==='part'?'Part':'Fee';
+      doc.text(tl,margin+280,y+13);
+      var qty2=l.type==='labor'?String(l.hrs||1)+'h':l.type==='part'?String(l.qty||1)+'x':'';
+      doc.text(qty2,margin+340,y+13);
+      var rt=l.type==='labor'?'$'+(l.rate||0)+'/h':l.type==='part'?'$'+(l.sell||0):'';
+      doc.text(rt,margin+400,y+13);
+      doc.text('$'+((l.subtotal||0).toFixed(2)),colR-8,y+13,{align:'right'});
+      y+=18;
+    });
+
+    // Totals
+    y+=10;
+    doc.setDrawColor(220,220,220);doc.line(margin,y,colR,y);y+=15;
+    doc.setFontSize(10);doc.setTextColor(100,100,100);
+    doc.text('Labor:',margin+350,y);doc.text('$'+s2.l,colR-8,y,{align:'right'});y+=16;
+    doc.text('Parts:',margin+350,y);doc.text('$'+s2.p,colR-8,y,{align:'right'});y+=16;
+    if(parseFloat(s2.sup)>0){doc.text('Shop Supplies:',margin+350,y);doc.text('$'+s2.sup,colR-8,y,{align:'right'});y+=16;}
+    doc.text('Tax:',margin+350,y);doc.text('$'+s2.tax,colR-8,y,{align:'right'});y+=10;
+    doc.setFillColor(24,95,165);doc.rect(margin+300,y,W-margin-300,24,'F');
+    doc.setTextColor(255,255,255);doc.setFontSize(13);doc.setFont('helvetica','bold');
+    doc.text('TOTAL:',margin+308,y+17);
+    doc.text('$'+s2.tot,colR-8,y+17,{align:'right'});
+    y+=40;
+
+    // Footer
+    doc.setTextColor(160,160,160);doc.setFontSize(9);doc.setFont('helvetica','normal');
+    doc.text('Questions? Call '+(shop.phone||'909-600-8440'),margin,750);
+    doc.text(shop.name+' · '+(shop.addr||''),margin,763);
+
+    var pdfBlob=doc.output('blob');
+    var filename='workorder-'+w.ticket+'-'+Date.now()+'.pdf';
+    var path='workorders/'+filename;
+    var uploadRes=await fetch(SB+'/storage/v1/object/mt%20photos/'+path,{
+      method:'POST',
+      headers:{'Content-Type':'application/pdf','apikey':SK,'Authorization':'Bearer '+SK},
+      body:pdfBlob
+    });
+    if(!uploadRes.ok)return null;
+    var pdfUrl=SB+'/storage/v1/object/public/mt%20photos/'+path;
+    w.pdfUrl=pdfUrl;
+    return pdfUrl;
+  }catch(err){
+    console.error('WO PDF error:',err);
+    return null;
+  }
+}
+async function txtWO(id){
+  var w=WO[id];
+  if(!w){alert('Work order not found');return;}
+  var cx=CUST.find(function(c){return c.name===w.customer;});
+  var raw=(cx&&cx.phone)||w.phone||'';
+  var digits=raw.replace(/\D/g,'');
+  var tel=(digits.length===10)?('+1'+digits):((digits.length===11&&digits.charAt(0)==='1')?('+'+digits):'');
+  if(!tel){alert('No phone on file for this customer.');return;}
+  var btn=event&&event.target?event.target.closest('button'):null;
+  if(btn){btn._orig=btn.innerHTML;btn.disabled=true;btn.innerHTML='<i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i> Sending...';}
+  var pdfUrl=await buildWOPdfUrl(id);
+  var msg='MT Truck & Trailer Repair: Service Order #'+w.ticket+' for your '+(w.vehicle||'vehicle')+' is ready to view.'+(pdfUrl?' View/download: '+pdfUrl:'')+' Questions? Call (909) 550-5331.';
+  fetch(AIPROXY+'/send-sms',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({to:tel,body:msg})
+  }).then(function(r){
+    return r.json().then(function(data){return{ok:r.ok,data:data};});
+  }).then(function(res){
+    if(btn){btn.disabled=false;btn.innerHTML=btn._orig;}
+    if(!w.history)w.history=[];
+    if(res.ok&&res.data&&res.data.success){
+      w.history.push({type:'text-workorder',at:new Date().toLocaleString(),to:tel,status:'sent',pdfUrl:pdfUrl||null});
+      saveAll();
+      invToast('Work order #'+w.ticket+' texted to '+tel,true);
+    }else{
+      var errMsg=(res.data&&(res.data.message||res.data.error))||'Text failed';
+      w.history.push({type:'text-workorder',at:new Date().toLocaleString(),to:tel,status:'failed',detail:errMsg});
+      saveAll();
+      invToast('Could not text work order: '+errMsg,false);
+    }
+  }).catch(function(e){
+    if(btn){btn.disabled=false;btn.innerHTML=btn._orig;}
+    if(!w.history)w.history=[];
+    w.history.push({type:'text-workorder',at:new Date().toLocaleString(),to:tel,status:'failed',detail:String(e&&e.message||e)});
+    saveAll();
+    invToast('Could not text work order: '+(e&&e.message?e.message:e),false);
+  });
 }
 function showSharedInvoice(invId){
   var sb=document.getElementById('sin-body');
