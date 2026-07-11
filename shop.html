@@ -5365,10 +5365,9 @@ async function txtWO(id){
 function showSharedInvoice(invId){
   var sb=document.getElementById('sin-body');
   if(!sb){return;}
-  
-  // Debug: show current state first
-  sb.innerHTML='<div style="padding:20px;font-size:12px;color:#888">Loading... invId='+invId+' INV='+INV.length+'</div>';
-  
+
+  sb.innerHTML='<div style="padding:20px;font-size:12px;color:#888">Loading invoice…</div>';
+
   try{
     var inv=null;
     for(var ix=0;ix<INV.length;ix++){
@@ -5380,48 +5379,34 @@ function showSharedInvoice(invId){
     if(!inv){
       sb.innerHTML='<div style="padding:40px;text-align:center">'
         +'<div style="font-size:16px;font-weight:700;margin-bottom:8px">Invoice Not Found</div>'
-        +'<div style="font-size:12px;color:#aaa;margin-bottom:16px">ID:'+invId+' | Count:'+INV.length+'</div>'
         +'<a href="tel:909-600-8440" style="background:#185FA5;color:#fff;padding:12px 24px;border-radius:10px;text-decoration:none;font-weight:600">Call 909-600-8440</a>'
         +'</div>';
       return;
     }
-  var sb=document.getElementById('sin-body');if(!sb)return;
-
-  // Find invoice - search by num first, then by array index
-  var inv=null;
-  for(var ix=0;ix<INV.length;ix++){
-    if(INV[ix]&&(String(INV[ix].num)===String(invId)||String(INV[ix].id)===String(invId))){
-      inv=INV[ix];break;
-    }
-  }
-
-  if(!inv){
-    // Show helpful error with debug info
-    sb.innerHTML='<div style="padding:40px;text-align:center">'
-      +'<div style="font-size:16px;font-weight:700;margin-bottom:8px">Could Not Load Invoice</div>'
-      +'<div style="font-size:13px;color:#888;margin-bottom:8px">ID: '+invId+' | Invoices loaded: '+INV.length+'</div>'
-      +'<div style="font-size:13px;color:#888;margin-bottom:20px">Please call us and we can help you.</div>'
-      +'<a href="tel:909-600-8440" style="background:#185FA5;color:#fff;padding:12px 24px;border-radius:10px;text-decoration:none;font-size:15px;font-weight:600">📞 Call 909-600-8440</a>'
-      +'</div>';
-    return;
-  }
 
   var appUrl=window.location.origin+window.location.pathname;
   // Rebuild totals if missing
   if(!inv.labor&&!inv.parts){
     var labor2=0,parts2=0;
-    (inv.lines||[]).forEach(function(l){var st=parseFloat(l.subtotal)||0;if(l.type==='labor')labor2+=st;else parts2+=st;});
+    (inv.lines||[]).forEach(function(l){if(!l)return;var st=parseFloat(l.subtotal)||0;if(l.type==='labor')labor2+=st;else parts2+=st;});
     inv.labor=labor2;inv.parts=parts2;
     if(!inv.total)inv.total=labor2+parts2+parseFloat(inv.tax||0);
   }
+  // Render each line defensively - one malformed/unexpected line item must never
+  // blank out the whole invoice (previously a single bad record could throw
+  // inside this loop and abort the entire render, leaving the page cut off).
   var lines=(inv.lines||[]).map(function(l){
-    var typeLabel=l.type==='labor'?'Labor':l.type==='fee'?'Fee':'Part';
-    var detail=l.type==='labor'?((l.hrs||1)+'hrs @ $'+(l.rate||0)+'/hr'):l.type==='fee'?'Flat fee':('x'+(l.qty||1)+' @ $'+(l.sell||0));
-    return'<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:10px 0;border-bottom:0.5px solid rgba(0,0,0,0.08)">'
-      +'<div style="flex:1"><div style="font-size:14px;font-weight:500">'+(l.desc||'Service')+'</div>'
-      +'<div style="font-size:12px;color:#888;margin-top:2px">'+typeLabel+' · '+detail+'</div></div>'
-      +'<div style="font-size:14px;font-weight:600;color:#185FA5;margin-left:12px">$'+(l.subtotal||0).toFixed(2)+'</div>'
-      +'</div>';
+    try{
+      if(!l)return'';
+      var typeLabel=l.type==='labor'?'Labor':l.type==='fee'?'Fee':'Part';
+      var detail=l.type==='labor'?((l.hrs||1)+'hrs @ $'+(l.rate||0)+'/hr'):l.type==='fee'?'Flat fee':('x'+(l.qty||1)+' @ $'+(l.sell||0));
+      var subtotal=parseFloat(l.subtotal)||0;
+      return'<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:10px 0;border-bottom:0.5px solid rgba(0,0,0,0.08)">'
+        +'<div style="flex:1"><div style="font-size:14px;font-weight:500">'+(l.desc||'Service')+'</div>'
+        +'<div style="font-size:12px;color:#888;margin-top:2px">'+typeLabel+' · '+detail+'</div></div>'
+        +'<div style="font-size:14px;font-weight:600;color:#185FA5;margin-left:12px">$'+subtotal.toFixed(2)+'</div>'
+        +'</div>';
+    }catch(lineErr){return'';}
   }).join('');
   if(!lines)lines='<div style="padding:12px 0;font-size:13px;color:#888">See attached work order for service details.</div>';
 
@@ -7244,29 +7229,52 @@ async function receiptSave(ev){
 
 // ── ITEMIZED RECEIPT: split each line to Stock / Customer invoice / Overhead ──
 var _rsData=null,_rsPending=null,_rsExistingPath='',_rsQueueReqId='',_rsPrefillCust='',_rsDefaultDest='stock';
+// If Claude flagged a customer/job name on this receipt line (custHint), or the
+// legacy partNum field happens to match a real customer's name, surface it as a
+// suggestion instead of silently letting it ride along as if it were a part number.
+function _rsCustHint(l){
+  var hint=(l.custHint||'').trim();
+  if(hint)return hint;
+  var pn=(l.partNum||'').trim();
+  if(!pn)return '';
+  var m=((typeof CUST!=='undefined'&&CUST)||[]).find(function(c){return c.name&&c.name.toLowerCase()===pn.toLowerCase();});
+  return m?m.name:'';
+}
 function receiptSplitPreview(d,imgURL){
   _pendingReceiptImg=imgURL;_rsData=d;
   var inS='padding:7px 9px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%';
-  var custOpts='<option value="">- pick customer -</option>'+(((typeof CUST!=='undefined'&&CUST)||[]).map(function(c){return '<option'+(c.name===_rsPrefillCust?' selected':'')+'>'+_rcEsc(c.name)+'</option>';}).join(''));
   var catOpts=EXP_CATS.map(function(c){return '<option'+(c==='Shop Supplies'?' selected':'')+'>'+c+'</option>';}).join('');
-  var dOpt=function(v){return _rsDefaultDest===v?' selected':'';};
+  var custOptsFor=function(selectedName){
+    return '<option value="">- pick customer -</option>'+(((typeof CUST!=='undefined'&&CUST)||[]).map(function(c){return '<option'+(c.name===selectedName?' selected':'')+'>'+_rcEsc(c.name)+'</option>';}).join(''));
+  };
   var lines=d.lines||[];
   var rows=lines.map(function(l,i){
     var cost=parseFloat(l.cost)||0,qty=parseFloat(l.qty)||1;
+    var custHint=_rsCustHint(l);
+    var partNumForBox=custHint?'':(l.partNum||'');
+    var destDefault=custHint?'customer':_rsDefaultDest;
+    var custDefault=custHint||_rsPrefillCust;
+    var dOptLine=function(v){return destDefault===v?' selected':'';};
     return '<div style="border:0.5px solid var(--bd);border-radius:10px;padding:10px;margin-bottom:8px">'
-      +'<input id="rs-desc-'+i+'" value="'+_rcEsc((l.partNum?l.partNum+' ':'')+(l.desc||''))+'" style="'+inS+';margin-bottom:6px;font-weight:600">'
+      +'<input id="rs-desc-'+i+'" value="'+_rcEsc(l.desc||'')+'" placeholder="Item name" style="'+inS+';margin-bottom:6px;font-weight:600">'
       +'<div style="display:flex;gap:6px;margin-bottom:6px">'
       +'<div style="flex:1"><div style="font-size:10px;color:#888">Qty</div><input id="rs-qty-'+i+'" type="number" inputmode="decimal" value="'+qty+'" style="'+inS+'"></div>'
       +'<div style="flex:1"><div style="font-size:10px;color:#888">Unit cost $</div><input id="rs-cost-'+i+'" type="number" inputmode="decimal" value="'+cost+'" style="'+inS+'"></div>'
+      +'<div style="flex:1"><div style="font-size:10px;color:#888">Part #</div><input id="rs-partnum-'+i+'" placeholder="optional" value="'+_rcEsc(partNumForBox)+'" style="'+inS+'"></div>'
       +'</div>'
-      +'<select id="rs-dest-'+i+'" onchange="_rsToggleCust()" style="'+inS+';font-family:inherit"><option value="stock"'+dOpt('stock')+'>Add to stock (inventory)</option><option value="customer"'+dOpt('customer')+'>Bill to a customer</option><option value="overhead"'+dOpt('overhead')+'>Shop overhead (expense)</option></select>'
+      +(custHint?'<div style="font-size:11px;color:#8a5a00;background:#FFF3CD;border-radius:6px;padding:5px 8px;margin-bottom:6px">The receipt shows “'+_rcEsc(custHint)+'” on this line — that looks like a customer name, not a part number. Confirm who to bill below.</div>':'')
+      +'<select id="rs-dest-'+i+'" onchange="_rsToggleCust('+i+')" style="'+inS+';font-family:inherit"><option value="stock"'+dOptLine('stock')+'>Add to stock (inventory)</option><option value="customer"'+dOptLine('customer')+'>Bill to a customer</option><option value="overhead"'+dOptLine('overhead')+'>Shop overhead (expense)</option></select>'
+      +'<div id="rs-custwrap-'+i+'" style="display:none;background:#E6F1FB;border-radius:8px;padding:8px;margin-top:6px">'
+      +'<div class="fg" style="margin-bottom:6px"><label>Customer</label><select id="rs-cust-'+i+'" onchange="_rsInvOpts('+i+')" style="'+inS+';font-family:inherit">'+custOptsFor(custDefault)+'</select></div>'
+      +'<div class="fg"><label>Invoice</label><select id="rs-invsel-'+i+'" style="'+inS+';font-family:inherit"><option value="new">+ New invoice</option></select></div>'
+      +'</div>'
       +'</div>';
   }).join('');
   var thumb=(imgURL&&imgURL.indexOf('data:')===0)?'<img src="'+imgURL+'" style="width:74px;height:100px;object-fit:cover;border-radius:8px;border:0.5px solid var(--bd);flex:none">':'<div style="width:74px;height:100px;border-radius:8px;border:0.5px solid var(--bd);background:#f5f5f7;display:flex;align-items:center;justify-content:center;flex:none"><i class="ti ti-receipt" style="font-size:24px;color:#aaa"></i></div>';
   oM('Receipt - Split & Route',
     '<div style="display:flex;gap:12px;margin-bottom:12px;align-items:flex-start">'
     +thumb
-    +'<div style="font-size:12px;color:#888;line-height:1.5">Claude found '+lines.length+' item(s). For each one, pick where it goes - your stock, a customer invoice, or shop overhead. The photo and invoice # are saved with all of them.</div>'
+    +'<div style="font-size:12px;color:#888;line-height:1.5">Claude found '+lines.length+' item(s). For each one, pick where it goes - your stock, a customer invoice, or shop overhead. If you’re billing a customer, pick which one for that item — different lines can go to different customers/invoices. The photo and invoice # are saved with all of them.</div>'
     +'</div>'
     +'<div class="g2" style="margin-bottom:12px">'
     +'<div class="fg"><label>Vendor</label><input id="rs-vendor" value="'+_rcEsc(d.vendor)+'" style="'+inS+'"></div>'
@@ -7274,24 +7282,17 @@ function receiptSplitPreview(d,imgURL){
     +'<div class="fg"><label>Date</label><input id="rs-date" type="date" value="'+_rcISO(d.date)+'" style="'+inS+'"></div>'
     +'<div class="fg"><label>Overhead category</label><select id="rs-cat" style="'+inS+';font-family:inherit">'+catOpts+'</select></div>'
     +'</div>'
-    +'<div style="font-size:12px;font-weight:600;margin-bottom:8px">Items on this receipt</div>'+rows
-    +'<div id="rs-custwrap" style="display:none;background:#E6F1FB;border-radius:10px;padding:10px;margin-top:4px">'
-    +'<div style="font-size:12px;font-weight:600;margin-bottom:6px;color:#0C447C">For the items you are billing to a customer</div>'
-    +'<div class="fg" style="margin-bottom:6px"><label>Customer</label><select id="rs-cust" onchange="_rsInvOpts()" style="'+inS+';font-family:inherit">'+custOpts+'</select></div>'
-    +'<div class="fg"><label>Invoice</label><select id="rs-invsel" style="'+inS+';font-family:inherit"><option value="new">+ New invoice</option></select></div>'
-    +'</div>',
+    +'<div style="font-size:12px;font-weight:600;margin-bottom:8px">Items on this receipt</div>'+rows,
     '<button class="btn bl" onclick="receiptSplitSave(event)"><i class="ti ti-check"></i>Save All</button><button class="btn" onclick="receiptPreview(_rsData,_pendingReceiptImg)">Whole receipt as 1 expense</button><button class="btn" onclick="expManager()">Cancel</button>'
   );
-  _rsToggleCust();
-  if(_rsPrefillCust)_rsInvOpts();
+  for(var ri=0;ri<lines.length;ri++){_rsToggleCust(ri);_rsInvOpts(ri);}
 }
-function _rsToggleCust(){
-  var lines=(_rsData&&_rsData.lines)||[];var any=false;
-  for(var i=0;i<lines.length;i++){var s=el('rs-dest-'+i);if(s&&s.value==='customer')any=true;}
-  var w=el('rs-custwrap');if(w)w.style.display=any?'block':'none';
+function _rsToggleCust(i){
+  var s=el('rs-dest-'+i);var w=el('rs-custwrap-'+i);
+  if(w)w.style.display=(s&&s.value==='customer')?'block':'none';
 }
-function _rsInvOpts(){
-  var cs=el('rs-cust'),sel=el('rs-invsel');if(!cs||!sel)return;
+function _rsInvOpts(i){
+  var cs=el('rs-cust-'+i),sel=el('rs-invsel-'+i);if(!cs||!sel)return;
   var name=cs.value,opts='<option value="new">+ New invoice</option>';
   ((typeof INV!=='undefined'&&INV)||[]).forEach(function(iv){
     if(iv.customer===name&&iv.status!=='Paid'){opts+='<option value="'+iv.id+'">#'+iv.num+' - '+(iv.vehicle||'no vehicle')+' - '+fm(invBal(iv))+' due</option>';}
@@ -7322,12 +7323,20 @@ function _rsAddStock(p,vendor,invn,mode){
 function receiptSplitSave(ev){
   var d=_rsData;if(!d)return;
   var lines=d.lines||[];
-  var parsed=lines.map(function(l,i){
-    return {desc:gv('rs-desc-'+i)||(l.desc||'Part'),qty:parseFloat(gv('rs-qty-'+i))||1,cost:parseFloat(gv('rs-cost-'+i))||0,dest:(el('rs-dest-'+i)?el('rs-dest-'+i).value:'stock'),partNum:l.partNum||''};
-  });
-  var needCust=parsed.some(function(p){return p.dest==='customer';}),custName='';
-  if(needCust){custName=el('rs-cust')?el('rs-cust').value:'';if(!custName){alert('Pick a customer for the items you are billing, or switch those items to Stock or Overhead.');return;}}
-  _rsPending={parsed:parsed,vendor:gv('rs-vendor'),invn:gv('rs-inv'),date:gv('rs-date')||_rcISO(''),ohCat:(el('rs-cat')?el('rs-cat').value:'Shop Supplies'),needCust:needCust,custName:custName,invChoice:(el('rs-invsel')?el('rs-invsel').value:'new'),img:_pendingReceiptImg,existingPath:_rsExistingPath,queueReqId:_rsQueueReqId};
+  var parsed=[];
+  for(var i=0;i<lines.length;i++){
+    var l=lines[i];
+    var dest=(el('rs-dest-'+i)?el('rs-dest-'+i).value:'stock');
+    var item={desc:gv('rs-desc-'+i)||(l.desc||'Part'),qty:parseFloat(gv('rs-qty-'+i))||1,cost:parseFloat(gv('rs-cost-'+i))||0,dest:dest,partNum:gv('rs-partnum-'+i)||''};
+    if(dest==='customer'){
+      var custName=el('rs-cust-'+i)?el('rs-cust-'+i).value:'';
+      if(!custName){alert('Pick a customer for item '+(i+1)+' ("'+item.desc+'"), or switch it to Stock or Overhead.');return;}
+      item.custName=custName;
+      item.invChoice=el('rs-invsel-'+i)?el('rs-invsel-'+i).value:'new';
+    }
+    parsed.push(item);
+  }
+  _rsPending={parsed:parsed,vendor:gv('rs-vendor'),invn:gv('rs-inv'),date:gv('rs-date')||_rcISO(''),ohCat:(el('rs-cat')?el('rs-cat').value:'Shop Supplies'),img:_pendingReceiptImg,existingPath:_rsExistingPath,queueReqId:_rsQueueReqId};
   if(parsed.some(function(p){return p.dest==='stock';})){_rsStockConfirm();}
   else{_rsCommit(ev);}
 }
@@ -7354,7 +7363,7 @@ function _rsStockConfirm(){
   var nCust=P.parsed.filter(function(p){return p.dest==='customer';}).length;
   var nOh=P.parsed.filter(function(p){return p.dest==='overhead';}).length;
   var extra='';
-  if(nCust||nOh){extra='<div style="font-size:12px;color:#888;margin:6px 0 2px">Also saving: '+[(nCust?nCust+' to '+(P.invChoice==='new'?'a new invoice for '+_rcEsc(P.custName):'an existing invoice'):''),(nOh?nOh+' to overhead':'')].filter(Boolean).join(', ')+'.</div>';}
+  if(nCust||nOh){extra='<div style="font-size:12px;color:#888;margin:6px 0 2px">Also saving: '+[(nCust?nCust+' to customer invoice(s)':''),(nOh?nOh+' to overhead':'')].filter(Boolean).join(', ')+'.</div>';}
   oM('Confirm inventory',
     '<div style="font-size:12px;color:#888;line-height:1.5;margin-bottom:12px">Check how each stock item lands so you don\u2019t get duplicates.</div>'+rows+extra,
     '<button class="btn bl" onclick="_rsCommit(event)"><i class="ti ti-check"></i>Confirm &amp; Save</button><button class="btn" onclick="receiptSplitPreview(_rsData,_pendingReceiptImg)">Back</button>'
@@ -7365,17 +7374,30 @@ async function _rsCommit(ev){
   var btn=ev&&ev.target?ev.target:null;if(btn&&btn.tagName!=='BUTTON')btn=btn.closest('button');if(btn)aiLoading(btn,'Saving\u2026');
   var url=P.existingPath||'';
   if(!url){try{if(P.img){var fn=Date.now()+'-'+Math.floor(Math.random()*10000)+'.jpg';url=(await uploadReceiptPrivate(P.img,fn))||'';}}catch(e){url='';}}
-  var invTarget=null;
-  if(P.needCust){
-    if(P.invChoice==='new'){
-      var cu=null;((typeof CUST!=='undefined'&&CUST)||[]).forEach(function(c){if(c.name===P.custName)cu=c;});
-      var ni={id:INV.length,num:invc++,customer:P.custName,phone:(cu&&cu.phone)||'',vehicle:'',vin:'',labor:'0.00',parts:'0.00',supplies:0,taxPct:(parseFloat(shop.taxRate)||0),subtotal:'0.00',tax:'0.00',total:'0.00',status:'Unpaid',payment:'',date:td(),lines:[],woTicket:'\u2014'};
-      INV.push(ni);invTarget=ni.id;
-    }else{invTarget=parseInt(P.invChoice);}
+
+  // One invoice per distinct (customer, invoice choice) pair, so several lines
+  // billed to the same customer land on the same invoice - but lines billed to
+  // DIFFERENT customers never get merged onto one invoice.
+  var invTargets={};
+  function resolveInvTarget(custName,invChoice){
+    var key=custName+'|'+invChoice;
+    if(invTargets.hasOwnProperty(key))return invTargets[key];
+    var id;
+    if(invChoice==='new'){
+      var cu=null;((typeof CUST!=='undefined'&&CUST)||[]).forEach(function(c){if(c.name===custName)cu=c;});
+      var ni={id:INV.length,num:invc++,customer:custName,phone:(cu&&cu.phone)||'',vehicle:'',vin:'',labor:'0.00',parts:'0.00',supplies:0,taxPct:(parseFloat(shop.taxRate)||0),subtotal:'0.00',tax:'0.00',total:'0.00',status:'Unpaid',payment:'',date:td(),lines:[],woTicket:'\u2014'};
+      INV.push(ni);id=ni.id;
+    }else{
+      id=parseInt(invChoice);
+    }
+    invTargets[key]=id;
+    return id;
   }
+
   var nStock=0,nCust=0,nOh=0;
   P.parsed.forEach(function(p){
-    if(p.dest==='customer'&&invTarget!=null){
+    if(p.dest==='customer'){
+      var invTarget=resolveInvTarget(p.custName,p.invChoice);
       var mk=getMarkup(p.cost),sell=+(p.cost*(1+mk/100)).toFixed(2);
       if(!INV[invTarget].lines)INV[invTarget].lines=[];
       INV[invTarget].lines.push({type:'part',partNum:p.partNum,desc:p.desc,vendor:P.vendor,qty:p.qty,cost:+p.cost.toFixed(2),markup:mk,sell:sell,tax:true,subtotal:+(p.qty*sell).toFixed(2),srcInvoice:P.invn});
@@ -7388,11 +7410,12 @@ async function _rsCommit(ev){
       _rsAddStock(p,P.vendor,P.invn,mode);nStock++;
     }
   });
-  if(invTarget!=null)recalcInv(invTarget);
+  var touchedIds=Object.keys(invTargets).map(function(k){return invTargets[k];});
+  touchedIds.forEach(function(id){recalcInv(id);});
   if(P.queueReqId){var rq=TECH_REQS.find(function(x){return x.id===P.queueReqId;});if(rq)rq.status='Routed';}
   _pendingReceiptImg=null;_rsData=null;_rsPending=null;_rsExistingPath='';_rsQueueReqId='';_rsPrefillCust='';_rsDefaultDest='stock';
   await saveAll();
-  var bits=[];if(nStock)bits.push(nStock+' to stock');if(nCust)bits.push(nCust+' to invoice'+(invTarget!=null?' #'+INV[invTarget].num:''));if(nOh)bits.push(nOh+' to overhead');
+  var bits=[];if(nStock)bits.push(nStock+' to stock');if(nCust)bits.push(nCust+' to '+(touchedIds.length===1?'invoice #'+INV[touchedIds[0]].num:touchedIds.length+' invoices'));if(nOh)bits.push(nOh+' to overhead');
   expManager();
   setTimeout(function(){alert('\u2705 Saved: '+bits.join(', ')+'.');},250);
 }
@@ -7431,7 +7454,7 @@ function expCPAExport(range){
 }
 
 function _receiptPrompt(){
-  return 'This is a photo of a business receipt, invoice, or bill for a heavy-duty diesel truck & trailer repair shop. Read it and return ONLY valid JSON - no markdown, no commentary. Format exactly: {"vendor":"","invoice":"","date":"YYYY-MM-DD","subtotal":0,"tax":0,"total":0,"category":"","note":"","lines":[{"partNum":"","desc":"","qty":1,"cost":0}]}. Rules: "vendor" is the seller/store name. "invoice" is the vendor invoice or receipt number printed on it (often labeled Invoice #, INV, Ticket, or Order #); use "" if none. "total" is the final amount paid including tax. "date" is the purchase date as YYYY-MM-DD (if the year is missing assume the current year; if unreadable use ""). "category" MUST be exactly one of these strings: '+EXP_CATS.join(' | ')+'. Choose the closest fit (a fuel/diesel receipt is Fuel; counter parts are Shop Supplies unless clearly tools/equipment; eating out is Other; a phone or internet bill is Phone / Internet, etc). "note" is one short line naming the main item(s) or purpose. "lines" is the itemized list of parts/products purchased: one object per line item with partNum (part number if shown, else ""), desc (short part name), qty (quantity, default 1), and cost (UNIT cost before tax - the price paid per single item). If this is NOT an itemized parts receipt (for example a utility bill, fuel, rent, or a single service charge), return "lines":[]. Use 0 for any number you cannot read and "" for any text you cannot read.';
+  return 'This is a photo of a business receipt, invoice, or bill for a heavy-duty diesel truck & trailer repair shop. Read it and return ONLY valid JSON - no markdown, no commentary. Format exactly: {"vendor":"","invoice":"","date":"YYYY-MM-DD","subtotal":0,"tax":0,"total":0,"category":"","note":"","lines":[{"partNum":"","desc":"","qty":1,"cost":0,"custHint":""}]}. Rules: "vendor" is the seller/store name. "invoice" is the vendor invoice or receipt number printed on it (often labeled Invoice #, INV, Ticket, or Order #); use "" if none. "total" is the final amount paid including tax. "date" is the purchase date as YYYY-MM-DD (if the year is missing assume the current year; if unreadable use ""). "category" MUST be exactly one of these strings: '+EXP_CATS.join(' | ')+'. Choose the closest fit (a fuel/diesel receipt is Fuel; counter parts are Shop Supplies unless clearly tools/equipment; eating out is Other; a phone or internet bill is Phone / Internet, etc). "note" is one short line naming the main item(s) or purpose. "lines" is the itemized list of parts/products purchased: one object per line item with partNum, desc (short part name), qty (quantity, default 1), cost (UNIT cost before tax - the price paid per single item), and custHint. IMPORTANT: "partNum" is ONLY a manufacturer/vendor part number (letters and digits, e.g. "PF46269" or "241D/DDE A4722005052") - if none is printed, use "". Some shop trips buy parts for several different customers on one receipt, so a line may have a customer or job name printed next to it (a person\'s name or a company name) - if you see that, put it in "custHint" for that line and leave "partNum" as "". NEVER put a customer/job name in "partNum" and NEVER combine a customer name into "desc". If this is NOT an itemized parts receipt (for example a utility bill, fuel, rent, or a single service charge), return "lines":[]. Use 0 for any number you cannot read and "" for any text you cannot read.';
 }
 async function tpGotParts(inp,woId){
   var f=inp.files&&inp.files[0];if(!f)return;inp.value='';
