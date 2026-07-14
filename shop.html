@@ -340,8 +340,17 @@ var LC=['Chassis/Cab','Engine','Transmission','Drive Axle','Steer Axle','Brakes'
 function getMarkup(cost){
   var tiers=(shop&&shop.markupTiers)||[{max:300,pct:45},{max:1000,pct:35},{max:2500,pct:25},{max:9999999,pct:15}];
   var c=parseFloat(cost)||0;
-  for(var i=0;i<tiers.length;i++){if(c<=tiers[i].max)return tiers[i].pct;}
-  return tiers[tiers.length-1].pct;
+  // Sort by cutoff so a tier list saved out of order (e.g. from the old "Add
+  // Tier" button, which used to append after the catch-all) still picks the
+  // correct percentage instead of whichever tier happens to come first.
+  // Each tier's lower bound is its own explicit .min if the owner set one,
+  // otherwise the previous tier's cutoff (old tiers only ever stored .max).
+  var sorted=tiers.slice().sort(function(a,b){return a.max-b.max;});
+  for(var i=0;i<sorted.length;i++){
+    var lo=sorted[i].min!=null?sorted[i].min:(i===0?0:sorted[i-1].max);
+    if(c>=lo&&c<=sorted[i].max)return sorted[i].pct;
+  }
+  return (shop&&shop.markup!=null)?shop.markup:15;
 }
 function getSell(cost){return parseFloat((parseFloat(cost)*(1+getMarkup(cost)/100)).toFixed(2));}
 
@@ -630,8 +639,13 @@ function spFilter(id){
   matches=matches.slice(0,50);
   dd._matches=matches;
   if(!matches.length){dd.innerHTML='<div style="padding:12px;font-size:13px;color:#888">No matches</div>';dd.style.display='block';return;}
+  // Use mousedown (not click) to select: on phones, a tap outside a focused
+  // input often just dismisses the keyboard on its own first and swallows
+  // that tap instead of registering it as a click, so a result looked
+  // selectable but needed a second tap. mousedown fires before the input
+  // blurs, so preventDefault()-ing it selects on the very first touch.
   dd.innerHTML=matches.map(function(it,idx){
-    return '<div onclick="spSelect(\''+id+'\','+idx+')" style="padding:12px;cursor:pointer;border-bottom:0.5px solid var(--bd);font-size:14px" onmouseover="this.style.background=\'#f5f5f7\'" onmouseout="this.style.background=\'\'">'
+    return '<div onmousedown="event.preventDefault();spSelect(\''+id+'\','+idx+')" style="padding:12px;cursor:pointer;border-bottom:0.5px solid var(--bd);font-size:14px" onmouseover="this.style.background=\'#f5f5f7\'" onmouseout="this.style.background=\'\'">'
       +'<div style="font-weight:500">'+_spEsc(it.label)+'</div>'
       +(it.sub?'<div style="font-size:12px;color:#888;margin-top:2px">'+_spEsc(it.sub)+'</div>':'')
       +'</div>';
@@ -831,7 +845,7 @@ function srchP(inp,wid,idx){
   if(!dd||q.length<1){if(dd)dd.style.display='none';return;}
   var m=PARTS.filter(function(p){return p.name.toLowerCase().includes(q)||(p.partNum||'').toLowerCase().includes(q);}).slice(0,6);
   if(!m.length){dd.style.display='none';return;}
-  dd.innerHTML=m.map(function(p){return'<div onclick="selP('+wid+','+idx+',\''+p.partNum+'\',\''+p.name.replace(/'/g,"\\'")+'\','+p.cost+')" style="padding:6px 8px;cursor:pointer;border-bottom:0.5px solid var(--bd)"><span style="color:#185FA5;font-weight:600">'+(p.partNum||'—')+'</span> '+p.name+' <span style="color:#888">$'+p.cost+'</span></div>';}).join('');
+  dd.innerHTML=m.map(function(p){return'<div onmousedown="event.preventDefault();selP('+wid+','+idx+',\''+p.partNum+'\',\''+p.name.replace(/'/g,"\\'")+'\','+p.cost+')" style="padding:6px 8px;cursor:pointer;border-bottom:0.5px solid var(--bd)"><span style="color:#185FA5;font-weight:600">'+(p.partNum||'—')+'</span> '+p.name+' <span style="color:#888">$'+p.cost+'</span></div>';}).join('');
   dd.style.display='block';
 }
 function selP(wid,idx,pn,desc,cost){
@@ -3882,7 +3896,7 @@ function rSet(){
     +'<div class="card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><div style="font-size:14px;font-weight:600">Technicians</div><button class="btn xs bl" onclick="addTech()"><i class="ti ti-plus"></i>Add</button></div><div id="tech-lst"></div></div>'
     +'<div class="card"><div style="font-size:14px;font-weight:600;margin-bottom:12px">Change PIN</div><div class="g2"><div class="fg"><label>New PIN (4 digits)</label><input id="np1" type="password" maxlength="4" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%" placeholder="New PIN"></div><div class="fg"><label>Confirm PIN</label><input id="np2" type="password" maxlength="4" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%" placeholder="Confirm"></div></div></div>'
     +'<div class="card"><div style="font-size:14px;font-weight:600;margin-bottom:6px">Office Staff Login</div><div style="font-size:12px;color:#888;margin-bottom:12px">Set a separate 4-digit PIN for an office employee. They sign in with this PIN and get a limited view: no Profit Dashboard, Reports, Tech pay, Settings, part costs, or revenue figures. Leave blank to disable office access.</div><div class="g2"><div class="fg"><label>Office PIN (4 digits)</label><input id="op1" type="text" inputmode="numeric" maxlength="4" value="'+(OPIN||'')+'" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%" placeholder="e.g. 5678"></div><div class="fg" style="display:flex;align-items:flex-end"><div style="font-size:12px;font-weight:600;color:'+(OPIN?'#3B6D11':'#888')+'">'+(OPIN?'● Office login active':'○ Office login off')+'</div></div></div></div>'
-    +'<div class="card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><div style="font-size:14px;font-weight:600">Parts Markup Tiers</div><button class="btn xs bl" onclick="shop.markupTiers=shop.markupTiers||[];shop.markupTiers.push({max:5000,pct:20});rMarkupTiers()"><i class="ti ti-plus"></i>Add Tier</button></div><div style="font-size:12px;color:#888;margin-bottom:10px">Auto markup based on part cost.</div><div id=\"mk-tiers\"></div><button class="btn bl xs" style="margin-top:8px" onclick="saveAll()">Save Tiers</button></div>'
+    +'<div class="card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><div style="font-size:14px;font-weight:600">Parts Markup Tiers</div><button class="btn xs bl" onclick="addMarkupTier()"><i class="ti ti-plus"></i>Add Tier</button></div><div style="font-size:12px;color:#888;margin-bottom:10px">Auto markup based on part cost. Type in the dollar cutoff for each range and its markup %.</div><div id=\"mk-tiers\"></div><button class="btn bl xs" style="margin-top:8px" onclick="saveAll()">Save Tiers</button></div>'
     +'<div class="card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><div style="font-size:14px;font-weight:600">Parts Vendors <span style="font-size:11px;color:#888;font-weight:400">(internal — not shown on invoices)</span></div><button class="btn xs bl" onclick="addVendor()"><i class="ti ti-plus"></i>Add</button></div><div id="vend-lst"></div></div>'
     +'<div class="card"><div style="font-size:14px;font-weight:600;margin-bottom:8px">Invoice Terms</div><textarea id="ster" style="width:100%;padding:8px 10px;font-size:13px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;font-family:inherit;resize:vertical;min-height:60px">'+shop.terms+'</textarea></div>'
     +'<div class="card"><div style="font-size:14px;font-weight:600;margin-bottom:4px">Invoice Warranty Text</div><div style="font-size:12px;color:#888;margin-bottom:8px">Printed at the bottom of every invoice. Edit anytime.</div><textarea id="swar" style="width:100%;padding:8px 10px;font-size:13px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;font-family:inherit;resize:vertical;min-height:120px">'+(shop.warranty||'')+'</textarea></div>'
@@ -4590,13 +4604,33 @@ function buildWorkbook(){
 }
 
 
+function addMarkupTier(){
+  shop.markupTiers=shop.markupTiers||[{max:300,pct:45},{max:1000,pct:35},{max:2500,pct:25},{max:9999999,pct:15}];
+  var tiers=shop.markupTiers;
+  // Insert before the last (catch-all) tier so the catch-all always stays last.
+  var prevMax=tiers.length>1?tiers[tiers.length-2].max:0;
+  var lastMax=tiers[tiers.length-1].max;
+  var newMax=lastMax>9999998?prevMax+500:Math.round((prevMax+lastMax)/2);
+  tiers.splice(tiers.length-1,0,{max:newMax,pct:20});
+  rMarkupTiers();
+}
 function rMarkupTiers(){
   var tl=el("mk-tiers");if(!tl)return;
-  var tiers=shop.markupTiers||[{max:300,pct:45},{max:1000,pct:35},{max:2500,pct:25},{max:9999999,pct:15}];
+  if(!shop.markupTiers)shop.markupTiers=[{max:300,pct:45},{max:1000,pct:35},{max:2500,pct:25},{max:9999999,pct:15}];
+  // Self-heal tier order (e.g. from the old "Add Tier" button, which used to
+  // append after the catch-all instead of before it) so the list always
+  // displays low-to-high with the catch-all last.
+  shop.markupTiers.sort(function(a,b){return a.max-b.max;});
+  var tiers=shop.markupTiers;
   tl.innerHTML=tiers.map(function(t,i){
-    var label=i===0?"$0 — $"+t.max:(i===tiers.length-1?"$"+tiers[i-1].max+"+":'$'+tiers[i-1].max+' — $'+t.max);
-    return'<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:0.5px solid var(--bd)">'
-      +'<div style="flex:1;font-size:13px;font-weight:500">'+label+'</div>'
+    var isLast=i===tiers.length-1;
+    var lowerBound=t.min!=null?t.min:(i===0?0:tiers[i-1].max);
+    return'<div style="display:flex;align-items:center;gap:6px;padding:8px 0;border-bottom:0.5px solid var(--bd)">'
+      +'<span style="font-size:12px;color:#888">$</span><input type="number" value="'+lowerBound+'" style="width:64px;padding:6px 8px;font-size:14px;border:0.5px solid var(--bd);border-radius:6px;background:#f5f5f7" onchange="shop.markupTiers['+i+'].min=parseFloat(this.value)||0;rMarkupTiers()">'
+      +'<span style="font-size:12px;color:#888">to</span>'
+      +(isLast
+        ?'<div style="flex:1;font-size:13px;color:#888;font-style:italic">and up</div>'
+        :'<input type="number" value="'+t.max+'" style="flex:1;min-width:0;padding:6px 8px;font-size:14px;border:0.5px solid var(--bd);border-radius:6px;background:#f5f5f7" onchange="shop.markupTiers['+i+'].max=parseFloat(this.value)||'+t.max+';rMarkupTiers()">')
       +'<div style="display:flex;align-items:center;gap:5px"><input type="number" value="'+t.pct+'" style="width:58px;padding:6px 8px;font-size:14px;border:0.5px solid var(--bd);border-radius:6px;background:#f5f5f7;text-align:center" onchange="shop.markupTiers['+i+'].pct=parseInt(this.value)||'+t.pct+'">%</div>'
       +(i>0?'<button class="btn rd xs" onclick="shop.markupTiers.splice('+i+',1);rMarkupTiers()">Del</button>':'')
       +'</div>';
