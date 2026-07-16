@@ -3372,11 +3372,83 @@ function vCust(i){
     +'<div class="tabs"><div class="tab on" onclick="sTb(this,\'tu\')">Units ('+(c.units||[]).length+')</div><div class="tab" onclick="sTb(this,\'tj\')">Jobs ('+jobs.length+')</div><div class="tab" onclick="sTb(this,\'ti\')">Invoices ('+invs.length+')</div></div>'
     +'<div class="tbc on" id="tu"><div id="unit-list-'+i+'">'+uRows+'</div><button class="btn xs bl" style="margin-top:10px" onclick="addU('+i+')"><i class="ti ti-plus"></i>Add Unit</button></div>'
     +'<div class="tbc" id="tj">'+jRows+'</div>'
-    +'<div class="tbc" id="ti">'+iRows+'</div>';
+    +'<div class="tbc" id="ti">'+(unp>0.005?'<button class="btn xs bl" style="margin-bottom:10px" onclick="custBulkPay('+i+')"><i class="ti ti-cash"></i>Record Payment</button>':'')+iRows+'</div>';
   oM(c.name,body,
     '<button class="btn bl" onclick="svCust('+i+')"><i class="ti ti-check"></i>Save Info</button>'
     +'<button class="btn rd" onclick="if(confirm(\'Delete '+c.name+'? This cannot be undone.\'))deleteCust('+i+')"><i class="ti ti-trash"></i>Delete</button>'
     +'<button class="btn" onclick="cM()">Close</button>');
+}
+function custBulkPay(ci){
+  var c=CUST[ci];if(!c)return;
+  var invs=activeInv().filter(function(iv){return iv.customer===c.name&&iv.status!=='Paid';});
+  invs.sort(function(a,b){return new Date(a.date)-new Date(b.date);});
+  if(!invs.length){alert('No unpaid invoices for this customer.');return;}
+  var rows=invs.map(function(iv){
+    var bal=invBal(iv);
+    return'<label style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid var(--bd);font-size:13px;cursor:pointer">'
+      +'<span><input type="checkbox" class="cbp-chk" data-bal="'+bal.toFixed(2)+'" checked onchange="cbpRecalc()" style="margin-right:8px;width:16px;height:16px;vertical-align:middle">Invoice #'+iv.num+' <span style="color:#888;font-size:11px">'+iv.date+'</span></span>'
+      +'<strong>'+fm(bal)+'</strong>'
+      +'</label>';
+  }).join('');
+  var totalBal=invs.reduce(function(s,iv){return s+invBal(iv);},0);
+  oM('Record Payment — '+c.name,
+    '<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">Select Invoices to Apply Payment To</div>'
+    +'<div id="cbp-list" style="max-height:220px;overflow:auto;margin-bottom:10px">'+rows+'</div>'
+    +'<div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;padding:6px 0;border-top:0.5px solid var(--bd);margin-bottom:10px"><span>Selected Total</span><span id="cbp-seltotal">'+fm(totalBal)+'</span></div>'
+    +'<div class="fg"><label>Amount Received</label><input type="number" id="cbp-amt" step="0.01" min="0" value="'+totalBal.toFixed(2)+'" style="padding:9px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
+    +'<div style="display:flex;gap:8px;margin:10px 0">'
+    +'<select id="cbp-mth" style="flex:1;padding:9px 8px;font-size:13px;border:0.5px solid var(--bd);border-radius:8px;font-family:inherit;background:#f5f5f7"><option>Cash</option><option>Card</option><option>Check</option><option>Zelle</option><option>Net-30</option></select>'
+    +'<input type="date" id="cbp-date" value="'+new Date().toISOString().split('T')[0]+'" style="flex:1;padding:8px 10px;font-size:13px;border:0.5px solid var(--bd);border-radius:8px;font-family:inherit;background:#f5f5f7">'
+    +'</div>'
+    +'<input id="cbp-note" placeholder="Note (check #, ref...)" style="padding:8px 10px;font-size:13px;border:0.5px solid var(--bd);border-radius:8px;font-family:inherit;background:#f5f5f7;width:100%;margin-bottom:6px">'
+    +'<div style="font-size:11px;color:#888">Applies to the oldest selected invoice first. If the amount doesn’t cover everything checked, the last invoice it reaches gets a partial payment and stays open — nothing gets overpaid.</div>',
+    '<button class="btn bl" onclick="svCustBulkPay('+ci+')"><i class="ti ti-cash"></i>Save Payment</button><button class="btn" onclick="cM()">Cancel</button>'
+  );
+}
+function cbpRecalc(){
+  var boxes=document.querySelectorAll('.cbp-chk');
+  var total=0;
+  boxes.forEach(function(b){if(b.checked)total+=parseFloat(b.dataset.bal)||0;});
+  var st=document.getElementById('cbp-seltotal');if(st)st.textContent=fm(total);
+  var amtEl=document.getElementById('cbp-amt');if(amtEl)amtEl.value=total.toFixed(2);
+}
+function svCustBulkPay(ci){
+  var c=CUST[ci];if(!c)return;
+  var amt=parseFloat(el('cbp-amt')?el('cbp-amt').value:'');
+  if(!amt||amt<=0){alert('Enter a payment amount.');return;}
+  var mth=el('cbp-mth')?el('cbp-mth').value:'';
+  var dv=el('cbp-date')?el('cbp-date').value:'';
+  var dstr=dv?new Date(dv+'T12:00:00').toLocaleDateString():td();
+  var note=el('cbp-note')?el('cbp-note').value.trim():'';
+  var boxes=document.querySelectorAll('.cbp-chk');
+  var invs=activeInv().filter(function(iv){return iv.customer===c.name&&iv.status!=='Paid';});
+  invs.sort(function(a,b){return new Date(a.date)-new Date(b.date);});
+  var selected=[];
+  invs.forEach(function(iv,idx){if(boxes[idx]&&boxes[idx].checked)selected.push(iv);});
+  if(!selected.length){alert('Select at least one invoice.');return;}
+  var remaining=amt;
+  var summary=[];
+  selected.forEach(function(iv){
+    if(remaining<=0.005)return;
+    var bal=invBal(iv);
+    var pay=Math.min(bal,remaining);
+    if(pay<=0)return;
+    iv.payments=iv.payments||[];
+    iv.payments.push({amt:pay,method:mth,date:dstr,note:note});
+    if(!iv.payment)iv.payment=mth;
+    var wasPaid=iv.status==='Paid';
+    syncInvStatus(iv);
+    remaining-=pay;
+    summary.push('#'+iv.num+': '+fm(pay)+(iv.status==='Paid'?' (paid in full)':' (partial)'));
+    if(iv.status==='Paid'&&!wasPaid)autoNotify('invoice_paid',{customer:iv.customer,phone:iv.phone,num:iv.num,total:parseFloat(iv.total)||0,payment:iv.payment,vehicle:iv.vehicle});
+  });
+  saveAll();
+  cM();
+  var msg='Payment recorded:\n'+summary.join('\n');
+  if(remaining>0.005)msg+='\n\n'+fm(remaining)+' left over — not applied to any invoice (selected invoices are now paid in full).';
+  alert(msg);
+  rINV();rDash();
+  vCust(ci);
 }
 function buildUnitRows(ci){
   var c=CUST[ci];
