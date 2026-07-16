@@ -3356,6 +3356,19 @@ function vCust(i){
     +'</div>'
     +'<div style="font-size:12px;font-weight:600;margin:4px 0 8px;color:#555;text-transform:uppercase;letter-spacing:0.5px">Contact Preferences</div>'
     +custPrefRows('ec2-',c.prefs)
+    +'<div style="font-size:12px;font-weight:600;margin:12px 0 8px;color:#555;text-transform:uppercase;letter-spacing:0.5px">Fleet Account</div>'
+    +'<label style="display:flex;align-items:center;justify-content:space-between;background:'+(c.isFleet?'#185FA5':'#f0f0f2')+';color:'+(c.isFleet?'#fff':'#555')+';border-radius:8px;padding:9px 12px;font-size:13px;font-weight:500;margin-bottom:8px;cursor:pointer;transition:background .15s"><span>Fleet Account (unlocks Fleet Accounts page, statements, portal link)</span><input type="checkbox" id="ec-fleet" '+(c.isFleet?'checked':'')+' onchange="this.parentElement.style.background=this.checked?\'#185FA5\':\'#f0f0f2\';this.parentElement.style.color=this.checked?\'#fff\':\'#555\'" style="width:17px;height:17px"></label>'
+    +'<div class="g2" style="margin-bottom:12px">'
+    +inp('ec-fpo','Fleet PO #',c.fleetPO,'PO number')
+    +inp('ec-fbill','Billing Contact',c.fleetBillingContact,'Name or email')
+    +inp('ec-fdisc','Labor Discount %',c.fleetDiscount,'0','number')
+    +inp('ec-fmk','Parts Markup %',c.fleetPartsMarkup,'25','number')
+    +'<div class="fg"><label>Payment Terms</label><select id="ec-fterms" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;font-family:inherit;background:#f5f5f7;width:100%;-webkit-appearance:none">'
+    +'<option value="due_on_receipt"'+(!c.fleetTerms||c.fleetTerms==='due_on_receipt'?' selected':'')+'>Due on Receipt</option>'
+    +'<option value="net15"'+(c.fleetTerms==='net15'?' selected':'')+'>Net-15</option>'
+    +'<option value="net30"'+(c.fleetTerms==='net30'?' selected':'')+'>Net-30</option>'
+    +'</select></div>'
+    +'</div>'
     +'<div class="tabs"><div class="tab on" onclick="sTb(this,\'tu\')">Units ('+(c.units||[]).length+')</div><div class="tab" onclick="sTb(this,\'tj\')">Jobs ('+jobs.length+')</div><div class="tab" onclick="sTb(this,\'ti\')">Invoices ('+invs.length+')</div></div>'
     +'<div class="tbc on" id="tu"><div id="unit-list-'+i+'">'+uRows+'</div><button class="btn xs bl" style="margin-top:10px" onclick="addU('+i+')"><i class="ti ti-plus"></i>Add Unit</button></div>'
     +'<div class="tbc" id="tj">'+jRows+'</div>'
@@ -3393,6 +3406,10 @@ function svCust(i){
   CUST[i].name=newName;CUST[i].phone=gv('ec-p');CUST[i].email=gv('ec-e');
   CUST[i].dot=gv('ec-d');CUST[i].mc=gv('ec-m');CUST[i].payTerms=gv('ec-t');CUST[i].notes=gv('ec-notes');
   CUST[i].contactFirst=gv('ec-cf');CUST[i].contactLast=gv('ec-cl');CUST[i].cell=gv('ec-cell');CUST[i].prefs=readPrefs('ec2-');
+  CUST[i].isFleet=!!(el('ec-fleet')&&el('ec-fleet').checked);
+  CUST[i].fleetPO=gv('ec-fpo');CUST[i].fleetBillingContact=gv('ec-fbill');
+  CUST[i].fleetDiscount=parseFloat(gv('ec-fdisc'))||0;CUST[i].fleetPartsMarkup=parseFloat(gv('ec-fmk'))||0;
+  CUST[i].fleetTerms=el('ec-fterms')?el('ec-fterms').value:'due_on_receipt';
   // Update name references in work orders and invoices if name changed
   if(oldName!==newName){
     WO.forEach(function(w){if(w.customer===oldName)w.customer=newName;});
@@ -3549,7 +3566,7 @@ function rFleetAccounts(){
         +'<button onclick="vCust('+realIdx+')" class="btn xs bl"><i class="ti ti-eye"></i>View Account</button>'
         +'<button onclick="genFleetStatement('+realIdx+')" class="btn xs" style="background:#3B6D11;color:#fff"><i class="ti ti-file-invoice"></i>Monthly Statement</button>'
         +'<button onclick="fleetPortalLink('+realIdx+')" class="btn xs" style="background:#534AB7;color:#fff"><i class="ti ti-world"></i>Customer Portal</button>'
-        +'<button onclick="editCust('+realIdx+')" class="btn xs"><i class="ti ti-edit"></i>Edit</button>'
+        +'<button onclick="vCust('+realIdx+')" class="btn xs"><i class="ti ti-edit"></i>Edit</button>'
         +'</div>'
         +'</div>';
     }).join(''):'<div class="card" style="font-size:13px;color:#888">No fleet accounts yet. Open a customer → Edit → turn on Fleet Account.</div>');
