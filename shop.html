@@ -3383,22 +3383,13 @@ function custBulkPay(ci){
   var invs=activeInv().filter(function(iv){return iv.customer===c.name&&iv.status!=='Paid';});
   invs.sort(function(a,b){return new Date(a.date)-new Date(b.date);});
   if(!invs.length){alert('No unpaid invoices for this customer.');return;}
-  var rows=invs.map(function(iv){
-    var bal=invBal(iv);
-    return'<div class="cbp-row" style="padding:9px 0;border-bottom:0.5px solid var(--bd)">'
-      +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">'
-      +'<label style="font-size:13px;display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" class="cbp-chk" data-num="'+iv.num+'" checked onchange="cbpRowToggle('+iv.num+')" style="width:16px;height:16px">Invoice #'+iv.num+' <span style="color:#888;font-size:11px">'+iv.date+'</span></label>'
-      +'<span style="font-size:12px;color:#888">Balance: <strong style="color:#333">'+fm(bal)+'</strong></span>'
-      +'</div>'
-      +'<div style="display:flex;align-items:center;gap:8px;padding-left:24px">'
-      +'<input type="number" class="cbp-amt" data-num="'+iv.num+'" data-bal="'+bal.toFixed(2)+'" step="0.01" min="0" value="'+bal.toFixed(2)+'" oninput="cbpRowToggle('+iv.num+')" style="flex:1;padding:7px 9px;font-size:13px;border:0.5px solid var(--bd);border-radius:6px;background:#fff">'
-      +'<span class="cbp-lbl" id="cbp-lbl-'+iv.num+'" style="font-size:11px;font-weight:700;color:#3B6D11;min-width:52px;text-align:right">Full</span>'
-      +'</div>'
-      +'</div>';
-  }).join('');
+  var rows=invs.map(function(iv){return cbpRowHtml(iv,true);}).join('');
   var totalBal=invs.reduce(function(s,iv){return s+invBal(iv);},0);
   oM('Record Payment — '+c.name,
-    '<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">Apply Payment to Invoices</div>'
+    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">'
+    +'<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px">Apply Payment to Invoices</div>'
+    +'<div style="font-size:11px"><a href="#" onclick="cbpSelectAll(true);return false" style="color:#185FA5;text-decoration:none;font-weight:600">Select All</a> · <a href="#" onclick="cbpSelectAll(false);return false" style="color:#888;text-decoration:none">Clear</a></div>'
+    +'</div>'
     +'<div id="cbp-list" style="max-height:280px;overflow:auto;margin-bottom:10px">'+rows+'</div>'
     +'<div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;padding:8px 0;border-top:0.5px solid var(--bd);margin-bottom:10px"><span>Total Applying</span><span id="cbp-seltotal" style="color:#185FA5">'+fm(totalBal)+'</span></div>'
     +'<div style="display:flex;gap:8px;margin-bottom:10px">'
@@ -3409,6 +3400,21 @@ function custBulkPay(ci){
     +'<div style="font-size:11px;color:#888">Uncheck an invoice to leave it out. Change any amount to make it a partial payment — it’ll show Full or Partial next to it.</div>',
     '<button class="btn bl" onclick="svCustBulkPay('+ci+')"><i class="ti ti-cash"></i>Save Payment</button><button class="btn" onclick="cM()">Cancel</button>'
   );
+}
+function cbpRowHtml(iv,checked){
+  var bal=invBal(iv);
+  var lblTxt=checked?'Full':'Skipped';
+  var lblColor=checked?'#3B6D11':'#888';
+  return'<div class="cbp-row" style="padding:9px 0;border-bottom:0.5px solid var(--bd)">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">'
+    +'<label style="font-size:13px;display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" class="cbp-chk" data-num="'+iv.num+'" '+(checked?'checked':'')+' onchange="cbpRowToggle('+iv.num+')" style="width:16px;height:16px">Invoice #'+iv.num+' <span style="color:#888;font-size:11px">'+iv.date+'</span></label>'
+    +'<span style="font-size:12px;color:#888">Balance: <strong style="color:#333">'+fm(bal)+'</strong></span>'
+    +'</div>'
+    +'<div style="display:flex;align-items:center;gap:8px;padding-left:24px">'
+    +'<input type="number" class="cbp-amt" data-num="'+iv.num+'" data-bal="'+bal.toFixed(2)+'" step="0.01" min="0" value="'+bal.toFixed(2)+'" '+(checked?'':'disabled')+' oninput="cbpRowToggle('+iv.num+')" style="flex:1;padding:7px 9px;font-size:13px;border:0.5px solid var(--bd);border-radius:6px;background:#fff">'
+    +'<span class="cbp-lbl" id="cbp-lbl-'+iv.num+'" style="font-size:11px;font-weight:700;color:'+lblColor+';min-width:52px;text-align:right">'+lblTxt+'</span>'
+    +'</div>'
+    +'</div>';
 }
 function cbpRowToggle(num){
   var chk=document.querySelector('.cbp-chk[data-num="'+num+'"]');
@@ -3435,41 +3441,59 @@ function cbpRecalcTotal(){
   });
   var st=document.getElementById('cbp-seltotal');if(st)st.textContent=fm(total);
 }
-function svCustBulkPay(ci){
-  var c=CUST[ci];if(!c)return;
+function cbpSelectAll(state){
+  document.querySelectorAll('.cbp-chk').forEach(function(c){c.checked=state;cbpRowToggle(parseInt(c.dataset.num));});
+}
+function cbpApply(){
   var mth=el('cbp-mth')?el('cbp-mth').value:'';
   var dv=el('cbp-date')?el('cbp-date').value:'';
   var dstr=dv?new Date(dv+'T12:00:00').toLocaleDateString():td();
   var note=el('cbp-note')?el('cbp-note').value.trim():'';
-  var invs=activeInv().filter(function(iv){return iv.customer===c.name&&iv.status!=='Paid';});
-  var summary=[],total=0,skip=false;
+  // Snapshot every checked row's number+amount BEFORE touching any invoice.
+  // Paying an invoice off in full can pop the "Notify Customer" dialog,
+  // which replaces this whole modal's DOM - if we queried .cbp-chk/.cbp-amt
+  // again mid-loop after that, every invoice after the first paid-off one
+  // would silently vanish from the page and get skipped.
+  var picks=[];
   document.querySelectorAll('.cbp-amt').forEach(function(a){
-    if(skip)return;
     var num=parseInt(a.dataset.num);
     var chk=document.querySelector('.cbp-chk[data-num="'+num+'"]');
     if(!chk||!chk.checked)return;
     var amt=parseFloat(a.value)||0;
     if(amt<=0)return;
-    var iv=invs.find(function(x){return x.num===num;});
+    picks.push({num:num,amt:amt});
+  });
+  var summary=[],total=0,blocked=false,newlyPaid=[];
+  picks.forEach(function(p){
+    if(blocked)return;
+    var iv=INV.find(function(x){return x.num===p.num;});
     if(!iv)return;
     var bal=invBal(iv);
-    if(amt>bal+0.005&&!confirm('Amount for #'+iv.num+' ('+fm(amt)+') is more than its balance ('+fm(bal)+'). Record anyway?')){skip=true;return;}
+    if(p.amt>bal+0.005&&!confirm('Amount for #'+iv.num+' ('+fm(p.amt)+') is more than its balance ('+fm(bal)+'). Record anyway?')){blocked=true;return;}
     iv.payments=iv.payments||[];
-    iv.payments.push({amt:amt,method:mth,date:dstr,note:note});
+    iv.payments.push({amt:p.amt,method:mth,date:dstr,note:note});
     if(!iv.payment)iv.payment=mth;
     var wasPaid=iv.status==='Paid';
     syncInvStatus(iv);
-    total+=amt;
-    summary.push('#'+iv.num+': '+fm(amt)+(iv.status==='Paid'?' (paid in full)':' (partial)'));
-    if(iv.status==='Paid'&&!wasPaid)autoNotify('invoice_paid',{customer:iv.customer,phone:iv.phone,num:iv.num,total:parseFloat(iv.total)||0,payment:iv.payment,vehicle:iv.vehicle});
+    total+=p.amt;
+    summary.push('#'+iv.num+': '+fm(p.amt)+(iv.status==='Paid'?' (paid in full)':' (partial)'));
+    if(iv.status==='Paid'&&!wasPaid)newlyPaid.push({customer:iv.customer,phone:iv.phone,num:iv.num,total:parseFloat(iv.total)||0,payment:iv.payment,vehicle:iv.vehicle});
   });
-  if(skip)return;
-  if(!summary.length){alert('Enter an amount for at least one checked invoice.');return;}
+  if(blocked)return null;
+  return{summary:summary,total:total,newlyPaid:newlyPaid};
+}
+function svCustBulkPay(ci){
+  var res=cbpApply();
+  if(!res)return;
+  if(!res.summary.length){alert('Enter an amount for at least one checked invoice.');return;}
   saveAll();
   cM();
-  alert('Payment recorded ('+fm(total)+' total):\n'+summary.join('\n'));
+  var msg='Payment recorded ('+fm(res.total)+' total):\n'+res.summary.join('\n');
+  if(res.newlyPaid.length>1)msg+='\n\n'+res.newlyPaid.length+' invoices are now fully paid.';
+  alert(msg);
   rINV();rDash();
-  vCust(ci);
+  if(res.newlyPaid.length===1)autoNotify('invoice_paid',res.newlyPaid[0]);
+  else vCust(ci);
 }
 function buildUnitRows(ci){
   var c=CUST[ci];
@@ -7825,50 +7849,52 @@ function payInv(id){
   var hist=(i.payments&&i.payments.length)?i.payments.map(function(p,pi){
     return'<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:0.5px solid var(--bd);font-size:13px">'
       +'<div><strong>'+fm(parseFloat(p.amt)||0)+'</strong> <span style="color:#888;font-size:12px">'+(p.method||'')+'</span>'
-      +'<div style="font-size:11px;color:#888">'+(p.date||'')+(p.note?' \u00B7 '+p.note:'')+'</div></div>'
+      +'<div style="font-size:11px;color:#888">'+(p.date||'')+(p.note?' · '+p.note:'')+'</div></div>'
       +'<button onclick="delInvPay(this.dataset.id,this.dataset.pi)" data-id="'+id+'" data-pi="'+pi+'" title="Delete payment" style="background:none;border:none;color:#A32D2D;cursor:pointer;font-size:14px;padding:2px 6px"><i class="ti ti-trash"></i></button>'
       +'</div>';
   }).join(''):'<div style="font-size:12px;color:#888;padding:6px 0">No payments recorded yet.</div>';
+  var siblings=activeInv().filter(function(iv){return iv.customer===i.customer&&iv!==i&&iv.status!=='Paid';});
+  siblings.sort(function(a,b){return new Date(a.date)-new Date(b.date);});
+  var rows='';
+  if(bal>0.005)rows+=cbpRowHtml(i,true);
+  siblings.forEach(function(iv){rows+=cbpRowHtml(iv,false);});
+  var payoutSection=rows?
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">'
+      +'<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px">Apply Payment'+(siblings.length?' — '+i.customer+' has '+siblings.length+' more unpaid':'')+'</div>'
+      +(siblings.length?'<div style="font-size:11px"><a href="#" onclick="cbpSelectAll(true);return false" style="color:#185FA5;text-decoration:none;font-weight:600">Select All</a> · <a href="#" onclick="cbpSelectAll(false);return false" style="color:#888;text-decoration:none">Clear</a></div>':'')
+      +'</div>'
+      +'<div id="cbp-list" style="max-height:260px;overflow:auto;margin-bottom:10px">'+rows+'</div>'
+      +'<div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;padding:8px 0;border-top:0.5px solid var(--bd);margin-bottom:10px"><span>Total Applying</span><span id="cbp-seltotal" style="color:#185FA5">'+fm(bal>0.005?bal:0)+'</span></div>'
+      +'<div style="display:flex;gap:8px;margin-bottom:10px">'
+      +'<select id="cbp-mth" style="flex:1;padding:9px 8px;font-size:13px;border:0.5px solid var(--bd);border-radius:8px;font-family:inherit;background:#fff"><option'+(i.payment==='Cash'?' selected':'')+'>Cash</option><option'+(i.payment==='Card'?' selected':'')+'>Card</option><option'+(i.payment==='Check'?' selected':'')+'>Check</option><option'+(i.payment==='Zelle'?' selected':'')+'>Zelle</option><option'+(i.payment==='Net-30'?' selected':'')+'>Net-30</option></select>'
+      +'<input type="date" id="cbp-date" value="'+new Date().toISOString().split('T')[0]+'" style="flex:1;padding:8px 10px;font-size:13px;border:0.5px solid var(--bd);border-radius:8px;font-family:inherit;background:#fff">'
+      +'</div>'
+      +'<input id="cbp-note" placeholder="Note (check #, ref...)" style="padding:8px 10px;font-size:13px;border:0.5px solid var(--bd);border-radius:8px;font-family:inherit;background:#fff;width:100%;margin-bottom:12px">'
+      :'<div style="background:#EAF3DE;border-radius:8px;padding:10px;text-align:center;font-size:13px;font-weight:600;color:#27500A;margin-bottom:12px">✓ Paid in full</div>';
   oM('Payments — Invoice #'+i.num+' ('+i.customer+')',
     '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px;text-align:center">'
     +'<div style="background:#f5f5f7;border-radius:8px;padding:8px"><div style="font-size:15px;font-weight:700">'+fm(parseFloat(i.total)||0)+'</div><div style="font-size:10px;color:#888">TOTAL</div></div>'
     +'<div style="background:#EAF3DE;border-radius:8px;padding:8px"><div style="font-size:15px;font-weight:700;color:#27500A">'+fm(pd)+'</div><div style="font-size:10px;color:#888">PAID</div></div>'
     +'<div style="background:'+(bal>0.005?'#FCEBEB':'#f5f5f7')+';border-radius:8px;padding:8px"><div style="font-size:15px;font-weight:700;color:'+(bal>0.005?'#A32D2D':'#888')+'">'+fm(bal)+'</div><div style="font-size:10px;color:#888">BALANCE</div></div>'
     +'</div>'
-    +(bal>0.005?
-      '<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px">Record a Payment</div>'
-      +'<div style="display:flex;gap:8px;margin-bottom:8px">'
-      +'<input type="number" id="pay-amt" step="0.01" min="0" value="'+bal.toFixed(2)+'" placeholder="Amount" style="flex:1;min-width:0;padding:9px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;font-family:inherit;background:#fff">'
-      +'<select id="pay-mth" style="flex:1;min-width:0;padding:9px 8px;font-size:13px;border:0.5px solid var(--bd);border-radius:8px;font-family:inherit;background:#fff"><option'+(i.payment==='Cash'?' selected':'')+'>Cash</option><option'+(i.payment==='Card'?' selected':'')+'>Card</option><option'+(i.payment==='Check'?' selected':'')+'>Check</option><option'+(i.payment==='Zelle'?' selected':'')+'>Zelle</option><option'+(i.payment==='Net-30'?' selected':'')+'>Net-30</option></select>'
-      +'</div>'
-      +'<div style="display:flex;gap:8px;margin-bottom:12px">'
-      +'<input type="date" id="pay-date" value="'+new Date().toISOString().split('T')[0]+'" style="flex:1;min-width:0;padding:8px 10px;font-size:13px;border:0.5px solid var(--bd);border-radius:8px;font-family:inherit;background:#fff">'
-      +'<input id="pay-note" placeholder="Note (check #, ref...)" style="flex:1.4;min-width:0;padding:8px 10px;font-size:13px;border:0.5px solid var(--bd);border-radius:8px;font-family:inherit;background:#fff">'
-      +'</div>'
-      :'<div style="background:#EAF3DE;border-radius:8px;padding:10px;text-align:center;font-size:13px;font-weight:600;color:#27500A;margin-bottom:12px">\u2713 Paid in full</div>')
-    +'<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Payment History</div>'
+    +payoutSection
+    +'<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px">Payment History (this invoice)</div>'
     +hist,
-    (bal>0.005?'<button class="btn bl" onclick="svInvPay(this.dataset.id)" data-id="'+id+'"><i class="ti ti-cash"></i>Save Payment</button>':'')
+    (rows?'<button class="btn bl" onclick="svPayInv('+id+')"><i class="ti ti-cash"></i>Save Payment</button>':'')
     +'<button class="btn" onclick="cM()">Close</button>');
 }
-function svInvPay(id){
-  var i=INV[id];if(!i)return;
-  var amt=parseFloat(el('pay-amt')?el('pay-amt').value:'');
-  if(!amt||amt<=0){alert('Enter a payment amount.');return;}
-  var bal=invBal(i);
-  if(amt>bal+0.005&&!confirm('Payment ('+fm(amt)+') is more than the balance due ('+fm(bal)+'). Record anyway?'))return;
-  var dv=el('pay-date')?el('pay-date').value:'';
-  var dstr=dv?new Date(dv+'T12:00:00').toLocaleDateString():td();
-  i.payments=i.payments||[];
-  var mth=el('pay-mth')?el('pay-mth').value:'';
-  i.payments.push({amt:amt,method:mth,date:dstr,note:el('pay-note')?el('pay-note').value.trim():''});
-  if(!i.payment)i.payment=mth;
-  var wasPaid=i.status==='Paid';
-  syncInvStatus(i);
+function svPayInv(id){
+  var res=cbpApply();
+  if(!res)return;
+  if(!res.summary.length){alert('Enter an amount for at least one checked invoice.');return;}
   saveAll();
-  if(i.status==='Paid'&&!wasPaid)autoNotify('invoice_paid',{customer:i.customer,phone:i.phone,num:i.num,total:parseFloat(i.total)||0,payment:i.payment,vehicle:i.vehicle});
-  payInv(id);
+  var msg='Payment recorded ('+fm(res.total)+' total):\n'+res.summary.join('\n');
+  if(res.newlyPaid.length>1)msg+='\n\n'+res.newlyPaid.length+' invoices are now fully paid.';
+  alert(msg);
   if(el('inv-tb'))rINV();
+  rDash();
+  if(res.newlyPaid.length===1)autoNotify('invoice_paid',res.newlyPaid[0]);
+  else payInv(id);
 }
 function delInvPay(id,pi){
   var i=INV[id];if(!i||!i.payments)return;
