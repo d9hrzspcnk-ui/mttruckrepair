@@ -477,7 +477,8 @@ function el(id){return document.getElementById(id);}
 function gv(id){var e=el(id);return e?e.value.trim():'';}
 function fm(n){return '$'+parseFloat(n||0).toFixed(2);}
 function td(){return new Date().toLocaleDateString();}
-function bdg(s,p){var m={'Open':'#E6F1FB,#0C447C','In Progress':'#FFF3CD,#664D03','Completed':'#D1E7DD,#0A3622','Waiting Parts':'#F8D7DA,#58151C','Paid':'#D1E7DD,#0A3622','Unpaid':'#F8D7DA,#58151C','Partial':'#FFF3CD,#664D03'};var c=(m[s]||'#E6F1FB,#0C447C').split(',');return'<span style="background:'+c[0]+';color:'+c[1]+';padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600">'+s+'</span>';}
+function bdg(s,p){var m={'Open':'#E6F1FB,#0C447C','In Progress':'#FFF3CD,#664D03','Completed':'#D1E7DD,#0A3622','Waiting Parts':'#F8D7DA,#58151C','Paid':'#D1E7DD,#0A3622','Unpaid':'#F8D7DA,#58151C','Partial':'#FFF3CD,#664D03','Written Off':'#E5E5EA,#48484A'};var c=(m[s]||'#E6F1FB,#0C447C').split(',');return'<span style="background:'+c[0]+';color:'+c[1]+';padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600">'+s+'</span>';}
+function invActive(iv){return iv.status!=='Paid'&&iv.status!=='Written Off';}
 
 async function dbS(k,v){try{await fetch(SB+'/rest/v1/shop_data',{method:'POST',headers:{'Content-Type':'application/json','apikey':SK,'Authorization':'Bearer '+SK,'Prefer':'resolution=merge-duplicates'},body:JSON.stringify({key:k,value:v,updated_at:new Date().toISOString()})});}catch(e){}}
 async function dbL(k){try{var r=await fetch(SB+'/rest/v1/shop_data?key=eq.'+k+'&select=value',{headers:{'apikey':SK,'Authorization':'Bearer '+SK}});var d=await r.json();return(d&&d.length)?d[0].value:null;}catch(e){return null;}}
@@ -684,7 +685,7 @@ function partPickerItems(){return _invPartPool().map(function(p){return {label:p
 
 function rDash(){
   var inv=activeInv(),wo=activeWO();
-  var unp=inv.filter(function(i){return i.status!=='Paid';});
+  var unp=inv.filter(invActive);
   var unpBal=unp.reduce(function(s,i){return s+invBal(i);},0);
   var low=PARTS.filter(function(p){return p.qty<=p.min;});
   var rev=inv.reduce(function(s,i){return s+parseFloat(i.total||0);},0);
@@ -2638,7 +2639,32 @@ if(i.jobs){
   ll=(i.lines||[]).filter(function(l){return l.type==='labor';}).map(function(l){return'<tr><td style="padding:6px 9px">'+(l.desc||'')+'</td><td style="padding:6px 9px">'+l.hrs+'hrs @ $'+l.rate+'</td><td style="padding:6px 9px;font-weight:600">'+fm(l.subtotal)+'</td></tr>';}).join('');
   pl=(i.lines||[]).filter(function(l){return l.type==='part';}).map(function(l){return'<tr><td style="padding:6px 9px">'+(l.partNum?l.partNum+': ':'')+l.desc+'</td><td style="padding:6px 9px">'+l.qty+' x '+fm(l.sell)+'</td><td style="padding:6px 9px;font-weight:600">'+fm(l.subtotal)+'</td></tr>';}).join('');
 }
-oM('Invoice #'+i.num,'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-bottom:10px;margin-bottom:10px;border-bottom:0.5px solid var(--bd)"><div><strong>'+shop.name+'</strong><br>'+shop.phone+'<br>'+shop.addr+'</div><div style="text-align:right">Invoice #'+i.num+'<br>'+i.date+'<br>'+bdg(i.status)+'</div></div><div style="background:#f5f5f7;padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:10px"><strong>Bill To:</strong> '+i.customer+' | '+(i.vehicle||'—')+(invVIN(i)?'<br><strong>VIN:</strong> '+invVIN(i):'')+'</div>'+(ll?'<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;margin-bottom:5px">Labor</div><div class="tbl"><table><thead><tr><th>Description</th><th>Detail</th><th>Total</th></tr></thead><tbody>'+ll+'</tbody></table></div>':'')+(pl?'<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;margin:8px 0 5px">Parts</div><div class="tbl"><table><thead><tr><th>Part</th><th>Qty/Price</th><th>Total</th></tr></thead><tbody>'+pl+'</tbody></table></div>':'')+'<div style="text-align:right;padding-top:8px;border-top:0.5px solid var(--bd);margin-top:8px"><div style="font-size:13px;color:#888">Labor: '+fm(parseFloat(i.labor)||0)+' | Parts: '+fm(parseFloat(i.parts)||0)+(parseFloat(i.supplies)>0?' | Supplies: '+fm(parseFloat(i.supplies)):'')+(parseFloat(i.discountAmt)>0?' | Discount: −'+fm(parseFloat(i.discountAmt)):'')+' | Tax: '+fm(parseFloat(i.tax)||0)+'</div><div style="font-size:18px;font-weight:700;color:#185FA5;margin-top:3px">Total: '+fm(parseFloat(i.total)||0)+'</div>'+(invPaidAmt(i)>0.005?'<div style="font-size:13px;color:#27500A;margin-top:2px">Paid: '+fm(invPaidAmt(i))+'</div>':'')+(invBal(i)>0.005?'<div style="font-size:15px;font-weight:700;color:#A32D2D;margin-top:1px">Balance Due: '+fm(invBal(i))+'</div>':(invPaidAmt(i)>0.005?'<div style="font-size:12px;font-weight:600;color:#27500A;margin-top:1px">\u2713 Paid in full</div>':''))+'</div>'+histHtml,'<button class="btn" onclick="cM();eInv('+id+')"><i class="ti ti-edit"></i>Edit</button><button class="btn gr" onclick="prtInv('+id+')"><i class="ti ti-printer"></i>Print</button><button class="btn bl" onclick="txtInv('+id+')"><i class="ti ti-message"></i>Text Invoice</button><button class="btn bl" onclick="sndInv('+id+')"><i class="ti ti-send"></i>Send</button><button class="btn'+(i.status==='Paid'?'':' bl')+'" onclick="cM();payInv('+id+')"><i class="ti ti-cash"></i>Payments</button>'+(ROLE==='owner'?'<button class="btn rd" onclick="softDeleteInv('+id+')"><i class="ti ti-trash"></i></button>':'')+'<button class="btn" onclick="cM()">Close</button>');}
+oM('Invoice #'+i.num,'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-bottom:10px;margin-bottom:10px;border-bottom:0.5px solid var(--bd)"><div><strong>'+shop.name+'</strong><br>'+shop.phone+'<br>'+shop.addr+'</div><div style="text-align:right">Invoice #'+i.num+'<br>'+i.date+'<br>'+bdg(i.status)+'</div></div><div style="background:#f5f5f7;padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:10px"><strong>Bill To:</strong> '+i.customer+' | '+(i.vehicle||'—')+(invVIN(i)?'<br><strong>VIN:</strong> '+invVIN(i):'')+'</div>'+(ll?'<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;margin-bottom:5px">Labor</div><div class="tbl"><table><thead><tr><th>Description</th><th>Detail</th><th>Total</th></tr></thead><tbody>'+ll+'</tbody></table></div>':'')+(pl?'<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;margin:8px 0 5px">Parts</div><div class="tbl"><table><thead><tr><th>Part</th><th>Qty/Price</th><th>Total</th></tr></thead><tbody>'+pl+'</tbody></table></div>':'')+'<div style="text-align:right;padding-top:8px;border-top:0.5px solid var(--bd);margin-top:8px"><div style="font-size:13px;color:#888">Labor: '+fm(parseFloat(i.labor)||0)+' | Parts: '+fm(parseFloat(i.parts)||0)+(parseFloat(i.supplies)>0?' | Supplies: '+fm(parseFloat(i.supplies)):'')+(parseFloat(i.discountAmt)>0?' | Discount: −'+fm(parseFloat(i.discountAmt)):'')+' | Tax: '+fm(parseFloat(i.tax)||0)+'</div><div style="font-size:18px;font-weight:700;color:#185FA5;margin-top:3px">Total: '+fm(parseFloat(i.total)||0)+'</div>'+(invPaidAmt(i)>0.005?'<div style="font-size:13px;color:#27500A;margin-top:2px">Paid: '+fm(invPaidAmt(i))+'</div>':'')+(invBal(i)>0.005?'<div style="font-size:15px;font-weight:700;color:#A32D2D;margin-top:1px">Balance Due: '+fm(invBal(i))+'</div>':(invPaidAmt(i)>0.005?'<div style="font-size:12px;font-weight:600;color:#27500A;margin-top:1px">\u2713 Paid in full</div>':''))+'</div>'+histHtml,'<button class="btn" onclick="cM();eInv('+id+')"><i class="ti ti-edit"></i>Edit</button><button class="btn gr" onclick="prtInv('+id+')"><i class="ti ti-printer"></i>Print</button><button class="btn bl" onclick="txtInv('+id+')"><i class="ti ti-message"></i>Text Invoice</button><button class="btn bl" onclick="sndInv('+id+')"><i class="ti ti-send"></i>Send</button><button class="btn'+(i.status==='Paid'?'':' bl')+'" onclick="cM();payInv('+id+')"><i class="ti ti-cash"></i>Payments</button>'+(ROLE==='owner'?(i.status==='Written Off'?'<button class="btn" onclick="restoreWrittenOffInv('+id+')"><i class="ti ti-rotate"></i>Restore to Unpaid</button>':(i.status!=='Paid'?'<button class="btn" onclick="writeOffInv('+id+')"><i class="ti ti-file-off"></i>Write Off</button>':''))+'<button class="btn rd" onclick="softDeleteInv('+id+')"><i class="ti ti-trash"></i></button>':'')+'<button class="btn" onclick="cM()">Close</button>');}
+function writeOffInv(id){
+  var i=INV[id];if(!i)return;
+  oM('Write Off Invoice #'+i.num+'?',
+    '<div style="background:#F0F0F2;border-radius:10px;padding:12px 14px;margin-bottom:10px">'
+    +'<div style="font-size:14px;font-weight:600">#'+i.num+' — '+i.customer+'</div>'
+    +'<div style="font-size:13px;color:#555;margin-top:2px">Balance: '+fm(invBal(i))+'</div>'
+    +'</div>'
+    +'<div style="font-size:13px;color:#555">Marks this as bad debt you’re not actively chasing. It stays on record and out of Deleted, but drops off your Unpaid Balance, dashboard totals, and payment reminders. You can restore it to Unpaid anytime.</div>',
+    '<button class="btn" style="background:#48484A;color:#fff" onclick="doWriteOffInv('+id+')"><i class="ti ti-file-off"></i>Write Off</button><button class="btn" onclick="vInv('+id+')">Cancel</button>'
+  );
+}
+function doWriteOffInv(id){
+  var i=INV[id];if(!i)return;
+  i.status='Written Off';i.writtenOffAt=new Date().toISOString();
+  saveAll();rINV();rDash();
+  vInv(id);
+}
+function restoreWrittenOffInv(id){
+  var i=INV[id];if(!i)return;
+  syncInvStatus(i);
+  if(i.status==='Written Off')i.status=invPaidAmt(i)>0.005?'Partial':'Unpaid';
+  i.writtenOffAt=null;
+  saveAll();rINV();rDash();
+  vInv(id);
+}
 function softDeleteInv(id){
   var i=INV[id];if(!i)return;
   oM(t('delInvoiceQ')+' #'+i.num+'?',
@@ -3326,13 +3352,13 @@ function emInv(id,em){
 }
 
 function rCUST(){
-  var rows=CUST.length?CUST.map(function(c,i){var unp=activeInv().filter(function(iv){return iv.customer===c.name&&iv.status!=='Paid';}).reduce(function(s,iv){return s+invBal(iv);},0);return'<tr><td style="padding:7px 9px;color:#185FA5;cursor:pointer;font-weight:600" onclick="vCust('+i+')">'+c.name+'</td><td style="padding:7px 9px;font-size:11px">'+(c.phone||'—')+'</td><td style="padding:7px 9px;font-size:11px">'+(c.dot||'—')+'</td><td style="padding:7px 9px">'+(c.units||[]).length+'</td><td style="padding:7px 9px">'+(c.jobs||0)+'</td><td style="padding:7px 9px;'+(unp?'color:#A32D2D;font-weight:600':'')+'">'+( unp?fm(unp):'—')+'</td><td style="padding:7px 9px;font-size:11px">'+(c.lastVisit||'—')+'</td><td style="padding:7px 9px"><button class="btn xs" onclick="vCust('+i+')">View</button></td></tr>';}).join(''):'<tr><td colspan="8" style="padding:16px;color:#888;font-size:12px">No customers yet. Added automatically on check-in.</td></tr>';
+  var rows=CUST.length?CUST.map(function(c,i){var unp=activeInv().filter(function(iv){return iv.customer===c.name&&invActive(iv);}).reduce(function(s,iv){return s+invBal(iv);},0);return'<tr><td style="padding:7px 9px;color:#185FA5;cursor:pointer;font-weight:600" onclick="vCust('+i+')">'+c.name+'</td><td style="padding:7px 9px;font-size:11px">'+(c.phone||'—')+'</td><td style="padding:7px 9px;font-size:11px">'+(c.dot||'—')+'</td><td style="padding:7px 9px">'+(c.units||[]).length+'</td><td style="padding:7px 9px">'+(c.jobs||0)+'</td><td style="padding:7px 9px;'+(unp?'color:#A32D2D;font-weight:600':'')+'">'+( unp?fm(unp):'—')+'</td><td style="padding:7px 9px;font-size:11px">'+(c.lastVisit||'—')+'</td><td style="padding:7px 9px"><button class="btn xs" onclick="vCust('+i+')">View</button></td></tr>';}).join(''):'<tr><td colspan="8" style="padding:16px;color:#888;font-size:12px">No customers yet. Added automatically on check-in.</td></tr>';
   el('pg-body').innerHTML='<div style="display:flex;gap:8px;margin-bottom:10px"><button onclick="rFleetAccounts()" style="background:#185FA5;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:5px"><i class="ti ti-building-factory"></i> Fleet Accounts</button></div>'+'<div class="sr"><i class="ti ti-search" style="color:#888"></i><input placeholder="Search customers..." oninput="fCUST(this.value)"></div><div class="tbl"><table><thead><tr><th>Name</th><th>Phone</th><th>DOT</th><th>Units</th><th>Jobs</th><th>Balance</th><th>Last Visit</th><th></th></tr></thead><tbody id="cust-tb">'+rows+'</tbody></table></div>';
 }
 function fCUST(q){var r=el('cust-tb');if(!r)return;r.innerHTML=CUST.filter(function(c){return c.name.toLowerCase().includes(q.toLowerCase())||(c.phone||'').includes(q);}).map(function(c,i){var ri=CUST.indexOf(c);return'<tr><td style="padding:7px 9px;color:#185FA5;cursor:pointer;font-weight:600" onclick="vCust('+ri+')">'+c.name+'</td><td style="padding:7px 9px;font-size:11px">'+(c.phone||'—')+'</td><td style="padding:7px 9px;font-size:11px">'+(c.dot||'—')+'</td><td style="padding:7px 9px">'+(c.units||[]).length+'</td><td style="padding:7px 9px">'+(c.jobs||0)+'</td><td style="padding:7px 9px">—</td><td style="padding:7px 9px;font-size:11px">'+(c.lastVisit||'—')+'</td><td style="padding:7px 9px"><button class="btn xs" onclick="vCust('+ri+')">View</button></td></tr>';}).join('');}
 function vCust(i){
   var c=CUST[i];var jobs=activeWO().filter(function(w){return w.customer===c.name;});var invs=activeInv().filter(function(iv){return iv.customer===c.name;});
-  var rev=invs.reduce(function(s,iv){return s+parseFloat(iv.total||0);},0);var unp=invs.filter(function(iv){return iv.status!=='Paid';}).reduce(function(s,iv){return s+invBal(iv);},0);
+  var rev=invs.reduce(function(s,iv){return s+parseFloat(iv.total||0);},0);var unp=invs.filter(invActive).reduce(function(s,iv){return s+invBal(iv);},0);
   function inp(id,lbl,val,ph,tp){return'<div class="fg"><label>'+lbl+'</label><input id="'+id+'" value="'+(val||'')+'" placeholder="'+(ph||'')+'" '+(tp?'type="'+tp+'"':'')+' style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>';}
   var uRows=buildUnitRows(i);
   var jRows=jobs.length?'<div class="tbl"><table><thead><tr><th>SO#</th><th>Vehicle</th><th>Status</th><th>Date</th></tr></thead><tbody>'+jobs.map(function(w){return'<tr><td style="padding:7px 9px;color:#185FA5;cursor:pointer" onclick="cM();vWO('+w.id+')">#'+w.ticket+'</td><td style="padding:7px 9px;font-size:11px">'+(w.vehicle||'—')+'</td><td style="padding:7px 9px">'+bdg(w.status)+'</td><td style="padding:7px 9px;font-size:11px">'+w.date+'</td></tr>';}).join('')+'</tbody></table></div>':'<p style="font-size:13px;color:#888;padding:8px 0">No service orders.</p>';
@@ -3380,7 +3406,7 @@ function vCust(i){
 }
 function custBulkPay(ci){
   var c=CUST[ci];if(!c)return;
-  var invs=activeInv().filter(function(iv){return iv.customer===c.name&&iv.status!=='Paid';});
+  var invs=activeInv().filter(function(iv){return iv.customer===c.name&&invActive(iv);});
   invs.sort(function(a,b){return new Date(a.date)-new Date(b.date);});
   if(!invs.length){alert('No unpaid invoices for this customer.');return;}
   var rows=invs.map(function(iv){return cbpRowHtml(iv,true);}).join('');
@@ -3660,7 +3686,7 @@ function rFleetAccounts(){
         var d=new Date(inv.date);
         return inv.customer===cx.name&&d.getMonth()===m&&d.getFullYear()===y;
       }).reduce(function(s,inv){return s+(inv.total||0);},0);
-      var unpaidInvs=activeInv().filter(function(inv){return inv.customer===cx.name&&inv.status!=='Paid';});
+      var unpaidInvs=activeInv().filter(function(inv){return inv.customer===cx.name&&invActive(inv);});
       var unpaidAmt=unpaidInvs.reduce(function(s,inv){return s+invBal(inv);},0);
       return'<div style="background:#fff;border-radius:12px;padding:14px;margin-bottom:10px;border:0.5px solid rgba(0,0,0,0.1);border-left:3px solid #185FA5">'
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">'
@@ -3705,7 +3731,7 @@ function genFleetStatement(cxIdx){
   if(!monthWOs.length&&!monthInvs.length){
     alert('No work orders or invoices found for '+cx.name+' this month.');return;
   }
-  var unpaid=monthInvs.filter(function(inv){return inv.status!=='Paid';});
+  var unpaid=monthInvs.filter(invActive);
   var paid=monthInvs.filter(function(inv){return inv.status==='Paid';});
   var totalUnpaid=unpaid.reduce(function(s,inv){return s+invBal(inv);},0);
   var totalPaid=monthInvs.reduce(function(s,inv){return s+invPaidAmt(inv);},0);
@@ -3749,7 +3775,7 @@ function sndFleetStatement(cxIdx){
   var monthName=now.toLocaleString('default',{month:'long',year:'numeric'});
   var unpaid=activeInv().filter(function(inv){
     var d=new Date(inv.date);
-    return inv.customer===cx.name&&d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear()&&inv.status!=='Paid';
+    return inv.customer===cx.name&&d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear()&&invActive(inv);
   });
   var balance=unpaid.reduce(function(s,inv){return s+(inv.total||0);},0);
   var msg=shop.name+' — Fleet Statement for '+cx.name+' ('+monthName+'). Balance due: $'+balance.toFixed(2)+'. '+(cx.fleetTerms&&cx.fleetTerms!=='due_on_receipt'?'Terms: '+cx.fleetTerms.toUpperCase()+'. ':'')+' Questions? Call '+shop.phone;
@@ -4520,7 +4546,7 @@ function rReports(){
   var now=new Date(),tm=now.getMonth(),ty=now.getFullYear();
   var mInv=invA.filter(function(i){var d=new Date(i.date);return d.getMonth()===tm&&d.getFullYear()===ty;});
   var mRev=mInv.reduce(function(s,i){return s+parseFloat(i.total||0);},0);
-  var out=invA.filter(function(i){return i.status!=='Paid';}).reduce(function(s,i){return s+invBal(i);},0);
+  var out=invA.filter(invActive).reduce(function(s,i){return s+invBal(i);},0);
   var allRev=invA.reduce(function(s,i){return s+parseFloat(i.total||0);},0);
   var cr={};invA.forEach(function(i){cr[i.customer]=(cr[i.customer]||0)+parseFloat(i.total||0);});
   var topC=Object.entries(cr).sort(function(a,b){return b[1]-a[1];}).slice(0,5);
@@ -7853,7 +7879,7 @@ function payInv(id){
       +'<button onclick="delInvPay(this.dataset.id,this.dataset.pi)" data-id="'+id+'" data-pi="'+pi+'" title="Delete payment" style="background:none;border:none;color:#A32D2D;cursor:pointer;font-size:14px;padding:2px 6px"><i class="ti ti-trash"></i></button>'
       +'</div>';
   }).join(''):'<div style="font-size:12px;color:#888;padding:6px 0">No payments recorded yet.</div>';
-  var siblings=activeInv().filter(function(iv){return iv.customer===i.customer&&iv!==i&&iv.status!=='Paid';});
+  var siblings=activeInv().filter(function(iv){return iv.customer===i.customer&&iv!==i&&invActive(iv);});
   siblings.sort(function(a,b){return new Date(a.date)-new Date(b.date);});
   var rows='';
   if(bal>0.005)rows+=cbpRowHtml(i,true);
@@ -8133,7 +8159,7 @@ function _rsInvOpts(i){
   var cs=el('rs-cust-'+i),sel=el('rs-invsel-'+i);if(!cs||!sel)return;
   var name=cs.value,opts='<option value="new">+ New invoice</option>';
   ((typeof INV!=='undefined'&&INV)||[]).forEach(function(iv){
-    if(iv.customer===name&&iv.status!=='Paid'){opts+='<option value="'+iv.id+'">#'+iv.num+' - '+(iv.vehicle||'no vehicle')+' - '+fm(invBal(iv))+' due</option>';}
+    if(iv.customer===name&&invActive(iv)){opts+='<option value="'+iv.id+'">#'+iv.num+' - '+(iv.vehicle||'no vehicle')+' - '+fm(invBal(iv))+' due</option>';}
   });
   sel.innerHTML=opts;
 }
@@ -8577,7 +8603,7 @@ function fpRender(ci){
   var base=location.origin+location.pathname;
   var openWOs=activeWO().filter(function(w){return w.customer===cx.name&&w.status!=='Completed';});
   var myInvs=activeInv().filter(function(i){return i.customer===cx.name;});
-  var unpaid=myInvs.filter(function(i){return i.status!=='Paid';});
+  var unpaid=myInvs.filter(invActive);
   var unpaidAmt=unpaid.reduce(function(s,i){return s+(parseFloat(i.total)||0);},0);
   var myPMs=PMS.filter(function(p){return p.customer===cx.name;});
   var pmsDue=myPMs.filter(isDue);
