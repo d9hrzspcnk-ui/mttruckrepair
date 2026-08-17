@@ -182,16 +182,8 @@ async function handleCreateCheckout(request, env, origin) {
     });
   }
 
-  // Secrets Store bindings expose the value via .get() (async) rather than
-  // as a plain string, unlike classic Worker secrets.
-  const cloverToken = await env.CLOVER_API_TOKEN.get();
-  const cloverMerchantId = await env.CLOVER_MERCHANT_ID.get();
-  if (!cloverToken || !cloverMerchantId) {
-    return new Response(JSON.stringify({ success: false, error: "Clover not configured" }), {
-      status: 500,
-      headers: { ...corsHeaders(origin), "Content-Type": "application/json" }
-    });
-  }
+  const cloverToken = env.CLOVER_API_TOKEN;
+  const cloverMerchantId = env.CLOVER_MERCHANT_ID;
 
   let payload;
   try {
