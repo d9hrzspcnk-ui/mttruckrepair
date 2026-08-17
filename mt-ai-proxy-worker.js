@@ -182,6 +182,17 @@ async function handleCreateCheckout(request, env, origin) {
     });
   }
 
+  // Secrets Store bindings expose the value via .get() (async) rather than
+  // as a plain string, unlike classic Worker secrets.
+  const cloverToken = await env.CLOVER_API_TOKEN.get();
+  const cloverMerchantId = await env.CLOVER_MERCHANT_ID.get();
+  if (!cloverToken || !cloverMerchantId) {
+    return new Response(JSON.stringify({ success: false, error: "Clover not configured" }), {
+      status: 500,
+      headers: { ...corsHeaders(origin), "Content-Type": "application/json" }
+    });
+  }
+
   let payload;
   try {
     payload = await request.json();
@@ -210,8 +221,8 @@ async function handleCreateCheckout(request, env, origin) {
       headers: {
         "Content-Type": "application/json",
         "Accept": "application/json",
-        "Authorization": "Bearer " + env.CLOVER_API_TOKEN,
-        "X-Clover-Merchant-Id": env.CLOVER_MERCHANT_ID
+        "Authorization": "Bearer " + cloverToken,
+        "X-Clover-Merchant-Id": cloverMerchantId
       },
       body: JSON.stringify({
         shoppingCart: {
