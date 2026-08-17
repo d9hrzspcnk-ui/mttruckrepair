@@ -3151,10 +3151,10 @@ function sndInv(id){
   var inv0=INV[id];var invLink=window.location.origin+window.location.pathname+'?inv='+(inv0?inv0.num:id);
   var total=(parseFloat(inv.total)||0).toFixed(2);
   var payInfo='';
-  if(shop.venmo)payInfo=' Pay via Venmo: '+shop.venmo+'.';
+  if(shop.venmo)payInfo=' Venmo: '+shop.venmo+'.';
   else if(shop.cashapp)payInfo=' CashApp: '+shop.cashapp+'.';
   else if(shop.zelle)payInfo=' Zelle: '+shop.zelle+'.';
-  var msg='Hi '+inv.customer+'! Invoice #'+inv.num+' from '+shop.name+'. Amount due: $'+total+'.'+payInfo+' View your full invoice: '+invLink+' Questions? Call '+shop.phone;
+  var msg='Hi '+inv.customer+'! Invoice #'+inv.num+' from '+shop.name+'. Amount due: $'+total+'.'+payInfo+' View/pay your invoice: '+invLink+' Questions? Call '+shop.phone;
   oM('Send Invoice #'+inv.num,
     '<div style="background:#E6F1FB;border-radius:8px;padding:10px;margin-bottom:12px;font-size:13px;color:#0C447C"><i class="ti ti-link"></i> Invoice link included — customer can see all charges by tapping it</div>'
     +'<div class="fg"><label>Customer Phone</label><input id="si-ph" value="'+phone+'" type="tel" placeholder="Customer phone" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
@@ -3210,7 +3210,7 @@ function sndInvEmail(id){
   var invX=INV[id];var invLink=window.location.origin+window.location.pathname+'?inv='+(invX?invX.num:id);
   var total=(parseFloat(inv.total)||0).toFixed(2);
   var subject='Invoice #'+inv.num+' from '+shop.name+' - $'+total;
-  var body='Hi '+inv.customer+',\n\nYour invoice #'+inv.num+' from '+shop.name+' is ready.\n\nAmount Due: $'+total+'\n\nView your full invoice here:\n'+invLink+'\n\n';
+  var body='Hi '+inv.customer+',\n\nYour invoice #'+inv.num+' from '+shop.name+' is ready.\n\nAmount Due: $'+total+'\n\nView and pay your invoice here:\n'+invLink+'\n\n';
   if(shop.venmo)body+='Pay via Venmo: '+shop.venmo+'\n';
   if(shop.cashapp)body+='Pay via CashApp: '+shop.cashapp+'\n';
   if(shop.zelle)body+='Pay via Zelle: '+shop.zelle+'\n';
@@ -3311,6 +3311,26 @@ function postSmsAndTrack(id,tel,msg,btn){
     }
     invToast('Could not text invoice: '+(e&&e.message?e.message:e),false);
   });
+}
+// Builds a one-time Clover checkout page for the exact invoice balance so the
+// customer never has to type in an amount. If the Worker/Clover call fails
+// for any reason (not configured yet, network hiccup, etc.) we fall back to
+// the plain Clover payment link, where they can still pay by entering the
+// amount themselves.
+async function payWithCloverDynamic(invNum,amt,btn){
+  var orig=btn?btn.innerHTML:'';
+  if(btn){btn.innerHTML='<i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i> Loading…';btn.style.pointerEvents='none';}
+  try{
+    var r=await fetch(AIPROXY+'/create-checkout',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({amount:amt,invoiceNum:invNum})
+    });
+    var d=await r.json();
+    if(r.ok&&d&&d.success&&d.href){window.location.href=d.href;return;}
+  }catch(e){}
+  if(btn){btn.innerHTML=orig;btn.style.pointerEvents='';}
+  window.location.href='https://'+shop.clover;
 }
 function emInv(id,em){
   if(!em){alert('Enter email');return;}
@@ -4139,26 +4159,13 @@ function rSet(){
     +'<div style="font-size:14px;font-weight:600;margin-bottom:8px;color:#633806"><i class="ti ti-credit-card" style="font-size:16px;vertical-align:-2px"></i> Payment Links</div>'
     +'<div style="font-size:12px;color:#888;margin-bottom:10px">Customers will see these on their invoice page with a Pay Now button.</div>'
     +'<div class="g2">'
+    +'<div class="fg"><label>Clover Payment Link</label><input id="s-clover" value="'+(shop.clover||'')+'" placeholder="link.clover.com/urlshortener/XXXXXX" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>Venmo Handle</label><input id="s-venmo" value="'+(shop.venmo||'')+'" placeholder="@MTTruckRepair" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>Zelle (phone or email)</label><input id="s-zelle" value="'+(shop.zelle||'')+'" placeholder="909-600-8440" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>CashApp Handle</label><input id="s-cashapp" value="'+(shop.cashapp||'')+'" placeholder="$MTTruckRepair" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>PayPal.me Link</label><input id="s-paypal" value="'+(shop.paypal||'')+'" placeholder="paypal.me/MTTruck" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
+    +'<div class="fg" style="grid-column:1/-1"><div style="font-size:11px;color:#888">Clover link: in your Clover web dashboard go to Account &amp; Setup → Payment Links (or Online Payments → Hosted Checkout), create a link, and paste it here. Customers can pay by card online.</div></div>'
     +'</div></div>'
-    +'<div class="card" style="border:1.5px solid #3B6D11;margin-bottom:12px">'
-    +'<div class="card" style="border:1.5px solid #BA7517;margin-bottom:12px">'
-    +'<div style="font-size:14px;font-weight:600;margin-bottom:8px;color:#633806"><i class="ti ti-credit-card" style="font-size:16px;vertical-align:-2px"></i> Payment Links</div>'
-    +'<div style="font-size:12px;color:#888;margin-bottom:10px">Customers will see these on their invoice with a Pay Now button.</div>'
-    +'<div class="g2">'
-    +'<div class="fg"><label>Venmo Handle</label><input id="s-venmo" value="'+(shop.venmo||'')+'" placeholder="@MTTruckRepair" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
-    +'<div class="fg"><label>Zelle (phone or email)</label><input id="s-zelle" value="'+(shop.zelle||'')+'" placeholder="909-600-8440" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
-    +'<div class="fg"><label>CashApp Handle</label><input id="s-cashapp" value="'+(shop.cashapp||'')+'" placeholder="$MTTruckRepair" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
-    +'<div class="fg"><label>PayPal.me Link</label><input id="s-paypal" value="'+(shop.paypal||'')+'" placeholder="paypal.me/MTTruck" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
-    +'</div></div>'
-    +'<div style="font-size:14px;font-weight:600;margin-bottom:4px;color:#27500A"><i class="ti ti-share" style="font-size:16px;vertical-align:-2px"></i> Customer Links</div>'
-    +'<div style="font-size:12px;color:#888;margin-bottom:12px">Send these links to customers so they can check in or book from their phone anywhere.</div>'
-    +'<div style="display:flex;flex-direction:column;gap:8px" id="share-links-list"></div>'
-    +'<button onclick="buildShareLinks()" style="margin-top:10px;background:#3B6D11;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;font-family:inherit;display:flex;align-items:center;gap:5px"><i class="ti ti-refresh"></i> Show My Links</button>'
-    +'</div>'
     +'<div class="card" style="border:1.5px solid #3B6D11;margin-bottom:12px">'
     +'<div style="font-size:14px;font-weight:600;margin-bottom:4px;color:#27500A"><i class="ti ti-share" style="font-size:16px;vertical-align:-2px"></i> Customer Links</div>'
     +'<div style="font-size:12px;color:#888;margin-bottom:12px">Send these links to customers so they can check in, book, or request road service from their phone.</div>'
@@ -4450,6 +4457,7 @@ function sendAllLowAlerts(){
   );
 }
 function saveSet(){shop.name=gv('sn')||shop.name;shop.phone=gv('sp');shop.email=gv('se');shop.addr=gv('sa');shop.laborRate=parseFloat(el('slr').value)||125;shop.markup=parseFloat(el('smk').value)||45;shop.suppliesRate=parseFloat(el('ssu').value)||7.4;shop.taxRate=parseFloat(el('stx').value)||8;shop.terms=el('ster').value;if(el('swar'))shop.warranty=el('swar').value;
+  var scl=el('s-clover');if(scl)shop.clover=scl.value.trim().replace(/^https?:\/\//,'');
   var sv=el('s-venmo');if(sv)shop.venmo=sv.value.trim();
   var sz=el('s-zelle');if(sz)shop.zelle=sz.value.trim();
   var sc=el('s-cashapp');if(sc)shop.cashapp=sc.value.trim();
@@ -5892,6 +5900,7 @@ async function buildInvoicePdfUrl(id){
 
     // Payment
     var pm=[];
+    if(shop.clover)pm.push('Pay by Card: https://'+shop.clover);
     if(shop.venmo)pm.push('Venmo: '+shop.venmo);
     if(shop.cashapp)pm.push('CashApp: '+shop.cashapp);
     if(shop.zelle)pm.push('Zelle: '+shop.zelle);
@@ -5942,9 +5951,10 @@ async function genInvPDF(id, sendSMS){
   if(!sendSMS){saveAll();return link;}
 
   var payInfo='';
-  if(shop.venmo)payInfo=' Venmo: '+shop.venmo+'.';
-  else if(shop.cashapp)payInfo=' CashApp: '+shop.cashapp+'.';
-  else if(shop.zelle)payInfo=' Zelle: '+shop.zelle+'.';
+  if(shop.clover)payInfo=' Pay by card: https://'+shop.clover+'.';
+  if(shop.venmo)payInfo+=' Venmo: '+shop.venmo+'.';
+  else if(shop.cashapp)payInfo+=' CashApp: '+shop.cashapp+'.';
+  else if(shop.zelle)payInfo+=' Zelle: '+shop.zelle+'.';
   var msg='Hi '+inv.customer+'! Invoice #'+inv.num+' from '+shop.name+'.'
     +' Amount due: $'+(parseFloat(inv.total)||0).toFixed(2)+'.'
     +' View full invoice: '+link
@@ -6248,6 +6258,7 @@ function showSharedInvoice(invId){
 
   // Payment buttons
   var payBtns='';
+  if(shop.clover)payBtns+='<a href="javascript:void(0)" onclick="payWithCloverDynamic('+(parseInt(inv.num)||0)+','+invBal(inv)+',this)" id="clover-pay-btn" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#228800;color:#fff;border-radius:10px;padding:14px;font-size:15px;font-weight:600;text-decoration:none;margin-bottom:10px">💳 Pay with Card</a>';
   if(shop.venmo)payBtns+='<a href="https://venmo.com/'+shop.venmo.replace('@','')+'" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#3D95CE;color:#fff;border-radius:10px;padding:14px;font-size:15px;font-weight:600;text-decoration:none;margin-bottom:10px"><img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/venmo.svg" width="20" height="20" style="filter:invert(1)">Pay with Venmo</a>';
   if(shop.cashapp)payBtns+='<a href="https://cash.app/'+shop.cashapp.replace('$','')+'" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#00C244;color:#fff;border-radius:10px;padding:14px;font-size:15px;font-weight:600;text-decoration:none;margin-bottom:10px">💚 Pay with CashApp</a>';
   if(shop.zelle)payBtns+='<a href="tel:'+shop.zelle.replace(/[^0-9]/g,'')+'" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#6D1ED4;color:#fff;border-radius:10px;padding:14px;font-size:15px;font-weight:600;text-decoration:none;margin-bottom:10px">💜 Pay with Zelle: '+shop.zelle+'</a>';
@@ -6390,8 +6401,8 @@ function sndInvLink(id){
   var inv=INV[id];if(!inv)return;
   var appUrl=window.location.origin+window.location.pathname;
   var link=appUrl+'?inv='+id;
-  var payInfo=shop.venmo?' Pay via Venmo: '+shop.venmo:shop.cashapp?' CashApp: '+shop.cashapp:shop.zelle?' Zelle: '+shop.zelle:'';
-  var msg='Hi '+inv.customer+'! Invoice #'+inv.num+' from '+shop.name+'. Amount due: $'+(parseFloat(inv.total)||0).toFixed(2)+'.'+payInfo+' View full invoice: '+link+' Questions? Call '+shop.phone;
+  var payInfo=shop.venmo?' Venmo: '+shop.venmo:shop.cashapp?' CashApp: '+shop.cashapp:shop.zelle?' Zelle: '+shop.zelle:'';
+  var msg='Hi '+inv.customer+'! Invoice #'+inv.num+' from '+shop.name+'. Amount due: $'+(parseFloat(inv.total)||0).toFixed(2)+'.'+payInfo+' View/pay full invoice: '+link+' Questions? Call '+shop.phone;
   var phone=inv.phone||inv.custPhone||'';
   if(!phone){var cx=CUST.find(function(cc){return cc.name===inv.customer;});if(cx)phone=cx.phone||'';}
   if(phone){
@@ -7843,18 +7854,25 @@ function autoNotify(evt,d){
   else if(evt==='invoice_paid'){msg='Hi '+d.customer+', payment received for Invoice #'+d.num+' - Total '+fm(d.total)+(d.payment?' ('+d.payment+')':'')+'. Thank you for your business! - '+shop.name+' '+shop.phone;subj='Payment Receipt - Invoice #'+d.num;}
   else if(evt==='estimate_ready'){msg='Hi '+d.customer+', your estimate #'+d.num+' from '+shop.name+' is ready. Total: '+fm(d.total)+'. Call '+shop.phone+' to approve or with questions.';subj='Estimate #'+d.num+' Ready';}
   if(!msg)return;
-  var emailSent=false;
-  if(ct.email&&typeof emailjs!=='undefined'){
-    try{emailjs.send(ES,ET,{email:ct.email,to_name:d.customer,from_name:shop.name,subject:subj,message:msg.replace(/\n/g,'<br>'),shop_phone:shop.phone,shop_addr:shop.addr});emailSent=true;}catch(e){}
+  var emailAttempted=!!(ct.email&&typeof emailjs!=='undefined');
+  if(emailAttempted){
+    emailjs.send(ES,ET,{email:ct.email,to_name:d.customer,from_name:shop.name,subject:subj,message:msg.replace(/\n/g,'<br>'),shop_phone:shop.phone,shop_addr:shop.addr})
+      .then(function(){
+        var b=el('an-email-status');if(b)b.innerHTML='<i class="ti ti-mail-check"></i> Email sent automatically to '+ct.email;
+        if(!ct.phone)showNotif('\u2713 Email notification sent to '+d.customer);
+      })
+      .catch(function(){
+        var b=el('an-email-status');if(b){b.style.background='#FCEBEB';b.style.color='#A32D2D';b.innerHTML='<i class="ti ti-alert-circle"></i> Email did not go through \u2014 check Settings';}
+        if(!ct.phone)showNotif('\u26a0\ufe0f Email did not send to '+d.customer+' \u2014 check Settings');
+      });
   }
   if(!ct.phone){
-    if(emailSent)showNotif('\u2713 Email notification sent to '+d.customer);
-    else showNotif('No phone or email on file for '+d.customer+' \u2014 add one in Customers');
+    if(!emailAttempted)showNotif('No phone or email on file for '+d.customer+' \u2014 add one in Customers');
     return;
   }
   _anPh=ct.phone;
   oM('\ud83d\udcf1 Notify Customer',
-    (emailSent?'<div style="background:#EAF3DE;color:#27500A;border-radius:8px;padding:8px 10px;font-size:12px;margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="ti ti-mail-check"></i> Email already sent automatically to '+ct.email+'</div>':'')
+    (emailAttempted?'<div id="an-email-status" style="background:#EAF3DE;color:#27500A;border-radius:8px;padding:8px 10px;font-size:12px;margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="ti ti-loader" style="animation:spin 1s linear infinite"></i> Emailing '+ct.email+'\u2026</div>':'')
     +'<div style="font-size:12px;color:#888;margin-bottom:6px">Text to <strong>'+ct.phone+'</strong> \u2014 edit if needed, then tap Send.</div>'
     +'<div class="fg"><textarea id="an-msg" style="padding:8px 10px;font-size:13px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%;min-height:95px;font-family:inherit;resize:vertical">'+msg+'</textarea></div>',
     '<button class="btn bl" onclick="anSendText()"><i class="ti ti-message"></i>Send Text</button><button class="btn" onclick="cM()">Skip</button>');

@@ -7,13 +7,21 @@
 //   TWILIO_ACCOUNT_SID
 //   TWILIO_AUTH_TOKEN
 //   TWILIO_MESSAGING_SERVICE_SID
+//   CLOVER_API_TOKEN      -> Ecommerce/Hosted Checkout API token from Clover
+//                            (Account & Setup -> Ecommerce API tokens)
+//   CLOVER_MERCHANT_ID    -> Merchant ID shown on that same Clover page
 //
 // Only requests coming from the shop's own site are allowed (Origin check),
 // which stops random people from using this as a free Claude/Twilio proxy.
 //
 // Routes:
-//   POST /            -> forwards body as-is to Anthropic's /v1/messages (unchanged)
-//   POST /send-sms     -> sends a text via Twilio. Body: { "to": "+1XXXXXXXXXX", "body": "message text" }
+//   POST /                -> forwards body as-is to Anthropic's /v1/messages (unchanged)
+//   POST /send-sms         -> sends a text via Twilio. Body: { "to": "+1XXXXXXXXXX", "body": "message text" }
+//   POST /create-checkout  -> creates a Clover Hosted Checkout session for an exact invoice
+//                             amount so the customer never has to type it in. Body:
+//                             { "amount": 123.45, "invoiceNum": "3112" }. Returns { success, href }
+//                             where href is the one-time Clover checkout page (expires in ~15 min,
+//                             which is fine since it's created the moment the customer taps Pay).
 //
 // Cron Trigger (set in dashboard under Triggers - not in this code):
 //   Runs sendInvoiceReminders() once a day. Texts a reminder for every
@@ -62,6 +70,10 @@ export default {
 
     if (url.pathname === "/send-sms") {
       return handleSendSms(request, env, origin);
+    }
+
+    if (url.pathname === "/create-checkout") {
+      return handleCreateCheckout(request, env, origin);
     }
 
     return handleAnthropic(request, env, origin);
@@ -154,6 +166,72 @@ async function handleSendSms(request, env, origin) {
         headers: { ...corsHeaders(origin), "Content-Type": "application/json" }
       });
     }
+  } catch (e) {
+    return new Response(JSON.stringify({ success: false, error: "Upstream error", detail: String(e) }), {
+      status: 502,
+      headers: { ...corsHeaders(origin), "Content-Type": "application/json" }
+    });
+  }
+}
+
+async function handleCreateCheckout(request, env, origin) {
+  if (!env.CLOVER_API_TOKEN || !env.CLOVER_MERCHANT_ID) {
+    return new Response(JSON.stringify({ success: false, error: "Clover not configured" }), {
+      status: 500,
+      headers: { ...corsHeaders(origin), "Content-Type": "application/json" }
+    });
+  }
+
+  let payload;
+  try {
+    payload = await request.json();
+  } catch (e) {
+    return new Response(JSON.stringify({ success: false, error: "Bad request body" }), {
+      status: 400,
+      headers: { ...corsHeaders(origin), "Content-Type": "application/json" }
+    });
+  }
+
+  const amount = parseFloat(payload && payload.amount);
+  const invoiceNum = String((payload && payload.invoiceNum) || "").slice(0, 40);
+  if (!amount || amount <= 0) {
+    return new Response(JSON.stringify({ success: false, error: "Invalid amount" }), {
+      status: 400,
+      headers: { ...corsHeaders(origin), "Content-Type": "application/json" }
+    });
+  }
+
+  const cents = Math.round(amount * 100);
+  const base = "https://mttruckandtrailerrepair.com/shop.html?inv=" + encodeURIComponent(invoiceNum);
+
+  try {
+    const cloverRes = await fetch("https://api.clover.com/invoicingcheckoutservice/v1/checkouts", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "Authorization": "Bearer " + env.CLOVER_API_TOKEN,
+        "X-Clover-Merchant-Id": env.CLOVER_MERCHANT_ID
+      },
+      body: JSON.stringify({
+        shoppingCart: {
+          lineItems: [{ name: "Invoice #" + invoiceNum, price: cents, unitQty: 1 }]
+        },
+        redirectUrls: { success: base + "&paid=1", failure: base }
+      })
+    });
+
+    const data = await cloverRes.json();
+    if (cloverRes.ok && data && data.href) {
+      return new Response(JSON.stringify({ success: true, href: data.href }), {
+        status: 200,
+        headers: { ...corsHeaders(origin), "Content-Type": "application/json" }
+      });
+    }
+    return new Response(JSON.stringify({ success: false, error: (data && (data.message || data.error)) || "Clover error" }), {
+      status: cloverRes.status || 502,
+      headers: { ...corsHeaders(origin), "Content-Type": "application/json" }
+    });
   } catch (e) {
     return new Response(JSON.stringify({ success: false, error: "Upstream error", detail: String(e) }), {
       status: 502,
