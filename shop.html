@@ -3312,6 +3312,8 @@ function postSmsAndTrack(id,tel,msg,btn){
     invToast('Could not text invoice: '+(e&&e.message?e.message:e),false);
   });
 }
+// Safely embeds a string as a single-quoted JS literal inside an onclick="..." HTML attribute.
+function _jsq(s){return "'"+String(s==null?'':s).replace(/\\/g,'\\\\').replace(/'/g,"\\'")+"'";}
 // Builds a one-time Clover checkout page for the exact invoice balance so the
 // customer never has to type in an amount. If the Worker/Clover call fails
 // for any reason (not configured yet, network hiccup, etc.) we fall back to
@@ -6258,8 +6260,7 @@ function showSharedInvoice(invId){
 
   // Payment buttons
   var payBtns='';
-  var custNameJs="'"+String(inv.customer||'Customer').replace(/\\/g,'\\\\').replace(/'/g,"\\'")+"'";
-  if(shop.clover)payBtns+='<a href="javascript:void(0)" onclick="payWithCloverDynamic('+(parseInt(inv.num)||0)+','+invBal(inv)+','+custNameJs+',null,this)" id="clover-pay-btn" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#228800;color:#fff;border-radius:10px;padding:14px;font-size:15px;font-weight:600;text-decoration:none;margin-bottom:10px">💳 Pay with Card</a>';
+  if(shop.clover)payBtns+='<a href="javascript:void(0)" onclick="payWithCloverDynamic('+(parseInt(inv.num)||0)+','+invBal(inv)+','+_jsq(inv.customer||'Customer')+',null,this)" id="clover-pay-btn" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#228800;color:#fff;border-radius:10px;padding:14px;font-size:15px;font-weight:600;text-decoration:none;margin-bottom:10px">💳 Pay with Card</a>';
   if(shop.venmo)payBtns+='<a href="https://venmo.com/'+shop.venmo.replace('@','')+'" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#3D95CE;color:#fff;border-radius:10px;padding:14px;font-size:15px;font-weight:600;text-decoration:none;margin-bottom:10px"><img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/venmo.svg" width="20" height="20" style="filter:invert(1)">Pay with Venmo</a>';
   if(shop.cashapp)payBtns+='<a href="https://cash.app/'+shop.cashapp.replace('$','')+'" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#00C244;color:#fff;border-radius:10px;padding:14px;font-size:15px;font-weight:600;text-decoration:none;margin-bottom:10px">💚 Pay with CashApp</a>';
   if(shop.zelle)payBtns+='<a href="tel:'+shop.zelle.replace(/[^0-9]/g,'')+'" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#6D1ED4;color:#fff;border-radius:10px;padding:14px;font-size:15px;font-weight:600;text-decoration:none;margin-bottom:10px">💜 Pay with Zelle: '+shop.zelle+'</a>';
@@ -8652,7 +8653,8 @@ function fpRender(ci){
   // Open invoices
   h+=card(sect('receipt','Open Invoices'+(unpaid.length?' ('+unpaid.length+')':''))
     +(unpaid.length?unpaid.map(function(i){
-      return'<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid rgba(0,0,0,0.06)"><div><div style="font-size:13px;font-weight:600">Invoice #'+i.num+'</div><div style="font-size:11px;color:#888">'+i.date+' \u00b7 '+(i.vehicle||'')+'</div></div><div style="display:flex;align-items:center;gap:8px"><div style="font-size:14px;font-weight:700;color:#A32D2D">'+fm(parseFloat(i.total)||0)+'</div><a href="'+base+'?inv='+i.id+'" target="_blank" style="background:#185FA5;color:#fff;padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;text-decoration:none">View</a></div></div>';
+      var payBtn=shop.clover?('<a href="javascript:void(0)" onclick="payWithCloverDynamic('+(parseInt(i.num)||0)+','+invBal(i)+','+_jsq(cx.name)+','+_jsq(cx.email||'')+',this)" style="background:#228800;color:#fff;padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap">\ud83d\udcb3 Pay</a>'):'';
+      return'<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid rgba(0,0,0,0.06)"><div><div style="font-size:13px;font-weight:600">Invoice #'+i.num+'</div><div style="font-size:11px;color:#888">'+i.date+' \u00b7 '+(i.vehicle||'')+'</div></div><div style="display:flex;align-items:center;gap:8px"><div style="font-size:14px;font-weight:700;color:#A32D2D">'+fm(invBal(i))+'</div>'+payBtn+'<a href="'+base+'?inv='+i.id+'" target="_blank" style="background:#185FA5;color:#fff;padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;text-decoration:none">View</a></div></div>';
     }).join('')+'<div style="text-align:right;font-size:13px;font-weight:700;padding-top:8px">Total Due: <span style="color:#A32D2D">'+fm(unpaidAmt)+'</span></div>'
     :'<div style="font-size:12px;color:#3B6D11;font-weight:600">\u2713 All paid up. Thank you!</div>'));
   // PM schedule
