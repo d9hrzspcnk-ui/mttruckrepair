@@ -207,6 +207,16 @@ async function handleCreateCheckout(request, env, origin) {
   const cents = Math.round(amount * 100);
   const base = "https://mttruckandtrailerrepair.com/shop.html?inv=" + encodeURIComponent(invoiceNum);
 
+  // Clover requires a non-null customer object even if we don't have a real
+  // email/name on file for this invoice.
+  const rawName = String((payload && payload.customerName) || "Customer").trim();
+  const nameParts = rawName.split(/\s+/);
+  const customer = {
+    email: (payload && payload.customerEmail) || "noreply@mttruckandtrailerrepair.com",
+    firstName: nameParts[0] || "Customer",
+    lastName: nameParts.slice(1).join(" ") || "-"
+  };
+
   try {
     const cloverRes = await fetch("https://api.clover.com/invoicingcheckoutservice/v1/checkouts", {
       method: "POST",
@@ -217,6 +227,7 @@ async function handleCreateCheckout(request, env, origin) {
         "X-Clover-Merchant-Id": cloverMerchantId
       },
       body: JSON.stringify({
+        customer: customer,
         shoppingCart: {
           lineItems: [{ name: "Invoice #" + invoiceNum, price: cents, unitQty: 1 }]
         },

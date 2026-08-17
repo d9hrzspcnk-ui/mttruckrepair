@@ -3317,14 +3317,14 @@ function postSmsAndTrack(id,tel,msg,btn){
 // for any reason (not configured yet, network hiccup, etc.) we fall back to
 // the plain Clover payment link, where they can still pay by entering the
 // amount themselves.
-async function payWithCloverDynamic(invNum,amt,btn){
+async function payWithCloverDynamic(invNum,amt,custName,custEmail,btn){
   var orig=btn?btn.innerHTML:'';
   if(btn){btn.innerHTML='<i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i> Loading…';btn.style.pointerEvents='none';}
   try{
     var r=await fetch(AIPROXY+'/create-checkout',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({amount:amt,invoiceNum:invNum})
+      body:JSON.stringify({amount:amt,invoiceNum:invNum,customerName:custName,customerEmail:custEmail})
     });
     var d=await r.json();
     if(r.ok&&d&&d.success&&d.href){window.location.href=d.href;return;}
@@ -6258,7 +6258,8 @@ function showSharedInvoice(invId){
 
   // Payment buttons
   var payBtns='';
-  if(shop.clover)payBtns+='<a href="javascript:void(0)" onclick="payWithCloverDynamic('+(parseInt(inv.num)||0)+','+invBal(inv)+',this)" id="clover-pay-btn" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#228800;color:#fff;border-radius:10px;padding:14px;font-size:15px;font-weight:600;text-decoration:none;margin-bottom:10px">💳 Pay with Card</a>';
+  var custNameJs="'"+String(inv.customer||'Customer').replace(/\\/g,'\\\\').replace(/'/g,"\\'")+"'";
+  if(shop.clover)payBtns+='<a href="javascript:void(0)" onclick="payWithCloverDynamic('+(parseInt(inv.num)||0)+','+invBal(inv)+','+custNameJs+',null,this)" id="clover-pay-btn" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#228800;color:#fff;border-radius:10px;padding:14px;font-size:15px;font-weight:600;text-decoration:none;margin-bottom:10px">💳 Pay with Card</a>';
   if(shop.venmo)payBtns+='<a href="https://venmo.com/'+shop.venmo.replace('@','')+'" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#3D95CE;color:#fff;border-radius:10px;padding:14px;font-size:15px;font-weight:600;text-decoration:none;margin-bottom:10px"><img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/venmo.svg" width="20" height="20" style="filter:invert(1)">Pay with Venmo</a>';
   if(shop.cashapp)payBtns+='<a href="https://cash.app/'+shop.cashapp.replace('$','')+'" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#00C244;color:#fff;border-radius:10px;padding:14px;font-size:15px;font-weight:600;text-decoration:none;margin-bottom:10px">💚 Pay with CashApp</a>';
   if(shop.zelle)payBtns+='<a href="tel:'+shop.zelle.replace(/[^0-9]/g,'')+'" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#6D1ED4;color:#fff;border-radius:10px;padding:14px;font-size:15px;font-weight:600;text-decoration:none;margin-bottom:10px">💜 Pay with Zelle: '+shop.zelle+'</a>';
