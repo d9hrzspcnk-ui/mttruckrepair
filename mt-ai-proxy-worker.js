@@ -207,15 +207,11 @@ async function handleCreateCheckout(request, env, origin) {
   const cents = Math.round(amount * 100);
   const base = "https://mttruckandtrailerrepair.com/shop.html?inv=" + encodeURIComponent(invoiceNum);
 
-  // Clover requires a non-null customer object even if we don't have a real
-  // email/name on file for this invoice.
-  const rawName = String((payload && payload.customerName) || "Customer").trim();
-  const nameParts = rawName.split(/\s+/);
-  const customer = {
-    email: (payload && payload.customerEmail) || "noreply@mttruckandtrailerrepair.com",
-    firstName: nameParts[0] || "Customer",
-    lastName: nameParts.slice(1).join(" ") || "-"
-  };
+  // Clover requires a non-null customer object, but we deliberately leave it
+  // empty rather than pre-filling name/email: Clover locks any field that
+  // arrives pre-filled, and the shop wants customers to be able to type in
+  // whatever name/email is right for that particular payment.
+  const customer = {};
 
   try {
     const cloverRes = await fetch("https://api.clover.com/invoicingcheckoutservice/v1/checkouts", {
