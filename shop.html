@@ -3334,6 +3334,36 @@ async function payWithCloverDynamic(invNum,amt,custName,custEmail,btn){
   if(btn){btn.innerHTML=orig;btn.style.pointerEvents='';}
   window.location.href='https://'+shop.clover;
 }
+// Recomputes the running total shown on the shared invoice page when the
+// customer checks/unchecks which of their open invoices to bundle into one payment.
+function updatePaySelTotal(){
+  var boxes=document.querySelectorAll('.pay-sel-cb:checked');
+  var total=0;
+  for(var i=0;i<boxes.length;i++)total+=parseFloat(boxes[i].dataset.amt)||0;
+  var t1=document.getElementById('pay-sel-total');if(t1)t1.textContent='$'+total.toFixed(2);
+  var t2=document.getElementById('pay-sel-total-btn');if(t2)t2.textContent=total.toFixed(2);
+}
+// Same idea as payWithCloverDynamic but charges several invoices at once in a
+// single Clover checkout, built from whichever checkboxes are checked.
+async function payMultiCloverDynamic(custName,btn){
+  var boxes=document.querySelectorAll('.pay-sel-cb:checked');
+  if(!boxes.length){alert('Select at least one invoice to pay.');return;}
+  var invoices=[];
+  for(var i=0;i<boxes.length;i++)invoices.push({num:boxes[i].dataset.num,amount:parseFloat(boxes[i].dataset.amt)});
+  var orig=btn?btn.innerHTML:'';
+  if(btn){btn.innerHTML='<i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i> Loading…';btn.style.pointerEvents='none';}
+  try{
+    var r=await fetch(AIPROXY+'/create-checkout',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({invoices:invoices,customerName:custName})
+    });
+    var d=await r.json();
+    if(r.ok&&d&&d.success&&d.href){window.location.href=d.href;return;}
+  }catch(e){}
+  if(btn){btn.innerHTML=orig;btn.style.pointerEvents='';}
+  alert('Could not start checkout. Please call '+shop.phone+' or try again.');
+}
 function emInv(id,em){
   if(!em){alert('Enter email');return;}
   var i=INV[id];var cx=CUST.find(function(c){return c.name===i.customer;});
@@ -6258,9 +6288,31 @@ function showSharedInvoice(invId){
   }
   if(!lines)lines='<div style="padding:12px 0;font-size:13px;color:#888">See attached work order for service details.</div>';
 
+  // Other open invoices for the same customer, so they can bundle payment into one charge
+  var otherOpen=INV.filter(function(o){return o&&!o.deleted&&o.customer===inv.customer&&o.id!==inv.id&&invActive(o)&&invBal(o)>0.005;});
+  var multiPaySection='';
+  if(shop.clover&&otherOpen.length){
+    var allSel=[inv].concat(otherOpen);
+    var selRows=allSel.map(function(o){
+      var isCur=(o.id===inv.id);
+      return '<label style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid rgba(0,0,0,0.06);font-size:13px;cursor:pointer">'
+        +'<span style="display:flex;align-items:center;gap:8px"><input type="checkbox" class="pay-sel-cb" data-num="'+o.num+'" data-amt="'+invBal(o)+'" '+(isCur?'checked':'')+' onchange="updatePaySelTotal()" style="width:16px;height:16px"> Invoice #'+o.num+' <span style="color:#888">('+o.date+')</span></span>'
+        +'<strong>$'+invBal(o).toFixed(2)+'</strong>'
+        +'</label>';
+    }).join('');
+    multiPaySection='<div style="background:#fff;border:0.5px solid rgba(0,0,0,0.08);border-radius:10px;padding:12px 14px;margin-bottom:12px">'
+      +'<div style="font-size:13px;font-weight:700;margin-bottom:6px">You have '+allSel.length+' open invoices — select which to pay:</div>'
+      +selRows
+      +'<div style="display:flex;justify-content:space-between;padding-top:8px;font-size:14px;font-weight:800"><span>Selected Total</span><span id="pay-sel-total" style="color:#185FA5">$'+invBal(inv).toFixed(2)+'</span></div>'
+      +'</div>';
+  }
+
   // Payment buttons
   var payBtns='';
-  if(shop.clover)payBtns+='<a href="javascript:void(0)" onclick="payWithCloverDynamic('+(parseInt(inv.num)||0)+','+invBal(inv)+','+_jsq(inv.customer||'Customer')+',null,this)" id="clover-pay-btn" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#228800;color:#fff;border-radius:10px;padding:14px;font-size:15px;font-weight:600;text-decoration:none;margin-bottom:10px">💳 Pay with Card</a>';
+  if(shop.clover){
+    if(otherOpen.length)payBtns+='<a href="javascript:void(0)" onclick="payMultiCloverDynamic('+_jsq(inv.customer||'Customer')+',this)" id="clover-pay-btn" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#228800;color:#fff;border-radius:10px;padding:14px;font-size:15px;font-weight:600;text-decoration:none;margin-bottom:10px">💳 Pay Selected ($<span id="pay-sel-total-btn">'+invBal(inv).toFixed(2)+'</span>)</a>';
+    else payBtns+='<a href="javascript:void(0)" onclick="payWithCloverDynamic('+(parseInt(inv.num)||0)+','+invBal(inv)+','+_jsq(inv.customer||'Customer')+',null,this)" id="clover-pay-btn" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#228800;color:#fff;border-radius:10px;padding:14px;font-size:15px;font-weight:600;text-decoration:none;margin-bottom:10px">💳 Pay with Card</a>';
+  }
   if(shop.venmo)payBtns+='<a href="https://venmo.com/'+shop.venmo.replace('@','')+'" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#3D95CE;color:#fff;border-radius:10px;padding:14px;font-size:15px;font-weight:600;text-decoration:none;margin-bottom:10px"><img src="https://cdn.jsdelivr.net/npm/simple-icons@latest/icons/venmo.svg" width="20" height="20" style="filter:invert(1)">Pay with Venmo</a>';
   if(shop.cashapp)payBtns+='<a href="https://cash.app/'+shop.cashapp.replace('$','')+'" target="_blank" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#00C244;color:#fff;border-radius:10px;padding:14px;font-size:15px;font-weight:600;text-decoration:none;margin-bottom:10px">💚 Pay with CashApp</a>';
   if(shop.zelle)payBtns+='<a href="tel:'+shop.zelle.replace(/[^0-9]/g,'')+'" style="display:flex;align-items:center;justify-content:center;gap:8px;background:#6D1ED4;color:#fff;border-radius:10px;padding:14px;font-size:15px;font-weight:600;text-decoration:none;margin-bottom:10px">💜 Pay with Zelle: '+shop.zelle+'</a>';
@@ -6298,7 +6350,7 @@ function showSharedInvoice(invId){
     +(invPaidAmt(inv)>0.005?'<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:14px;color:#27500A"><span>Payments Received</span><span>\u2212$'+invPaidAmt(inv).toFixed(2)+'</span></div>'
     +'<div style="display:flex;justify-content:space-between;padding:6px 0 2px;font-size:17px;font-weight:800;border-top:1px solid rgba(0,0,0,0.1)"><span>Balance Due</span><span style="color:'+(invBal(inv)>0.005?'#A32D2D':'#27500A')+'">$'+invBal(inv).toFixed(2)+'</span></div>':'')
     +'</div>'
-    +(inv.status!=='Paid'?'<div style="margin-bottom:16px">'+payBtns+'</div>':'<div style="background:#EAF3DE;border-radius:10px;padding:14px;text-align:center;font-size:15px;font-weight:700;color:#27500A;margin-bottom:16px">✓ This invoice has been paid. Thank you!</div>')
+    +(inv.status!=='Paid'?multiPaySection+'<div style="margin-bottom:16px">'+payBtns+'</div>':'<div style="background:#EAF3DE;border-radius:10px;padding:14px;text-align:center;font-size:15px;font-weight:700;color:#27500A;margin-bottom:16px">✓ This invoice has been paid. Thank you!</div>')
     +(inv.notes?'<div style="background:#FFF3CD;border-radius:8px;padding:10px 12px;font-size:13px;color:#633806;margin-bottom:16px">'+inv.notes+'</div>':'')
     +'<div style="text-align:center;font-size:12px;color:#888;padding:16px 0">Questions? Call '+shop.phone+'<br>'+shop.name+' · '+shop.addr+'</div>'
     +'</div>';

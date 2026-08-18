@@ -18,10 +18,13 @@
 //   POST /                -> forwards body as-is to Anthropic's /v1/messages (unchanged)
 //   POST /send-sms         -> sends a text via Twilio. Body: { "to": "+1XXXXXXXXXX", "body": "message text" }
 //   POST /create-checkout  -> creates a Clover Hosted Checkout session for an exact invoice
-//                             amount so the customer never has to type it in. Body:
-//                             { "amount": 123.45, "invoiceNum": "3112" }. Returns { success, href }
-//                             where href is the one-time Clover checkout page (expires in ~15 min,
-//                             which is fine since it's created the moment the customer taps Pay).
+//                             amount so the customer never has to type it in. Body is either
+//                             a single invoice { "amount": 123.45, "invoiceNum": "3112" } or
+//                             several bundled into one charge:
+//                             { "invoices": [{ "num": "3112", "amount": 123.45 }, ...] }.
+//                             Returns { success, href } where href is the one-time Clover
+//                             checkout page (expires in ~15 min, which is fine since it's
+//                             created the moment the customer taps Pay).
 //
 // Cron Trigger (set in dashboard under Triggers - not in this code):
 //   Runs sendInvoiceReminders() once a day. Texts a reminder for every
@@ -195,17 +198,28 @@ async function handleCreateCheckout(request, env, origin) {
     });
   }
 
-  const amount = parseFloat(payload && payload.amount);
-  const invoiceNum = String((payload && payload.invoiceNum) || "").slice(0, 40);
-  if (!amount || amount <= 0) {
+  // Two request shapes: a single invoice ({ amount, invoiceNum }), or several
+  // bundled into one charge ({ invoices: [{ num, amount }, ...] }).
+  let items;
+  if (Array.isArray(payload && payload.invoices) && payload.invoices.length) {
+    items = payload.invoices.map(function (i) {
+      return { num: String((i && i.num) || "").slice(0, 40), amount: parseFloat(i && i.amount) };
+    });
+  } else {
+    items = [{ num: String((payload && payload.invoiceNum) || "").slice(0, 40), amount: parseFloat(payload && payload.amount) }];
+  }
+  if (!items.length || items.some(function (i) { return !i.num || !i.amount || i.amount <= 0; })) {
     return new Response(JSON.stringify({ success: false, error: "Invalid amount" }), {
       status: 400,
       headers: { ...corsHeaders(origin), "Content-Type": "application/json" }
     });
   }
 
-  const cents = Math.round(amount * 100);
-  const base = "https://mttruckandtrailerrepair.com/shop.html?inv=" + encodeURIComponent(invoiceNum);
+  const invoiceNums = items.map(function (i) { return i.num; });
+  const base = "https://mttruckandtrailerrepair.com/shop.html?inv=" + encodeURIComponent(invoiceNums[0]);
+  const lineItems = items.map(function (i) {
+    return { name: "Invoice #" + i.num, price: Math.round(i.amount * 100), unitQty: 1 };
+  });
 
   // Clover requires a non-null customer object, but we deliberately leave it
   // empty rather than pre-filling name/email: Clover locks any field that
@@ -225,9 +239,9 @@ async function handleCreateCheckout(request, env, origin) {
       body: JSON.stringify({
         customer: customer,
         shoppingCart: {
-          lineItems: [{ name: "Invoice #" + invoiceNum, price: cents, unitQty: 1 }]
+          lineItems: lineItems
         },
-        redirectUrls: { success: base + "&paid=1", failure: base }
+        redirectUrls: { success: base + "&paid=" + encodeURIComponent(invoiceNums.join(",")), failure: base }
       })
     });
 
