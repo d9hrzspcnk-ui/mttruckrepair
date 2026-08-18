@@ -10,9 +10,15 @@
 //   CLOVER_API_TOKEN      -> Ecommerce/Hosted Checkout API token from Clover
 //                            (Account & Setup -> Ecommerce API tokens)
 //   CLOVER_MERCHANT_ID    -> Merchant ID shown on that same Clover page
+//   CLOVER_WEBHOOK_SECRET  -> Signing secret from Clover's Hosted Checkout webhook
+//                             setup (Settings -> Ecommerce -> Hosted Checkout ->
+//                             Webhook URL -> Generate). Used to verify that payment
+//                             webhooks really came from Clover, not to send anything.
 //
 // Only requests coming from the shop's own site are allowed (Origin check),
 // which stops random people from using this as a free Claude/Twilio proxy.
+// The one exception is /clover-webhook, which Clover's own servers call
+// directly (no Origin header) and which is authenticated by signature instead.
 //
 // Routes:
 //   POST /                -> forwards body as-is to Anthropic's /v1/messages (unchanged)
@@ -24,7 +30,13 @@
 //                             { "invoices": [{ "num": "3112", "amount": 123.45 }, ...] }.
 //                             Returns { success, href } where href is the one-time Clover
 //                             checkout page (expires in ~15 min, which is fine since it's
-//                             created the moment the customer taps Pay).
+//                             created the moment the customer taps Pay). Also remembers
+//                             which invoice(s) this checkout session was for, so the
+//                             webhook below can mark them paid automatically.
+//   POST /clover-webhook   -> called by Clover when a Hosted Checkout payment completes.
+//                             Verifies the Clover-Signature header, looks up which
+//                             invoice(s) that checkout session was for, and marks them
+//                             paid (or partial, for a partial payment) in the shop's data.
 //
 // Cron Trigger (set in dashboard under Triggers - not in this code):
 //   Runs sendInvoiceReminders() once a day. Texts a reminder for every
@@ -61,6 +73,12 @@ export default {
 
     if (request.method !== "POST") {
       return new Response("Method not allowed", { status: 405, headers: corsHeaders(origin) });
+    }
+
+    // Clover calls this directly (no Origin header) and is authenticated by
+    // signature instead, so it must be handled before the origin check below.
+    if (url.pathname === "/clover-webhook") {
+      return handleCloverWebhook(request, env);
     }
 
     // Only allow calls from the shop's own site
@@ -247,6 +265,13 @@ async function handleCreateCheckout(request, env, origin) {
 
     const data = await cloverRes.json();
     if (cloverRes.ok && data && data.href) {
+      // Remember which invoice(s) this checkout was for, keyed by Clover's
+      // session id, so the webhook can mark the right invoice(s) paid without
+      // having to guess from Clover's side what the line items meant.
+      const sessionId = data.checkoutSessionId || (data.href.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i) || [])[0];
+      if (sessionId) {
+        await sbPut("mttr-cksession-" + sessionId, { invoices: items, createdAt: new Date().toISOString() });
+      }
       return new Response(JSON.stringify({ success: true, href: data.href }), {
         status: 200,
         headers: { ...corsHeaders(origin), "Content-Type": "application/json" }
@@ -262,6 +287,84 @@ async function handleCreateCheckout(request, env, origin) {
       headers: { ...corsHeaders(origin), "Content-Type": "application/json" }
     });
   }
+}
+
+// Verifies Clover's "Clover-Signature: t=<timestamp>,v1=<hex>" header by
+// recomputing the HMAC-SHA256 of "<timestamp>.<rawBody>" with the webhook
+// secret and comparing it to v1. Without this, anyone who found the webhook
+// URL could fake a "payment approved" call and get an invoice marked paid
+// for free.
+async function verifyCloverSignature(rawBody, sigHeader, secret) {
+  if (!sigHeader) return false;
+  const parts = {};
+  sigHeader.split(",").forEach(function (kv) {
+    const idx = kv.indexOf("=");
+    if (idx > -1) parts[kv.slice(0, idx).trim()] = kv.slice(idx + 1).trim();
+  });
+  if (!parts.t || !parts.v1) return false;
+
+  const enc = new TextEncoder();
+  const key = await crypto.subtle.importKey("raw", enc.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sigBuf = await crypto.subtle.sign("HMAC", key, enc.encode(parts.t + "." + rawBody));
+  const sigHex = Array.from(new Uint8Array(sigBuf)).map(function (b) { return b.toString(16).padStart(2, "0"); }).join("");
+  return sigHex === parts.v1;
+}
+
+// Called by Clover when a Hosted Checkout payment completes. Looks up which
+// invoice(s) that checkout session was created for (saved in handleCreateCheckout)
+// and marks them paid/partial. Always responds 200 once the signature checks
+// out, even if there's nothing to do, since Clover retries on non-2xx responses.
+async function handleCloverWebhook(request, env) {
+  const rawBody = await request.text();
+  const sig = request.headers.get("Clover-Signature");
+
+  if (!env.CLOVER_WEBHOOK_SECRET || !(await verifyCloverSignature(rawBody, sig, env.CLOVER_WEBHOOK_SECRET))) {
+    return new Response("Invalid signature", { status: 401 });
+  }
+
+  let event;
+  try {
+    event = JSON.parse(rawBody);
+  } catch (e) {
+    return new Response("Bad body", { status: 400 });
+  }
+
+  if (!event || event.Type !== "PAYMENT" || event.Status !== "APPROVED" || !event.Data) {
+    return new Response("OK", { status: 200 });
+  }
+
+  const mapping = await sbGet("mttr-cksession-" + event.Data);
+  if (!mapping || !mapping.invoices || !mapping.invoices.length) {
+    return new Response("OK", { status: 200 });
+  }
+
+  const invoices = await sbGet("mttr-inv");
+  if (!invoices) return new Response("OK", { status: 200 });
+
+  let changed = false;
+  for (const item of mapping.invoices) {
+    const inv = invoices.find(function (i) { return i && String(i.num) === String(item.num); });
+    if (!inv) continue;
+    if (!inv.payments) inv.payments = [];
+    // Idempotency: Clover may deliver the same webhook more than once.
+    if (inv.payments.some(function (p) { return p.cloverPaymentId === event.Id; })) continue;
+
+    inv.payments.push({ amt: item.amount, method: "Clover", date: new Date().toLocaleString(), cloverPaymentId: event.Id });
+    const paidTotal = inv.payments.reduce(function (s, p) { return s + (parseFloat(p.amt) || 0); }, 0);
+    const total = parseFloat(inv.total) || 0;
+    if (total > 0 && paidTotal >= total - 0.005) {
+      inv.status = "Paid";
+      inv.paidDate = new Date().toISOString().slice(0, 10);
+    } else if (paidTotal > 0.005) {
+      inv.status = "Partial";
+    }
+    if (!inv.history) inv.history = [];
+    inv.history.push({ type: "clover-payment", at: new Date().toLocaleString(), amt: item.amount, status: "sent" });
+    changed = true;
+  }
+
+  if (changed) await sbPut("mttr-inv", invoices);
+  return new Response("OK", { status: 200 });
 }
 
 // Shared by the /send-sms route and the daily reminder cron job.
