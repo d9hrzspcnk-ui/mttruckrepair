@@ -8594,10 +8594,20 @@ function fleetPortalLink(ci){
   oM('Fleet Portal \u2014 '+cx.name,
     '<div style="font-size:13px;color:#555;margin-bottom:10px">Send this link to '+cx.name+'. They will see <strong>their trucks, open invoices, PM due dates, and full service history</strong> \u2014 read-only, no login needed. This is a big selling point for winning fleet accounts.</div>'
     +'<div style="background:#f5f5f7;border-radius:8px;padding:10px;font-size:12px;word-break:break-all;margin-bottom:8px;font-family:monospace">'+_fpUrl+'</div>'
-    +'<div style="font-size:12px;color:#888">Access code: <strong>'+cx.portalCode+'</strong> <button class="btn xs" onclick="fpResetCode('+ci+')" style="margin-left:6px">Reset Code</button></div>',
+    +'<div style="font-size:12px;color:#888;margin-bottom:10px">Access code: <strong>'+cx.portalCode+'</strong> <button class="btn xs" onclick="fpResetCode('+ci+')" style="margin-left:6px">Random New Code</button></div>'
+    +'<div class="fg"><label>Or set a custom code (4-10 letters/numbers)</label><div style="display:flex;gap:6px"><input id="fp-custom-code" maxlength="10" value="'+cx.portalCode+'" style="flex:1;padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;text-transform:uppercase;font-family:monospace"><button class="btn xs bl" onclick="fpSetCustomCode('+ci+')">Save Code</button></div></div>',
     '<button class="btn bl" onclick="fpCopy()"><i class="ti ti-copy"></i>Copy Link</button><button class="btn gr" onclick="fpText()"><i class="ti ti-message"></i>Text</button><button class="btn" onclick="fpQR()"><i class="ti ti-qrcode"></i>QR</button><button class="btn" onclick="cM()">Close</button>');
 }
 function fpResetCode(ci){var cx=CUST[ci];if(!cx)return;if(!confirm('Reset portal code? The old link will stop working.'))return;cx.portalCode=fpGenCode();saveAll();fleetPortalLink(ci);}
+function fpSetCustomCode(ci){
+  var cx=CUST[ci];if(!cx)return;
+  var inp=el('fp-custom-code');if(!inp)return;
+  var code=inp.value.trim().toUpperCase().replace(/[^A-Z0-9]/g,'');
+  if(code.length<4){alert('Code must be at least 4 letters/numbers.');return;}
+  var dupe=CUST.find(function(c,i){return i!==ci&&c.portalCode&&String(c.portalCode).toUpperCase()===code;});
+  if(dupe){alert('That code is already used by '+dupe.name+'. Pick a different one.');return;}
+  cx.portalCode=code;saveAll();fleetPortalLink(ci);
+}
 function fpCopy(){copyShareLink(_fpUrl);}
 function fpText(){textShareLink(_fpUrl,'Fleet Portal');}
 function fpQR(){showQRCode(_fpUrl);}
