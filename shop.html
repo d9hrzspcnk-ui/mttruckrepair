@@ -586,7 +586,7 @@ function setLang(lang){
 function goHome(){showScr('SH');el('h-addr').textContent=shop.addr||'12200 Hibiscus Rd, Adelanto CA';}
 function goPin(){showScr('SP');pe='';updD();el('perr').style.display='none';}
 function goCI(){showScr('SCI');buildCI();setTimeout(initSig,100);var h=document.getElementById('ci-hdr-title');if(h)h.textContent=t('ciTitle');}
-function goShop(){showScr('SS');applyRole();goP('d');startBackgroundPoll();}
+function goShop(){showScr('SS');applyRole();goP('d');startBackgroundPoll();checkInvoiceReminders();}
 function applyRole(){['r','pf','t','s'].forEach(function(p){var n=el('n-'+p);if(n)n.style.display=(ROLE==='office')?'none':'';});}
 
 function pk(n){if(pe.length<4){pe+=n;updD();if(pe.length===4){if(pe===PIN){ROLE='owner';el('perr').style.display='none';pe='';updD();goShop();}else if(OPIN&&pe===OPIN){ROLE='office';el('perr').style.display='none';pe='';updD();goShop();}else{el('perr').style.display='block';pe='';updD();}}}}
@@ -1280,6 +1280,7 @@ function toInv(wid){
   INV.push(ni);
   w.status='Completed';var cx=CUST.find(function(c){return c.name===w.customer;});if(cx)cx.jobs=(cx.jobs||0)+1;
   saveAll();cM();alert('Invoice #'+(invc-1)+' created! Total: $'+s.tot);goP('i');
+  autoSendInvoice(ni.id);
 }
 function nWO(){
   var techO='<option value="">\u2014 Unassigned \u2014</option>'+getTechList().map(function(t){return'<option>'+t.name+'</option>';}).join('');
@@ -2991,10 +2992,12 @@ function svNI(){
   var taxp=el('ni2-taxp')?parseFloat(el('ni2-taxp').value)||0:(parseFloat(shop.taxRate)||0);
   var dv=el('ni2-disc')?parseFloat(el('ni2-disc').value)||0:0;
   var dt=el('ni2-disct')?el('ni2-disct').value:'$';
-  INV.push({id:INV.length,num:invc++,customer:c,phone:phone,vehicle:veh,vin:vin,labor:'0.00',parts:'0.00',supplies:sup,taxPct:taxp,discount:dv,discountType:dt,subtotal:'0.00',tax:'0.00',total:'0.00',status:'Unpaid',payment:'',date:td(),jobs:jobs,extras:extras,woTicket:'\u2014'});
-  recalcInv(INV.length-1);
+  var niId=INV.length;
+  INV.push({id:niId,num:invc++,customer:c,phone:phone,vehicle:veh,vin:vin,labor:'0.00',parts:'0.00',supplies:sup,taxPct:taxp,discount:dv,discountType:dt,subtotal:'0.00',tax:'0.00',total:'0.00',status:'Unpaid',payment:'',date:td(),jobs:jobs,extras:extras,woTicket:'\u2014'});
+  recalcInv(niId);
   _niJobs=[];_niExtras=[];
-  saveAll();cM();rDash();rINV();}
+  saveAll();cM();rDash();rINV();
+  autoSendInvoice(niId);}
 function prtInv(id){
   var i=INV[id];var vin=invVIN(i);
   var w=null;if(i.woTicket&&i.woTicket!=='\u2014'){w=WO.find(function(x){return x.ticket===i.woTicket;});}
@@ -4206,7 +4209,7 @@ function rSet(){
     +'</div>'
     +'<div class="card" style="border:1.5px solid #185FA5;margin-bottom:12px">'
     +'<div style="font-size:14px;font-weight:600;margin-bottom:4px;color:#0C447C"><i class="ti ti-bell" style="font-size:16px;vertical-align:-2px"></i> Auto Customer Notifications</div>'
-    +'<div style="font-size:12px;color:#888;margin-bottom:10px">When a work order is created, a truck is marked <strong>Completed</strong>, or an invoice is marked <strong>Paid</strong>: an email is sent automatically (if on file) and a pre-written text pops up ready to send in one tap.</div>'
+    +'<div style="font-size:12px;color:#888;margin-bottom:10px">When a work order is created, a truck is marked <strong>Completed</strong>, or an invoice is marked <strong>Paid</strong>: an email is sent automatically (if on file) and a pre-written text pops up ready to send in one tap. <strong>New invoices are texted and emailed to the customer automatically the moment they’re created</strong> — no need to tap Send. Unpaid invoices also get up to 4 automatic payment reminder texts/emails, spaced a few days apart, whenever you have the app open. Turn any of this off per customer under Customers → Preferences → “Receive Invoices.”</div>'
     +'<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;font-weight:500"><input type="checkbox" id="s-autonotif" '+(shop.autoNotify===false?'':'checked')+' style="width:18px;height:18px;accent-color:#185FA5"> Enable auto notifications</label>'
     +'</div>'
     +'<div class="card" style="border:1.5px solid #534AB7">'
@@ -7932,6 +7935,89 @@ function autoNotify(evt,d){
     '<button class="btn bl" onclick="anSendText()"><i class="ti ti-message"></i>Send Text</button><button class="btn" onclick="cM()">Skip</button>');
 }
 function anSendText(){var m=el('an-msg');sms(_anPh,m?m.value:'');cM();}
+
+// ==================== AUTO-SEND & AUTO-REMIND INVOICES ====================
+// Fires the moment an invoice is created (toInv, svNI) so the customer gets
+// it immediately instead of waiting for staff to tap Send. Uses real
+// automatic delivery (EmailJS + the Twilio worker), not the "sms:" link
+// which needs a human to tap Send in their phone app.
+function invContactFor(inv){
+  var cx=CUST.find(function(c){return c.name===inv.customer;});
+  var email=(cx&&cx.email)||'';
+  var digits=((cx&&cx.phone)||inv.phone||'').replace(/\D/g,'');
+  var tel=(digits.length===10)?('+1'+digits):((digits.length===11&&digits.charAt(0)==='1')?('+'+digits):'');
+  var optOut=!!(cx&&cx.prefs&&cx.prefs.inv===false);
+  return{cx:cx,email:email,tel:tel,optOut:optOut};
+}
+function autoSendInvoice(id){
+  if(shop.autoNotify===false)return;
+  var inv=INV[id];if(!inv)return;
+  var c=invContactFor(inv);
+  if(c.optOut||(!c.email&&!c.tel))return;
+  var invLink=window.location.origin+window.location.pathname+'?inv='+inv.num;
+  var total=(parseFloat(inv.total)||0).toFixed(2);
+  if(!inv.history)inv.history=[];
+  if(c.email&&typeof emailjs!=='undefined'){
+    var body='Hi '+inv.customer+',\n\nYour invoice #'+inv.num+' from '+shop.name+' is ready.\n\nAmount Due: $'+total+'\n\nView and pay your invoice here:\n'+invLink+'\n\n'+(shop.venmo?'Pay via Venmo: '+shop.venmo+'\n':'')+(shop.cashapp?'Pay via CashApp: '+shop.cashapp+'\n':'')+(shop.zelle?'Pay via Zelle: '+shop.zelle+'\n':'')+'\nQuestions? Call '+shop.phone+'\n\nThank you,\n'+shop.name;
+    emailjs.send(ES,ET,{email:c.email,to_name:inv.customer,from_name:shop.name,subject:'Invoice #'+inv.num+' from '+shop.name+' - $'+total,message:body.replace(/\n/g,'<br>'),shop_name:shop.name,shop_phone:shop.phone,shop_addr:shop.addr,invoice_num:inv.num,customer_name:inv.customer,vehicle:inv.vehicle||'',date:inv.date,status:inv.status,total:'$'+total,invoice_link:invLink,terms:shop.terms||'Payment due upon receipt.'})
+      .then(function(){inv.history.push({type:'email-invoice',at:new Date().toLocaleString(),to:c.email,status:'sent'});inv.sent=true;inv.sentAt=new Date().toLocaleString();inv.emailSent=true;inv.emailSentAt=new Date().toLocaleString();saveAll();})
+      .catch(function(){inv.history.push({type:'email-invoice',at:new Date().toLocaleString(),to:c.email,status:'failed'});saveAll();});
+  }
+  if(c.tel){
+    var msg='Hi '+inv.customer+'! Invoice #'+inv.num+' from '+shop.name+' is ready. Amount due: $'+total+'. View/pay: '+invLink+' Questions? Call '+shop.phone;
+    postSmsAndTrack(id,c.tel,msg,null);
+  }
+}
+// Reminder cadence: first nudge 3 days after the invoice was created, then
+// every 4 days after that, capped at 4 total reminders per invoice (matches
+// the "auto-reminded 4x" flag already shown on the dashboard/invoice list).
+function sendAutoReminder(id){
+  var i=INV[id];if(!i)return;
+  var c=invContactFor(i);
+  if(c.optOut||(!c.email&&!c.tel))return;
+  var n=(i.reminderCount||0)+1;
+  var invLink=window.location.origin+window.location.pathname+'?inv='+i.num;
+  var bal=invBal(i).toFixed(2);
+  var lead=n>=4?'Final reminder':n===1?'Friendly reminder':'Reminder';
+  var msg=lead+' — Invoice #'+i.num+' from '+shop.name+' has a balance of $'+bal+'. View/pay: '+invLink+'. Questions? Call '+shop.phone;
+  if(!i.history)i.history=[];
+  if(c.email&&typeof emailjs!=='undefined'){
+    emailjs.send(ES,ET,{email:c.email,to_name:i.customer,from_name:shop.name,subject:lead+' — Invoice #'+i.num,message:msg.replace(/\n/g,'<br>'),shop_phone:shop.phone,shop_addr:shop.addr})
+      .then(function(){i.history.push({type:'auto-reminder',at:new Date().toLocaleString(),to:c.email,status:'sent'});saveAll();})
+      .catch(function(){i.history.push({type:'auto-reminder',at:new Date().toLocaleString(),to:c.email,status:'failed'});saveAll();});
+  }
+  if(c.tel){
+    fetch(AIPROXY+'/send-sms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:c.tel,body:msg})})
+      .then(function(r){return r.json().then(function(d){return{ok:r.ok,d:d};});})
+      .then(function(res){var ok=!!(res.ok&&res.d&&res.d.success);i.history.push({type:'auto-reminder',at:new Date().toLocaleString(),to:c.tel,status:ok?'sent':'failed'});saveAll();})
+      .catch(function(){i.history.push({type:'auto-reminder',at:new Date().toLocaleString(),to:c.tel,status:'failed'});saveAll();});
+  }
+  i.reminderCount=n;i.lastReminderAt=Date.now();
+  if(n>=4)i.reminderCapped=true;
+  saveAll();
+}
+function checkInvoiceReminders(){
+  if(shop.autoNotify===false)return;
+  var now=Date.now();
+  // One-time safety step: the first time this runs, every already-unpaid
+  // invoice would otherwise look "overdue" and blast out a reminder all at
+  // once. Instead we just start each one's reminder clock from today, so
+  // the first automatic reminder for old invoices lands a few days out
+  // like normal, not the instant this ships.
+  if(!shop._remindersMigrated){
+    activeInv().forEach(function(i){if(invActive(i)&&invBal(i)>0.005&&!i.lastReminderAt)i.lastReminderAt=now;});
+    shop._remindersMigrated=true;saveAll();return;
+  }
+  activeInv().forEach(function(i){
+    if(!invActive(i)||i.reminderCapped)return;
+    if(invBal(i)<=0.005)return;
+    var count=i.reminderCount||0;
+    if(count>=4){i.reminderCapped=true;saveAll();return;}
+    var last=i.lastReminderAt||(new Date(i.date).getTime())||now;
+    var gapDays=count===0?3:4;
+    if(now-last>=gapDays*24*60*60*1000)sendAutoReminder(i.id);
+  });
+}
 function invPaidAmt(i){
   if(i.payments&&i.payments.length)return i.payments.reduce(function(s,p){return s+(parseFloat(p.amt)||0);},0);
   return i.status==='Paid'?(parseFloat(i.total)||0):0;
