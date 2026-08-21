@@ -3435,6 +3435,7 @@ function vCust(i){
     +inp('ec-cl','Contact Last Name',c.contactLast,'Last')
     +inp('ec-cell','Cell Phone',c.cell,'(555) 555-5555','tel')
     +inp('ec-t','Payment Terms',c.payTerms,'Net-30, COD...')
+    +'<div class="fg"><label>Preferred Language</label><select id="ec-lang" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;font-family:inherit;background:#f5f5f7;width:100%"><option value="en"'+(c.lang!=='es'?' selected':'')+'>English</option><option value="es"'+(c.lang==='es'?' selected':'')+'>Espa\u00f1ol</option></select></div>'
     +'<div class="fg"><label>Notes</label><input id="ec-notes" value="'+(c.notes||'')+'" placeholder="Internal notes..." style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'</div>'
     +'<div style="font-size:12px;font-weight:600;margin:4px 0 8px;color:#555;text-transform:uppercase;letter-spacing:0.5px">Contact Preferences</div>'
@@ -3606,6 +3607,7 @@ function svCust(i){
   CUST[i].name=newName;CUST[i].phone=gv('ec-p');CUST[i].email=gv('ec-e');
   CUST[i].dot=gv('ec-d');CUST[i].mc=gv('ec-m');CUST[i].payTerms=gv('ec-t');CUST[i].notes=gv('ec-notes');
   CUST[i].contactFirst=gv('ec-cf');CUST[i].contactLast=gv('ec-cl');CUST[i].cell=gv('ec-cell');CUST[i].prefs=readPrefs('ec2-');
+  CUST[i].lang=el('ec-lang')?el('ec-lang').value:'en';
   CUST[i].isFleet=!!(el('ec-fleet')&&el('ec-fleet').checked);
   CUST[i].fleetPO=gv('ec-fpo');CUST[i].fleetBillingContact=gv('ec-fbill');
   CUST[i].fleetDiscount=parseFloat(gv('ec-fdisc'))||0;CUST[i].fleetPartsMarkup=parseFloat(gv('ec-fmk'))||0;
@@ -3709,6 +3711,7 @@ function nCust(){
     +'<div class="fg"><label>Email</label><input id="nc-e" placeholder="email@example.com" '+F+'></div>'
     +'<div class="fg"><label>'+t('ciDOT')+'</label><input id="nc-d" placeholder="DOT number" '+F+'></div>'
     +'<div class="fg"><label>MC #</label><input id="nc-mc" placeholder="MC number" '+F+'></div>'
+    +'<div class="fg"><label>Preferred Language</label><select id="nc-lang" '+F+'><option value="en" selected>English</option><option value="es">Espa\u00f1ol</option></select></div>'
     +'</div>'
     +'<div style="font-size:12px;font-weight:600;margin:10px 0 8px;color:#555;text-transform:uppercase;letter-spacing:0.5px">Contact Preferences</div>'
     +custPrefRows('nc2-'),
@@ -3716,7 +3719,7 @@ function nCust(){
 }
 function svNCust(){
   var n=gv('nc-n');if(!n){alert('Enter name');return;}
-  CUST.push({name:n,contactFirst:gv('nc-cf'),contactLast:gv('nc-cl'),phone:gv('nc-p'),cell:gv('nc-cell'),email:gv('nc-e'),dot:gv('nc-d'),mc:gv('nc-mc'),prefs:readPrefs('nc2-'),units:[],jobs:0,lastVisit:td()});
+  CUST.push({name:n,contactFirst:gv('nc-cf'),contactLast:gv('nc-cl'),phone:gv('nc-p'),cell:gv('nc-cell'),email:gv('nc-e'),dot:gv('nc-d'),mc:gv('nc-mc'),lang:(el('nc-lang')?el('nc-lang').value:'en'),prefs:readPrefs('nc2-'),units:[],jobs:0,lastVisit:td()});
   saveAll();cM();rDash();rCUST();
 }
 
@@ -7954,17 +7957,23 @@ function autoSendInvoice(id){
   var inv=INV[id];if(!inv)return;
   var c=invContactFor(inv);
   if(c.optOut||(!c.email&&!c.tel))return;
+  var es=!!(c.cx&&c.cx.lang==='es');
   var invLink=window.location.origin+window.location.pathname+'?inv='+inv.num;
   var total=(parseFloat(inv.total)||0).toFixed(2);
   if(!inv.history)inv.history=[];
   if(c.email&&typeof emailjs!=='undefined'){
-    var body='Hi '+inv.customer+',\n\nYour invoice #'+inv.num+' from '+shop.name+' is ready.\n\nAmount Due: $'+total+'\n\nView and pay your invoice here:\n'+invLink+'\n\n'+(shop.venmo?'Pay via Venmo: '+shop.venmo+'\n':'')+(shop.cashapp?'Pay via CashApp: '+shop.cashapp+'\n':'')+(shop.zelle?'Pay via Zelle: '+shop.zelle+'\n':'')+'\nQuestions? Call '+shop.phone+'\n\nThank you,\n'+shop.name;
-    emailjs.send(ES,ET,{email:c.email,to_name:inv.customer,from_name:shop.name,subject:'Invoice #'+inv.num+' from '+shop.name+' - $'+total,message:body.replace(/\n/g,'<br>'),shop_name:shop.name,shop_phone:shop.phone,shop_addr:shop.addr,invoice_num:inv.num,customer_name:inv.customer,vehicle:inv.vehicle||'',date:inv.date,status:inv.status,total:'$'+total,invoice_link:invLink,terms:shop.terms||'Payment due upon receipt.'})
+    var body=es
+      ? 'Hola '+inv.customer+',\n\nSu factura #'+inv.num+' de '+shop.name+' ya est\u00e1 lista.\n\nMonto a pagar: $'+total+'\n\nVea y pague su factura aqu\u00ed:\n'+invLink+'\n\n'+(shop.venmo?'Pague con Venmo: '+shop.venmo+'\n':'')+(shop.cashapp?'Pague con CashApp: '+shop.cashapp+'\n':'')+(shop.zelle?'Pague con Zelle: '+shop.zelle+'\n':'')+'\n\u00bfPreguntas? Llame al '+shop.phone+'\n\nGracias,\n'+shop.name
+      : 'Hi '+inv.customer+',\n\nYour invoice #'+inv.num+' from '+shop.name+' is ready.\n\nAmount Due: $'+total+'\n\nView and pay your invoice here:\n'+invLink+'\n\n'+(shop.venmo?'Pay via Venmo: '+shop.venmo+'\n':'')+(shop.cashapp?'Pay via CashApp: '+shop.cashapp+'\n':'')+(shop.zelle?'Pay via Zelle: '+shop.zelle+'\n':'')+'\nQuestions? Call '+shop.phone+'\n\nThank you,\n'+shop.name;
+    var subj=es?('Factura #'+inv.num+' de '+shop.name+' - $'+total):('Invoice #'+inv.num+' from '+shop.name+' - $'+total);
+    emailjs.send(ES,ET,{email:c.email,to_name:inv.customer,from_name:shop.name,subject:subj,message:body.replace(/\n/g,'<br>'),shop_name:shop.name,shop_phone:shop.phone,shop_addr:shop.addr,invoice_num:inv.num,customer_name:inv.customer,vehicle:inv.vehicle||'',date:inv.date,status:inv.status,total:'$'+total,invoice_link:invLink,terms:shop.terms||'Payment due upon receipt.'})
       .then(function(){inv.history.push({type:'email-invoice',at:new Date().toLocaleString(),to:c.email,status:'sent'});inv.sent=true;inv.sentAt=new Date().toLocaleString();inv.emailSent=true;inv.emailSentAt=new Date().toLocaleString();saveAll();})
       .catch(function(){inv.history.push({type:'email-invoice',at:new Date().toLocaleString(),to:c.email,status:'failed'});saveAll();});
   }
   if(c.tel){
-    var msg='Hi '+inv.customer+'! Invoice #'+inv.num+' from '+shop.name+' is ready. Amount due: $'+total+'. View/pay: '+invLink+' Questions? Call '+shop.phone;
+    var msg=es
+      ? '\u00a1Hola '+inv.customer+'! Su factura #'+inv.num+' de '+shop.name+' ya est\u00e1 lista. Monto: $'+total+'. Ver/pagar: '+invLink+' \u00bfPreguntas? Llame al '+shop.phone
+      : 'Hi '+inv.customer+'! Invoice #'+inv.num+' from '+shop.name+' is ready. Amount due: $'+total+'. View/pay: '+invLink+' Questions? Call '+shop.phone;
     postSmsAndTrack(id,c.tel,msg,null);
   }
 }
@@ -7975,14 +7984,17 @@ function sendAutoReminder(id){
   var i=INV[id];if(!i)return;
   var c=invContactFor(i);
   if(c.optOut||(!c.email&&!c.tel))return;
+  var es=!!(c.cx&&c.cx.lang==='es');
   var n=(i.reminderCount||0)+1;
   var invLink=window.location.origin+window.location.pathname+'?inv='+i.num;
   var bal=invBal(i).toFixed(2);
-  var lead=n>=4?'Final reminder':n===1?'Friendly reminder':'Reminder';
-  var msg=lead+' — Invoice #'+i.num+' from '+shop.name+' has a balance of $'+bal+'. View/pay: '+invLink+'. Questions? Call '+shop.phone;
+  var lead=es?(n>=4?'\u00daltimo aviso':n===1?'Recordatorio amistoso':'Recordatorio'):(n>=4?'Final reminder':n===1?'Friendly reminder':'Reminder');
+  var msg=es
+    ? lead+' \u2014 Factura #'+i.num+' de '+shop.name+' tiene un saldo de $'+bal+'. Ver/pagar: '+invLink+'. \u00bfPreguntas? Llame al '+shop.phone
+    : lead+' \u2014 Invoice #'+i.num+' from '+shop.name+' has a balance of $'+bal+'. View/pay: '+invLink+'. Questions? Call '+shop.phone;
   if(!i.history)i.history=[];
   if(c.email&&typeof emailjs!=='undefined'){
-    emailjs.send(ES,ET,{email:c.email,to_name:i.customer,from_name:shop.name,subject:lead+' — Invoice #'+i.num,message:msg.replace(/\n/g,'<br>'),shop_phone:shop.phone,shop_addr:shop.addr})
+    emailjs.send(ES,ET,{email:c.email,to_name:i.customer,from_name:shop.name,subject:lead+' \u2014 '+(es?'Factura #':'Invoice #')+i.num,message:msg.replace(/\n/g,'<br>'),shop_phone:shop.phone,shop_addr:shop.addr})
       .then(function(){i.history.push({type:'auto-reminder',at:new Date().toLocaleString(),to:c.email,status:'sent'});saveAll();})
       .catch(function(){i.history.push({type:'auto-reminder',at:new Date().toLocaleString(),to:c.email,status:'failed'});saveAll();});
   }
@@ -8725,10 +8737,21 @@ function rProfit(){
 // ==================== FLEET CUSTOMER PORTAL ====================
 var _fpUrl='';
 function fpGenCode(){var s='',ch='ABCDEFGHJKMNPQRSTUVWXYZ23456789';for(var i=0;i<6;i++)s+=ch[Math.floor(Math.random()*ch.length)];return s;}
+// Fleet Portal display strings, picked per customer via cx.lang (set in the
+// Customer profile) so their portal, and the messages that go with it, show
+// up in the language they actually read.
+var FP_TR={
+  en:{title:'Fleet Customer Portal',badcode:'Code not recognized. Check with the shop or try again.',entercode:'Enter your fleet access code',viewbtn:'View My Fleet',needcode:'Need a code? Call us at ',header:' \u2014 Fleet Portal',trucks:'Trucks',inshop:'In Shop Now',openbal:'Open Balance',pmsdue:'PMs Due',inshopnow:'In the Shop Right Now',truckFallback:'Truck',openinv:'Open Invoices',invoice:'Invoice',payBtn:'\ud83d\udcb3 Pay',viewLink:'View',totaldue:'Total Due:',allpaid:'\u2713 All paid up. Thank you!',pmsched:'PM Schedule',due:'Due',dueat:'Due @',duesoon:'DUE SOON',ok:'OK',nopms:'No PM schedules on file yet. Call us to set up preventive maintenance tracking for your fleet.',yourtrucks:'Your Trucks',unit:'Unit',plate:'Plate',inshopbadge:'IN SHOP',onroad:'ON ROAD',notrucks:'No trucks on file yet.',svchist:'Service History',thDate:'Date',thVeh:'Vehicle',thInv:'Inv#',thTotal:'Total',nohist:'No service history yet.',poweredby:'Powered by'},
+  es:{title:'Portal de Clientes de Flotilla',badcode:'C\u00f3digo no reconocido. Verifique con el taller o intente de nuevo.',entercode:'Ingrese su c\u00f3digo de acceso de flotilla',viewbtn:'Ver Mi Flotilla',needcode:'\u00bfNecesita un c\u00f3digo? Ll\u00e1menos al ',header:' \u2014 Portal de Flotilla',trucks:'Camiones',inshop:'En Taller Ahora',openbal:'Saldo Pendiente',pmsdue:'Mant. Pr\u00f3ximos',inshopnow:'En el Taller Ahora Mismo',truckFallback:'Cami\u00f3n',openinv:'Facturas Pendientes',invoice:'Factura',payBtn:'\ud83d\udcb3 Pagar',viewLink:'Ver',totaldue:'Total Adeudado:',allpaid:'\u2713 Todo pagado. \u00a1Gracias!',pmsched:'Programa de Mantenimiento',due:'Vence',dueat:'Vence a las',duesoon:'PRONTO',ok:'BIEN',nopms:'A\u00fan no hay programas de mantenimiento registrados. Ll\u00e1menos para configurar el seguimiento de mantenimiento preventivo de su flotilla.',yourtrucks:'Sus Camiones',unit:'Unidad',plate:'Placa',inshopbadge:'EN TALLER',onroad:'EN CAMINO',notrucks:'A\u00fan no hay camiones registrados.',svchist:'Historial de Servicio',thDate:'Fecha',thVeh:'Veh\u00edculo',thInv:'Factura#',thTotal:'Total',nohist:'A\u00fan no hay historial de servicio.',poweredby:'Desarrollado por'}
+};
+var _fpLang='en',_fpCustIdx=-1;
+function fpT(k){return (FP_TR[_fpLang]||FP_TR.en)[k]||FP_TR.en[k]||k;}
+function fpSetLang(l){_fpLang=l;var inp=el('fp-code');buildFleetPortal(inp?inp.value:'');}
 function fleetPortalLink(ci){
   var cx=CUST[ci];if(!cx)return;
   if(!cx.portalCode){cx.portalCode=fpGenCode();saveAll();}
   _fpUrl=location.origin+location.pathname+'?portal='+cx.portalCode;
+  _fpCustIdx=ci;
   oM('Fleet Portal \u2014 '+cx.name,
     '<div style="font-size:13px;color:#555;margin-bottom:10px">Send this link to '+cx.name+'. They will see <strong>their trucks, open invoices, PM due dates, and full service history</strong> \u2014 read-only, no login needed. This is a big selling point for winning fleet accounts.</div>'
     +'<div style="background:#f5f5f7;border-radius:8px;padding:10px;font-size:12px;word-break:break-all;margin-bottom:8px;font-family:monospace">'+_fpUrl+'</div>'
@@ -8747,24 +8770,36 @@ function fpSetCustomCode(ci){
   cx.portalCode=code;saveAll();fleetPortalLink(ci);
 }
 function fpCopy(){copyShareLink(_fpUrl);}
-function fpText(){textShareLink(_fpUrl,'Fleet Portal');}
+function fpText(){
+  var cx=CUST[_fpCustIdx];
+  var es=!!(cx&&cx.lang==='es');
+  var helpUrl=location.origin+location.pathname.replace(/[^\/]*$/,'')+'fleet-portal-help.html'+(es?'?lang=es':'');
+  var code=cx?cx.portalCode:'';
+  var msg=es
+    ? '\u00a1Hola! Aqu\u00ed est\u00e1 su acceso al Portal de Flotilla de '+shop.name+': '+_fpUrl+' C\u00f3digo: '+code+'. \u00bfPrimera vez? Vea c\u00f3mo usarlo aqu\u00ed: '+helpUrl
+    : 'Hi! Here\'s your Fleet Portal access for '+shop.name+': '+_fpUrl+' Code: '+code+'. First time? See how to use it here: '+helpUrl;
+  window.open('sms:?body='+encodeURIComponent(msg));
+}
 function fpQR(){showQRCode(_fpUrl);}
 function buildFleetPortal(code){
   var body=el('sfp-body');if(!body)return;
   var cx=null;
   if(code){var cu=String(code).trim().toUpperCase();cx=CUST.find(function(c){return c.isFleet&&c.portalCode&&String(c.portalCode).toUpperCase()===cu;});}
   if(!cx){
+    function langBtn(l,lbl){return'<button onclick="fpSetLang(\''+l+'\')" style="background:'+(_fpLang===l?'#185FA5':'#f0f0f2')+';color:'+(_fpLang===l?'#fff':'#555')+';border:none;border-radius:7px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">'+lbl+'</button>';}
     body.innerHTML='<div style="max-width:420px;margin:0 auto;padding:40px 20px;text-align:center">'
+      +'<div style="display:flex;justify-content:center;gap:6px;margin-bottom:14px">'+langBtn('en','English')+langBtn('es','Espa\u00f1ol')+'</div>'
       +'<div style="font-size:42px;margin-bottom:8px">\ud83d\ude9b</div>'
       +'<h2 style="font-size:20px;font-weight:700;margin-bottom:4px">'+shop.name+'</h2>'
-      +'<div style="font-size:13px;color:#888;margin-bottom:24px">Fleet Customer Portal</div>'
-      +(code?'<div style="background:#FCEBEB;color:#A32D2D;border-radius:8px;padding:10px;font-size:13px;margin-bottom:14px">Code not recognized. Check with the shop or try again.</div>':'')
-      +'<div class="fg" style="text-align:left"><label>Enter your fleet access code</label><input id="fp-code" maxlength="6" placeholder="e.g. K7M2XP" style="padding:12px;font-size:18px;letter-spacing:4px;text-transform:uppercase;text-align:center;border:0.5px solid var(--bd);border-radius:10px;background:#fff;width:100%;font-family:monospace"></div>'
-      +'<button onclick="fpLogin()" style="margin-top:12px;width:100%;padding:13px;background:#185FA5;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;font-family:inherit;cursor:pointer">View My Fleet</button>'
-      +'<div style="font-size:12px;color:#888;margin-top:20px">Need a code? Call us at '+shop.phone+'</div>'
+      +'<div style="font-size:13px;color:#888;margin-bottom:24px">'+fpT('title')+'</div>'
+      +(code?'<div style="background:#FCEBEB;color:#A32D2D;border-radius:8px;padding:10px;font-size:13px;margin-bottom:14px">'+fpT('badcode')+'</div>':'')
+      +'<div class="fg" style="text-align:left"><label>'+fpT('entercode')+'</label><input id="fp-code" maxlength="6" placeholder="e.g. K7M2XP" value="'+(code||'')+'" style="padding:12px;font-size:18px;letter-spacing:4px;text-transform:uppercase;text-align:center;border:0.5px solid var(--bd);border-radius:10px;background:#fff;width:100%;font-family:monospace"></div>'
+      +'<button onclick="fpLogin()" style="margin-top:12px;width:100%;padding:13px;background:#185FA5;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;font-family:inherit;cursor:pointer">'+fpT('viewbtn')+'</button>'
+      +'<div style="font-size:12px;color:#888;margin-top:20px">'+fpT('needcode')+shop.phone+'</div>'
       +'</div>';
     return;
   }
+  _fpLang=cx.lang==='es'?'es':'en';
   fpRender(CUST.indexOf(cx));
 }
 function fpLogin(){buildFleetPortal(gv('fp-code'));}
@@ -8781,49 +8816,49 @@ function fpRender(ci){
   function sect(icon,title){return'<div style="font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="ti ti-'+icon+'" style="color:#185FA5"></i>'+title+'</div>';}
   var h='<div style="background:#185FA5;color:#fff;padding:18px 16px 16px">'
     +'<div style="max-width:760px;margin:0 auto">'
-    +'<div style="font-size:11px;opacity:0.8;text-transform:uppercase;letter-spacing:1px">'+shop.name+' \u2014 Fleet Portal</div>'
+    +'<div style="font-size:11px;opacity:0.8;text-transform:uppercase;letter-spacing:1px">'+shop.name+fpT('header')+'</div>'
     +'<div style="font-size:21px;font-weight:700;margin-top:2px">'+cx.name+'</div>'
     +'<div style="font-size:12px;opacity:0.85;margin-top:2px">'+shop.phone+' \u00b7 '+shop.addr+'</div>'
     +'</div></div>';
   h+='<div style="max-width:760px;margin:0 auto;padding:14px 14px 40px">';
   h+='<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">'
-    +'<div style="background:#fff;border-radius:10px;padding:10px;text-align:center;border:0.5px solid rgba(0,0,0,0.08)"><div style="font-size:20px;font-weight:700;color:#185FA5">'+(cx.units?cx.units.length:0)+'</div><div style="font-size:10px;color:#888">Trucks</div></div>'
-    +'<div style="background:#fff;border-radius:10px;padding:10px;text-align:center;border:0.5px solid rgba(0,0,0,0.08)"><div style="font-size:20px;font-weight:700;color:#BA7517">'+openWOs.length+'</div><div style="font-size:10px;color:#888">In Shop Now</div></div>'
-    +'<div style="background:#fff;border-radius:10px;padding:10px;text-align:center;border:0.5px solid rgba(0,0,0,0.08)"><div style="font-size:20px;font-weight:700;color:'+(unpaidAmt>0?'#A32D2D':'#3B6D11')+'">'+fm(unpaidAmt)+'</div><div style="font-size:10px;color:#888">Open Balance</div></div>'
-    +'<div style="background:#fff;border-radius:10px;padding:10px;text-align:center;border:0.5px solid rgba(0,0,0,0.08)"><div style="font-size:20px;font-weight:700;color:'+(pmsDue.length?'#A32D2D':'#3B6D11')+'">'+pmsDue.length+'</div><div style="font-size:10px;color:#888">PMs Due</div></div>'
+    +'<div style="background:#fff;border-radius:10px;padding:10px;text-align:center;border:0.5px solid rgba(0,0,0,0.08)"><div style="font-size:20px;font-weight:700;color:#185FA5">'+(cx.units?cx.units.length:0)+'</div><div style="font-size:10px;color:#888">'+fpT('trucks')+'</div></div>'
+    +'<div style="background:#fff;border-radius:10px;padding:10px;text-align:center;border:0.5px solid rgba(0,0,0,0.08)"><div style="font-size:20px;font-weight:700;color:#BA7517">'+openWOs.length+'</div><div style="font-size:10px;color:#888">'+fpT('inshop')+'</div></div>'
+    +'<div style="background:#fff;border-radius:10px;padding:10px;text-align:center;border:0.5px solid rgba(0,0,0,0.08)"><div style="font-size:20px;font-weight:700;color:'+(unpaidAmt>0?'#A32D2D':'#3B6D11')+'">'+fm(unpaidAmt)+'</div><div style="font-size:10px;color:#888">'+fpT('openbal')+'</div></div>'
+    +'<div style="background:#fff;border-radius:10px;padding:10px;text-align:center;border:0.5px solid rgba(0,0,0,0.08)"><div style="font-size:20px;font-weight:700;color:'+(pmsDue.length?'#A32D2D':'#3B6D11')+'">'+pmsDue.length+'</div><div style="font-size:10px;color:#888">'+fpT('pmsdue')+'</div></div>'
     +'</div>';
   // In shop now
   if(openWOs.length){
-    h+=card(sect('tools','In the Shop Right Now')+openWOs.map(function(w){
-      return'<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid rgba(0,0,0,0.06)"><div><div style="font-size:13px;font-weight:600">'+(w.vehicle||'Truck')+' <span style="color:#888;font-weight:400">#'+w.ticket+'</span></div><div style="font-size:11px;color:#888">'+(w.complaint||'')+'</div></div>'+bdg(w.status)+'</div>';
+    h+=card(sect('tools',fpT('inshopnow'))+openWOs.map(function(w){
+      return'<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid rgba(0,0,0,0.06)"><div><div style="font-size:13px;font-weight:600">'+(w.vehicle||fpT('truckFallback'))+' <span style="color:#888;font-weight:400">#'+w.ticket+'</span></div><div style="font-size:11px;color:#888">'+(w.complaint||'')+'</div></div>'+bdg(w.status)+'</div>';
     }).join(''));
   }
   // Open invoices
-  h+=card(sect('receipt','Open Invoices'+(unpaid.length?' ('+unpaid.length+')':''))
+  h+=card(sect('receipt',fpT('openinv')+(unpaid.length?' ('+unpaid.length+')':''))
     +(unpaid.length?unpaid.map(function(i){
-      var payBtn=shop.clover?('<a href="javascript:void(0)" onclick="payWithCloverDynamic('+(parseInt(i.num)||0)+','+invBal(i)+','+_jsq(cx.name)+','+_jsq(cx.email||'')+',this)" style="background:#228800;color:#fff;padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap">\ud83d\udcb3 Pay</a>'):'';
-      return'<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid rgba(0,0,0,0.06)"><div><div style="font-size:13px;font-weight:600">Invoice #'+i.num+'</div><div style="font-size:11px;color:#888">'+i.date+' \u00b7 '+(i.vehicle||'')+'</div></div><div style="display:flex;align-items:center;gap:8px"><div style="font-size:14px;font-weight:700;color:#A32D2D">'+fm(invBal(i))+'</div>'+payBtn+'<a href="'+base+'?inv='+i.id+'" target="_blank" style="background:#185FA5;color:#fff;padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;text-decoration:none">View</a></div></div>';
-    }).join('')+'<div style="text-align:right;font-size:13px;font-weight:700;padding-top:8px">Total Due: <span style="color:#A32D2D">'+fm(unpaidAmt)+'</span></div>'
-    :'<div style="font-size:12px;color:#3B6D11;font-weight:600">\u2713 All paid up. Thank you!</div>'));
+      var payBtn=shop.clover?('<a href="javascript:void(0)" onclick="payWithCloverDynamic('+(parseInt(i.num)||0)+','+invBal(i)+','+_jsq(cx.name)+','+_jsq(cx.email||'')+',this)" style="background:#228800;color:#fff;padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap">'+fpT('payBtn')+'</a>'):'';
+      return'<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid rgba(0,0,0,0.06)"><div><div style="font-size:13px;font-weight:600">'+fpT('invoice')+' #'+i.num+'</div><div style="font-size:11px;color:#888">'+i.date+' \u00b7 '+(i.vehicle||'')+'</div></div><div style="display:flex;align-items:center;gap:8px"><div style="font-size:14px;font-weight:700;color:#A32D2D">'+fm(invBal(i))+'</div>'+payBtn+'<a href="'+base+'?inv='+i.id+'" target="_blank" style="background:#185FA5;color:#fff;padding:5px 12px;border-radius:8px;font-size:11px;font-weight:600;text-decoration:none">'+fpT('viewLink')+'</a></div></div>';
+    }).join('')+'<div style="text-align:right;font-size:13px;font-weight:700;padding-top:8px">'+fpT('totaldue')+' <span style="color:#A32D2D">'+fm(unpaidAmt)+'</span></div>'
+    :'<div style="font-size:12px;color:#3B6D11;font-weight:600">'+fpT('allpaid')+'</div>'));
   // PM schedule
-  h+=card(sect('engine','PM Schedule')
+  h+=card(sect('engine',fpT('pmsched'))
     +(myPMs.length?myPMs.map(function(p){
       var due=isDue(p);
-      return'<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid rgba(0,0,0,0.06)"><div><div style="font-size:13px;font-weight:600">'+p.vehicle+'</div><div style="font-size:11px;color:#888">'+p.pmType+(p.dueDate?' \u00b7 Due '+p.dueDate:'')+(p.dueMiles?' \u00b7 Due @ '+p.dueMiles+' mi':'')+'</div></div><span style="background:'+(due?'#FCEBEB':'#EAF3DE')+';color:'+(due?'#A32D2D':'#27500A')+';padding:2px 10px;border-radius:12px;font-size:10px;font-weight:700">'+(due?'DUE SOON':'OK')+'</span></div>';
-    }).join(''):'<div style="font-size:12px;color:#888">No PM schedules on file yet. Call us to set up preventive maintenance tracking for your fleet.</div>'));
+      return'<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid rgba(0,0,0,0.06)"><div><div style="font-size:13px;font-weight:600">'+p.vehicle+'</div><div style="font-size:11px;color:#888">'+p.pmType+(p.dueDate?' \u00b7 '+fpT('due')+' '+p.dueDate:'')+(p.dueMiles?' \u00b7 '+fpT('dueat')+' '+p.dueMiles+' mi':'')+'</div></div><span style="background:'+(due?'#FCEBEB':'#EAF3DE')+';color:'+(due?'#A32D2D':'#27500A')+';padding:2px 10px;border-radius:12px;font-size:10px;font-weight:700">'+(due?fpT('duesoon'):fpT('ok'))+'</span></div>';
+    }).join(''):'<div style="font-size:12px;color:#888">'+fpT('nopms')+'</div>'));
   // Trucks
-  h+=card(sect('truck','Your Trucks')
+  h+=card(sect('truck',fpT('yourtrucks'))
     +((cx.units&&cx.units.length)?cx.units.map(function(u){
       var inShop=openWOs.find(function(w){return(u.vin&&w.unit&&w.unit.vin===u.vin)||(w.vehicle&&w.vehicle===(u.year+' '+u.make+' '+u.model).trim());});
-      return'<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid rgba(0,0,0,0.06)"><div><div style="font-size:13px;font-weight:600">'+(u.year||'')+' '+(u.make||'')+' '+(u.model||'')+(u.num?' <span style="color:#185FA5">\u00b7 Unit '+u.num+'</span>':'')+'</div><div style="font-size:11px;color:#888">'+(u.vin?'VIN \u2026'+String(u.vin).slice(-6):'')+(u.plate?' \u00b7 Plate '+u.plate:'')+'</div></div>'+(inShop?'<span style="background:#FFF3CD;color:#664D03;padding:2px 10px;border-radius:12px;font-size:10px;font-weight:700">IN SHOP</span>':'<span style="background:#EAF3DE;color:#27500A;padding:2px 10px;border-radius:12px;font-size:10px;font-weight:700">ON ROAD</span>')+'</div>';
-    }).join(''):'<div style="font-size:12px;color:#888">No trucks on file yet.</div>'));
+      return'<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:0.5px solid rgba(0,0,0,0.06)"><div><div style="font-size:13px;font-weight:600">'+(u.year||'')+' '+(u.make||'')+' '+(u.model||'')+(u.num?' <span style="color:#185FA5">\u00b7 '+fpT('unit')+' '+u.num+'</span>':'')+'</div><div style="font-size:11px;color:#888">'+(u.vin?'VIN \u2026'+String(u.vin).slice(-6):'')+(u.plate?' \u00b7 '+fpT('plate')+' '+u.plate:'')+'</div></div>'+(inShop?'<span style="background:#FFF3CD;color:#664D03;padding:2px 10px;border-radius:12px;font-size:10px;font-weight:700">'+fpT('inshopbadge')+'</span>':'<span style="background:#EAF3DE;color:#27500A;padding:2px 10px;border-radius:12px;font-size:10px;font-weight:700">'+fpT('onroad')+'</span>')+'</div>';
+    }).join(''):'<div style="font-size:12px;color:#888">'+fpT('notrucks')+'</div>'));
   // Service history
   var hist=myInvs.slice().reverse().slice(0,20);
-  h+=card(sect('history','Service History')
-    +(hist.length?'<div class="tbl"><table style="width:100%;border-collapse:collapse"><thead><tr><th style="text-align:left;padding:6px 8px;font-size:10px;color:#888;text-transform:uppercase">Date</th><th style="text-align:left;padding:6px 8px;font-size:10px;color:#888;text-transform:uppercase">Vehicle</th><th style="text-align:left;padding:6px 8px;font-size:10px;color:#888;text-transform:uppercase">Inv#</th><th style="text-align:right;padding:6px 8px;font-size:10px;color:#888;text-transform:uppercase">Total</th><th style="padding:6px 8px"></th></tr></thead><tbody>'
-      +hist.map(function(i){return'<tr style="border-top:0.5px solid rgba(0,0,0,0.06)"><td style="padding:7px 8px;font-size:12px">'+i.date+'</td><td style="padding:7px 8px;font-size:12px">'+(i.vehicle||'\u2014')+'</td><td style="padding:7px 8px;font-size:12px;color:#185FA5;font-weight:600">#'+i.num+'</td><td style="padding:7px 8px;font-size:12px;text-align:right;font-weight:600">'+fm(parseFloat(i.total)||0)+'</td><td style="padding:7px 8px;text-align:right"><a href="'+base+'?inv='+i.id+'" target="_blank" style="font-size:11px;color:#185FA5;font-weight:600;text-decoration:none">View</a></td></tr>';}).join('')
-      +'</tbody></table></div>':'<div style="font-size:12px;color:#888">No service history yet.</div>'));
-  h+='<div style="text-align:center;font-size:11px;color:#aaa;margin-top:18px">Powered by '+shop.name+' \u00b7 '+shop.phone+'</div>';
+  h+=card(sect('history',fpT('svchist'))
+    +(hist.length?'<div class="tbl"><table style="width:100%;border-collapse:collapse"><thead><tr><th style="text-align:left;padding:6px 8px;font-size:10px;color:#888;text-transform:uppercase">'+fpT('thDate')+'</th><th style="text-align:left;padding:6px 8px;font-size:10px;color:#888;text-transform:uppercase">'+fpT('thVeh')+'</th><th style="text-align:left;padding:6px 8px;font-size:10px;color:#888;text-transform:uppercase">'+fpT('thInv')+'</th><th style="text-align:right;padding:6px 8px;font-size:10px;color:#888;text-transform:uppercase">'+fpT('thTotal')+'</th><th style="padding:6px 8px"></th></tr></thead><tbody>'
+      +hist.map(function(i){return'<tr style="border-top:0.5px solid rgba(0,0,0,0.06)"><td style="padding:7px 8px;font-size:12px">'+i.date+'</td><td style="padding:7px 8px;font-size:12px">'+(i.vehicle||'\u2014')+'</td><td style="padding:7px 8px;font-size:12px;color:#185FA5;font-weight:600">#'+i.num+'</td><td style="padding:7px 8px;font-size:12px;text-align:right;font-weight:600">'+fm(parseFloat(i.total)||0)+'</td><td style="padding:7px 8px;text-align:right"><a href="'+base+'?inv='+i.id+'" target="_blank" style="font-size:11px;color:#185FA5;font-weight:600;text-decoration:none">'+fpT('viewLink')+'</a></td></tr>';}).join('')
+      +'</tbody></table></div>':'<div style="font-size:12px;color:#888">'+fpT('nohist')+'</div>'));
+  h+='<div style="text-align:center;font-size:11px;color:#aaa;margin-top:18px">'+fpT('poweredby')+' '+shop.name+' \u00b7 '+shop.phone+'</div>';
   h+='</div>';
   body.innerHTML=h;
 }
