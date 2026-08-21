@@ -2629,7 +2629,7 @@ function svEInv(id){
 }
 function rINV(){
   var rows=activeInv().length?activeInv().map(function(i){var paid=i.status==='Paid';var bal=invBal(i);var rowSt=i.status==='Unpaid'?' style="background:#FDF2F2;border-left:3px solid #A32D2D"':i.status==='Partial'?' style="background:#FFFBEB;border-left:3px solid #BA7517"':'';return'<tr'+rowSt+'><td style="padding:7px 9px;color:#185FA5;cursor:pointer;font-weight:600" onclick="vInv('+i.id+')">#'+i.num+'</td><td style="padding:7px 9px">'+i.customer+'</td><td style="padding:7px 9px;font-size:11px">'+(i.vehicle||'—')+'</td><td style="padding:7px 9px">'+fm(parseFloat(i.labor)||0)+'</td><td style="padding:7px 9px">'+fm(parseFloat(i.parts)||0)+'</td><td style="padding:7px 9px">'+fm(parseFloat(i.tax)||0)+'</td><td style="padding:7px 9px;font-weight:600">'+fm(parseFloat(i.total)||0)+'</td><td style="padding:7px 9px;font-weight:700;color:'+(bal>0.005?'#A32D2D':'#27500A')+'">'+(bal>0.005?fm(bal):'—')+'</td><td style="padding:7px 9px"><select style="font-size:11px;padding:3px 5px;border:0.5px solid var(--bd);border-radius:4px;font-family:inherit" onchange="INV['+i.id+'].payment=this.value;saveAll()"><option value="">—</option><option'+(i.payment==='Cash'?' selected':'')+'>Cash</option><option'+(i.payment==='Card'?' selected':'')+'>Card</option><option'+(i.payment==='Check'?' selected':'')+'>Check</option><option'+(i.payment==='Zelle'?' selected':'')+'>Zelle</option><option'+(i.payment==='Net-30'?' selected':'')+'>Net-30</option></select></td><td style="padding:7px 9px">'+bdg(i.status)+(i.reminderCapped?' <i class="ti ti-phone-off" style="color:#A32D2D" title="4 auto-reminders sent, no response"></i>':'')+'</td><td style="padding:7px 9px;display:flex;gap:3px"><button class="btn xs'+(paid?'':' bl')+'" onclick="payInv('+i.id+')" title="Payments"><i class="ti ti-cash"></i></button><button class="btn xs" onclick="eInv('+i.id+')"><i class="ti ti-edit"></i></button><button class="btn xs gr" onclick="prtInv('+i.id+')"><i class="ti ti-printer"></i></button><button class="btn xs bl" onclick="sndInv('+i.id+')"><i class="ti ti-send"></i></button></td></tr>';}).join(''):'<tr><td colspan="11" style="padding:16px;color:#888;font-size:12px">No invoices yet.</td></tr>';
-  el('pg-body').innerHTML='<div class="sr" style="display:flex;gap:8px"><i class="ti ti-search" style="color:#888"></i><input placeholder="Search..." oninput="fINV(this.value)" style="flex:1">'+(ROLE==='owner'?'<button class="btn xs" onclick="rINVDeleted()">'+t('showDeletedBtn')+'</button>':'')+'</div><div class="tbl"><table><thead><tr><th>Inv#</th><th>Customer</th><th>Vehicle</th><th>Labor</th><th>Parts</th><th>Tax</th><th>Total</th><th>Balance</th><th>Payment</th><th>Status</th><th></th></tr></thead><tbody id="inv-tb">'+rows+'</tbody></table></div>';
+  el('pg-body').innerHTML='<div class="sr" style="display:flex;gap:8px"><i class="ti ti-search" style="color:#888"></i><input placeholder="Search..." oninput="fINV(this.value)" style="flex:1">'+(ROLE==='owner'?'<button class="btn xs bl" onclick="bulkSendPreview()"><i class="ti ti-send"></i>Send All to Customers</button><button class="btn xs" onclick="rINVDeleted()">'+t('showDeletedBtn')+'</button>':'')+'</div><div class="tbl"><table><thead><tr><th>Inv#</th><th>Customer</th><th>Vehicle</th><th>Labor</th><th>Parts</th><th>Tax</th><th>Total</th><th>Balance</th><th>Payment</th><th>Status</th><th></th></tr></thead><tbody id="inv-tb">'+rows+'</tbody></table></div>';
 }
 function fINV(q){var r=el('inv-tb');if(!r)return;q=q.toLowerCase();r.innerHTML=activeInv().filter(function(i){return i.customer.toLowerCase().includes(q)||String(i.num).includes(q)||(i.vehicle||'').toLowerCase().includes(q)||(i.status||'').toLowerCase().includes(q);}).map(function(i){var bal=invBal(i);var rowSt=i.status==='Unpaid'?' style="background:#FDF2F2;border-left:3px solid #A32D2D"':i.status==='Partial'?' style="background:#FFFBEB;border-left:3px solid #BA7517"':'';return'<tr'+rowSt+'><td style="padding:7px 9px;color:#185FA5;font-weight:600">#'+i.num+'</td><td style="padding:7px 9px">'+i.customer+'</td><td style="padding:7px 9px;font-size:11px">'+(i.vehicle||'—')+'</td><td style="padding:7px 9px">'+fm(parseFloat(i.labor)||0)+'</td><td style="padding:7px 9px">'+fm(parseFloat(i.parts)||0)+'</td><td style="padding:7px 9px">'+fm(parseFloat(i.tax)||0)+'</td><td style="padding:7px 9px;font-weight:600">'+fm(parseFloat(i.total)||0)+'</td><td style="padding:7px 9px;font-weight:700;color:'+(bal>0.005?'#A32D2D':'#27500A')+'">'+(bal>0.005?fm(bal):'—')+'</td><td style="padding:7px 9px">'+(i.payment||'—')+'</td><td style="padding:7px 9px">'+bdg(i.status)+'</td><td style="padding:7px 9px"><button class="btn xs" onclick="vInv('+i.id+')">View</button></td></tr>';}).join('');}
 function vInv(id){var i=INV[id];var ll,pl;var hist=(i.history||[]).slice().reverse();
@@ -8007,6 +8007,75 @@ function sendAutoReminder(id){
   i.reminderCount=n;i.lastReminderAt=Date.now();
   if(n>=4)i.reminderCapped=true;
   saveAll();
+}
+// One-time catch-up tool: pushes every currently-unpaid invoice, plus every
+// fleet customer's portal link, out to customers right now. For anything
+// that existed before auto-send was turned on and never went out on its own.
+function bulkSendPreview(){
+  var unpaid=activeInv().filter(invActive);
+  var byCust={};
+  unpaid.forEach(function(i){(byCust[i.customer]=byCust[i.customer]||[]).push(i);});
+  var names=Object.keys(byCust);
+  CUST.forEach(function(c){if(c.isFleet&&names.indexOf(c.name)===-1)names.push(c.name);});
+  names.sort();
+  if(!names.length){alert('Nothing to send \u2014 no unpaid invoices and no fleet customers.');return;}
+  var rows=names.map(function(name,idx){
+    var cx=CUST.find(function(c){return c.name===name;});
+    var invs=byCust[name]||[];
+    var invTotal=invs.reduce(function(s,i){return s+invBal(i);},0);
+    var hasPortal=!!(cx&&cx.isFleet);
+    var hasContact=!!(cx&&(cx.email||cx.phone));
+    var optOut=!!(cx&&cx.prefs&&cx.prefs.inv===false);
+    var enabled=hasContact&&!optOut;
+    var tags=(invs.length?'<span style="background:#E6F1FB;color:#0C447C;padding:2px 7px;border-radius:10px;font-size:10px;margin-right:4px">'+invs.length+' invoice'+(invs.length>1?'s':'')+' \u00b7 '+fm(invTotal)+'</span>':'')
+      +(hasPortal?'<span style="background:#EAF3DE;color:#27500A;padding:2px 7px;border-radius:10px;font-size:10px;margin-right:4px">Portal Link</span>':'')
+      +(optOut?'<span style="background:#FFF3CD;color:#664D03;padding:2px 7px;border-radius:10px;font-size:10px">Opted out</span>':'')
+      +(!hasContact?'<span style="background:#F8D7DA;color:#58151C;padding:2px 7px;border-radius:10px;font-size:10px">No phone/email</span>':'');
+    return'<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:0.5px solid var(--bd)"><input type="checkbox" id="bs'+idx+'" data-bulksend="1" data-name="'+name.replace(/"/g,'&quot;')+'" '+(enabled?'checked':'disabled')+' style="width:18px;height:18px;cursor:pointer;accent-color:var(--bl)"><div style="flex:1"><div style="font-size:13px;font-weight:600">'+name+'</div><div style="margin-top:3px">'+tags+'</div></div></div>';
+  }).join('');
+  oM('Send All to Customers ('+names.length+')',
+    '<div style="background:#FFF3CD;color:#664D03;border-radius:8px;padding:10px 12px;font-size:12px;margin-bottom:12px"><i class="ti ti-alert-triangle"></i> This sends real texts/emails right now to every checked customer \u2014 their unpaid invoice(s) and/or their Fleet Portal link. This can\'t be undone once sent.</div>'
+    +'<div style="max-height:360px;overflow-y:auto">'+rows+'</div>',
+    '<button class="btn bl" onclick="bulkSendExecute()"><i class="ti ti-send"></i>Send Now</button><button class="btn" onclick="cM()">Cancel</button>'
+  );
+}
+function bsSleep(ms){return new Promise(function(r){setTimeout(r,ms);});}
+async function bulkSendExecute(){
+  var checks=document.querySelectorAll('[data-bulksend]');
+  var names=[];
+  checks.forEach(function(cb){if(cb.checked)names.push(cb.dataset.name);});
+  if(!names.length){alert('Nothing selected.');return;}
+  cM();
+  invToast('Sending to '+names.length+' customer(s)\u2026',true);
+  var unpaid=activeInv().filter(invActive);
+  for(var n=0;n<names.length;n++){
+    var name=names[n];
+    var cx=CUST.find(function(c){return c.name===name;});
+    var invs=unpaid.filter(function(i){return i.customer===name;});
+    for(var k=0;k<invs.length;k++){autoSendInvoice(invs[k].id);await bsSleep(350);}
+    if(cx&&cx.isFleet){sendPortalLinkAuto(cx);await bsSleep(350);}
+  }
+  saveAll();
+  invToast('Done \u2014 sent to '+names.length+' customer(s). Check each invoice\'s Send History for delivery status.',true);
+}
+// Same message fpText() would open in the phone's SMS app, but sent for
+// real via the Twilio worker + EmailJS \u2014 no human needed to tap Send.
+function sendPortalLinkAuto(cx){
+  if(!cx.portalCode)cx.portalCode=fpGenCode();
+  var url=location.origin+location.pathname+'?portal='+cx.portalCode;
+  var es=cx.lang==='es';
+  var helpUrl=location.origin+location.pathname.replace(/[^\/]*$/,'')+'fleet-portal-help.html'+(es?'?lang=es':'');
+  var msg=es
+    ? '\u00a1Hola! Aqu\u00ed est\u00e1 su acceso al Portal de Flotilla de '+shop.name+': '+url+' C\u00f3digo: '+cx.portalCode+'. \u00bfPrimera vez? Vea c\u00f3mo usarlo aqu\u00ed: '+helpUrl
+    : 'Hi! Here\'s your Fleet Portal access for '+shop.name+': '+url+' Code: '+cx.portalCode+'. First time? See how to use it here: '+helpUrl;
+  if(cx.email&&typeof emailjs!=='undefined'){
+    emailjs.send(ES,ET,{email:cx.email,to_name:cx.name,from_name:shop.name,subject:es?('Su Portal de Flotilla \u2014 '+shop.name):('Your Fleet Portal \u2014 '+shop.name),message:msg,shop_phone:shop.phone,shop_addr:shop.addr}).catch(function(){});
+  }
+  if(cx.phone){
+    var digits=cx.phone.replace(/\D/g,'');
+    var tel=(digits.length===10)?('+1'+digits):((digits.length===11&&digits.charAt(0)==='1')?('+'+digits):'');
+    if(tel)fetch(AIPROXY+'/send-sms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:tel,body:msg})}).catch(function(){});
+  }
 }
 function checkInvoiceReminders(){
   if(shop.autoNotify===false)return;
