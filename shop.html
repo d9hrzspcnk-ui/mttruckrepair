@@ -2674,6 +2674,75 @@ function invApplyFilters(){
 function invHeadHtml(){
   return'<tr><th style="cursor:pointer" onclick="invSortBy(\'num\')">Inv#'+invSortArrow('num')+'</th><th style="cursor:pointer" onclick="invSortBy(\'date\')">Date'+invSortArrow('date')+'</th><th style="cursor:pointer" onclick="invSortBy(\'customer\')">Customer'+invSortArrow('customer')+'</th><th>Vehicle</th><th>Labor</th><th>Parts</th><th>Tax</th><th style="cursor:pointer" onclick="invSortBy(\'total\')">Total'+invSortArrow('total')+'</th><th>Balance</th><th>Payment</th><th>Status</th><th></th></tr>';
 }
+function paymentsFlat(){
+  var out=[];
+  activeInv().forEach(function(i){
+    (i.payments||[]).forEach(function(p,pi){
+      out.push({invId:i.id,invNum:i.num,customer:i.customer,vehicle:i.vehicle,amt:parseFloat(p.amt)||0,method:p.method||'',date:p.date||i.date,note:p.note||'',pi:pi});
+    });
+  });
+  return out;
+}
+var _paySort={key:'date',dir:'desc'};
+function paySortArrow(key){return _paySort.key===key?(_paySort.dir==='asc'?' \u2191':' \u2193'):'';}
+function paySortBy(key){
+  if(_paySort.key===key)_paySort.dir=_paySort.dir==='asc'?'desc':'asc';
+  else{_paySort.key=key;_paySort.dir=(key==='amt'||key==='date')?'desc':'asc';}
+  payApplyFilters();
+}
+function payRowHtml(p){
+  return'<tr><td style="padding:7px 9px;color:#185FA5;cursor:pointer;font-weight:600" onclick="cM();vInv('+p.invId+')">#'+p.invNum+'</td><td style="padding:7px 9px;font-size:11px">'+p.date+'</td><td style="padding:7px 9px">'+p.customer+'</td><td style="padding:7px 9px;font-size:11px">'+(p.method||'\u2014')+'</td><td style="padding:7px 9px;font-size:11px">'+(p.note||'\u2014')+'</td><td style="padding:7px 9px;font-weight:700;color:#27500A">'+fm(p.amt)+'</td></tr>';
+}
+function payFilterSort(list){
+  var q=(el('pay-q')?el('pay-q').value:'').toLowerCase().trim();
+  var mth=el('pay-method-f')?el('pay-method-f').value:'';
+  var from=el('pay-from')?el('pay-from').value:'';
+  var to=el('pay-to')?el('pay-to').value:'';
+  list=list.filter(function(p){
+    if(q&&!(p.customer.toLowerCase().includes(q)||String(p.invNum).includes(q)||(p.note||'').toLowerCase().includes(q)))return false;
+    if(mth&&p.method!==mth)return false;
+    if(from&&new Date(p.date)<new Date(from))return false;
+    if(to){var toEnd=new Date(to);toEnd.setHours(23,59,59,999);if(new Date(p.date)>toEnd)return false;}
+    return true;
+  });
+  var k=_paySort.key,dir=_paySort.dir==='asc'?1:-1;
+  list=list.slice().sort(function(a,b){
+    var av=k==='amt'?a.amt:k==='customer'?a.customer.toLowerCase():k==='invNum'?(parseInt(a.invNum)||0):(new Date(a.date).getTime()||0);
+    var bv=k==='amt'?b.amt:k==='customer'?b.customer.toLowerCase():k==='invNum'?(parseInt(b.invNum)||0):(new Date(b.date).getTime()||0);
+    if(av<bv)return -1*dir;if(av>bv)return 1*dir;return 0;
+  });
+  return list;
+}
+function payHeadHtml(){
+  return'<tr><th style="cursor:pointer" onclick="paySortBy(\'invNum\')">Inv#'+paySortArrow('invNum')+'</th><th style="cursor:pointer" onclick="paySortBy(\'date\')">Date'+paySortArrow('date')+'</th><th style="cursor:pointer" onclick="paySortBy(\'customer\')">Customer'+paySortArrow('customer')+'</th><th>Method</th><th>Note</th><th style="cursor:pointer" onclick="paySortBy(\'amt\')">Amount'+paySortArrow('amt')+'</th></tr>';
+}
+function payApplyFilters(){
+  var r=el('pay-tb');if(!r)return;
+  var filtered=payFilterSort(paymentsFlat());
+  r.innerHTML=filtered.length?filtered.map(payRowHtml).join(''):'<tr><td colspan="6" style="padding:16px;color:#888;font-size:12px">No payments match your filters.</td></tr>';
+  var h=el('pay-thead');if(h)h.innerHTML=payHeadHtml();
+  var total=filtered.reduce(function(s,p){return s+p.amt;},0);
+  var cnt=el('pay-count');if(cnt)cnt.textContent=filtered.length+' payment'+(filtered.length===1?'':'s')+' \u00b7 '+fm(total)+' total';
+}
+function payClearFilters(){
+  var q=el('pay-q'),mth=el('pay-method-f'),from=el('pay-from'),to=el('pay-to');
+  if(q)q.value='';if(mth)mth.value='';if(from)from.value='';if(to)to.value='';
+  payApplyFilters();
+}
+function rPayments(){
+  el('pg-body').innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div style="font-size:14px;font-weight:700">Customer Payments</div><button class="btn xs" onclick="rINV()">Back to Invoices</button></div>'
+    +'<div class="sr" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px">'
+    +'<i class="ti ti-search" style="color:#888"></i><input id="pay-q" placeholder="Search customer, invoice #, note..." oninput="payApplyFilters()" style="flex:1;min-width:140px">'
+    +'<select id="pay-method-f" onchange="payApplyFilters()" style="padding:7px 8px;font-size:12px;border:0.5px solid var(--bd);border-radius:6px;font-family:inherit;background:#f5f5f7"><option value="">All Methods</option><option value="Cash">Cash</option><option value="Card">Card</option><option value="Check">Check</option><option value="Zelle">Zelle</option><option value="Net-30">Net-30</option></select>'
+    +'<input id="pay-from" type="date" onchange="payApplyFilters()" title="From date" style="padding:7px 8px;font-size:12px;border:0.5px solid var(--bd);border-radius:6px;font-family:inherit;background:#f5f5f7">'
+    +'<span style="font-size:11px;color:#888">to</span>'
+    +'<input id="pay-to" type="date" onchange="payApplyFilters()" title="To date" style="padding:7px 8px;font-size:12px;border:0.5px solid var(--bd);border-radius:6px;font-family:inherit;background:#f5f5f7">'
+    +'<button class="btn xs" onclick="payClearFilters()">Clear</button>'
+    +'</div>'
+    +'<div id="pay-count" style="font-size:11px;color:#888;margin-bottom:6px"></div>'
+    +'<div class="tbl"><table><thead id="pay-thead">'+payHeadHtml()+'</thead><tbody id="pay-tb"></tbody></table></div>';
+  payApplyFilters();
+}
 function rINV(){
   el('pg-body').innerHTML='<div class="sr" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px">'
     +'<i class="ti ti-search" style="color:#888"></i><input id="inv-q" placeholder="Search name or invoice #..." oninput="invApplyFilters()" style="flex:1;min-width:140px">'
@@ -2682,6 +2751,7 @@ function rINV(){
     +'<span style="font-size:11px;color:#888">to</span>'
     +'<input id="inv-to" type="date" onchange="invApplyFilters()" title="To date" style="padding:7px 8px;font-size:12px;border:0.5px solid var(--bd);border-radius:6px;font-family:inherit;background:#f5f5f7">'
     +'<button class="btn xs" onclick="invClearFilters()">Clear</button>'
+    +'<button class="btn xs gr" onclick="rPayments()"><i class="ti ti-cash"></i>Payments</button>'
     +(ROLE==='owner'?'<button class="btn xs bl" onclick="bulkSendPreview()"><i class="ti ti-send"></i>Send All to Customers</button><button class="btn xs" onclick="rINVDeleted()">'+t('showDeletedBtn')+'</button>':'')
     +'</div>'
     +'<div id="inv-count" style="font-size:11px;color:#888;margin-bottom:6px"></div>'
