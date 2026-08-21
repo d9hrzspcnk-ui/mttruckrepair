@@ -8068,14 +8068,21 @@ function sendPortalLinkAuto(cx){
   var msg=es
     ? '\u00a1Hola! Aqu\u00ed est\u00e1 su acceso al Portal de Flotilla de '+shop.name+': '+url+' C\u00f3digo: '+cx.portalCode+'. \u00bfPrimera vez? Vea c\u00f3mo usarlo aqu\u00ed: '+helpUrl
     : 'Hi! Here\'s your Fleet Portal access for '+shop.name+': '+url+' Code: '+cx.portalCode+'. First time? See how to use it here: '+helpUrl;
+  var jobs=[];
   if(cx.email&&typeof emailjs!=='undefined'){
-    emailjs.send(ES,ET,{email:cx.email,to_name:cx.name,from_name:shop.name,subject:es?('Su Portal de Flotilla \u2014 '+shop.name):('Your Fleet Portal \u2014 '+shop.name),message:msg,shop_phone:shop.phone,shop_addr:shop.addr}).catch(function(){});
+    jobs.push(emailjs.send(ES,ET,{email:cx.email,to_name:cx.name,from_name:shop.name,subject:es?('Su Portal de Flotilla \u2014 '+shop.name):('Your Fleet Portal \u2014 '+shop.name),message:msg,shop_phone:shop.phone,shop_addr:shop.addr})
+      .then(function(){return{channel:'email',ok:true};}).catch(function(){return{channel:'email',ok:false};}));
   }
   if(cx.phone){
     var digits=cx.phone.replace(/\D/g,'');
     var tel=(digits.length===10)?('+1'+digits):((digits.length===11&&digits.charAt(0)==='1')?('+'+digits):'');
-    if(tel)fetch(AIPROXY+'/send-sms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:tel,body:msg})}).catch(function(){});
+    if(tel){
+      jobs.push(fetch(AIPROXY+'/send-sms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:tel,body:msg})})
+        .then(function(r){return r.json().then(function(d){return{channel:'text',ok:!!(r.ok&&d&&d.success)};});})
+        .catch(function(){return{channel:'text',ok:false};}));
+    }
   }
+  return Promise.all(jobs);
 }
 function checkInvoiceReminders(){
   if(shop.autoNotify===false)return;
@@ -8826,7 +8833,7 @@ function fleetPortalLink(ci){
     +'<div style="background:#f5f5f7;border-radius:8px;padding:10px;font-size:12px;word-break:break-all;margin-bottom:8px;font-family:monospace">'+_fpUrl+'</div>'
     +'<div style="font-size:12px;color:#888;margin-bottom:10px">Access code: <strong>'+cx.portalCode+'</strong> <button class="btn xs" onclick="fpResetCode('+ci+')" style="margin-left:6px">Random New Code</button></div>'
     +'<div class="fg"><label>Or set a custom code (4-10 letters/numbers)</label><div style="display:flex;gap:6px"><input id="fp-custom-code" maxlength="10" value="'+cx.portalCode+'" style="flex:1;padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;text-transform:uppercase;font-family:monospace"><button class="btn xs bl" onclick="fpSetCustomCode('+ci+')">Save Code</button></div></div>',
-    '<button class="btn bl" onclick="fpCopy()"><i class="ti ti-copy"></i>Copy Link</button><button class="btn gr" onclick="fpText()"><i class="ti ti-message"></i>Text</button><button class="btn" onclick="fpQR()"><i class="ti ti-qrcode"></i>QR</button><button class="btn" onclick="cM()">Close</button>');
+    '<button class="btn bl" onclick="fpCopy()"><i class="ti ti-copy"></i>Copy Link</button><button class="btn gr" onclick="fpText()"><i class="ti ti-send"></i>Send Link</button><button class="btn" onclick="fpQR()"><i class="ti ti-qrcode"></i>QR</button><button class="btn" onclick="cM()">Close</button>');
 }
 function fpResetCode(ci){var cx=CUST[ci];if(!cx)return;if(!confirm('Reset portal code? The old link will stop working.'))return;cx.portalCode=fpGenCode();saveAll();fleetPortalLink(ci);}
 function fpSetCustomCode(ci){
@@ -8839,15 +8846,20 @@ function fpSetCustomCode(ci){
   cx.portalCode=code;saveAll();fleetPortalLink(ci);
 }
 function fpCopy(){copyShareLink(_fpUrl);}
-function fpText(){
+async function fpText(){
   var cx=CUST[_fpCustIdx];
-  var es=!!(cx&&cx.lang==='es');
-  var helpUrl=location.origin+location.pathname.replace(/[^\/]*$/,'')+'fleet-portal-help.html'+(es?'?lang=es':'');
-  var code=cx?cx.portalCode:'';
-  var msg=es
-    ? '\u00a1Hola! Aqu\u00ed est\u00e1 su acceso al Portal de Flotilla de '+shop.name+': '+_fpUrl+' C\u00f3digo: '+code+'. \u00bfPrimera vez? Vea c\u00f3mo usarlo aqu\u00ed: '+helpUrl
-    : 'Hi! Here\'s your Fleet Portal access for '+shop.name+': '+_fpUrl+' Code: '+code+'. First time? See how to use it here: '+helpUrl;
-  window.open('sms:?body='+encodeURIComponent(msg));
+  if(!cx){alert('Customer not found.');return;}
+  if(!cx.email&&!cx.phone){alert('No phone or email on file for '+cx.name+'. Add one under Customers, or use Copy Link / QR instead.');return;}
+  var btn=event&&event.target?event.target.closest('button'):null;
+  var orig=btn?btn.innerHTML:'';
+  if(btn){btn.disabled=true;btn.innerHTML='<i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i> Sending\u2026';}
+  var results=await sendPortalLinkAuto(cx);
+  saveAll();
+  if(btn){btn.disabled=false;btn.innerHTML=orig;}
+  var ok=results.filter(function(r){return r.ok;}).map(function(r){return r.channel==='email'?'email':'text';});
+  var fail=results.filter(function(r){return !r.ok;}).map(function(r){return r.channel==='email'?'email':'text';});
+  if(ok.length)alert('Sent to '+cx.name+' via '+ok.join(' and ')+(fail.length?' (but the '+fail.join(', ')+' did not go through)':'')+'.');
+  else alert('Could not send \u2014 check Settings > AI/Email setup, or use Copy Link instead.');
 }
 function fpQR(){showQRCode(_fpUrl);}
 function buildFleetPortal(code){
