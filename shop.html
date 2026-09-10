@@ -1280,8 +1280,8 @@ function toInv(wid){
   else{ni.lines=JSON.parse(JSON.stringify(w.lines||[]));}
   INV.push(ni);
   w.status='Completed';var cx=CUST.find(function(c){return c.name===w.customer;});if(cx)cx.jobs=(cx.jobs||0)+1;
-  saveAll();cM();alert('Invoice #'+(invc-1)+' created! Total: $'+s.tot);goP('i');
-  autoSendInvoice(ni.id);
+  saveAll();cM();goP('i');
+  if(confirm('Invoice #'+(invc-1)+' created! Total: $'+s.tot+'\n\nSend it to the customer now?'))autoSendInvoice(ni.id,true);
 }
 function nWO(){
   var techO='<option value="">\u2014 Unassigned \u2014</option>'+getTechList().map(function(t){return'<option>'+t.name+'</option>';}).join('');
@@ -3124,7 +3124,7 @@ function svNI(){
   recalcInv(niId);
   _niJobs=[];_niExtras=[];
   saveAll();cM();rDash();rINV();
-  autoSendInvoice(niId);}
+  if(confirm('Invoice #'+INV[niId].num+' created! Total: $'+INV[niId].total+'\n\nSend it to the customer now?'))autoSendInvoice(niId,true);}
 function prtInv(id){
   var i=INV[id];var vin=invVIN(i);
   var w=null;if(i.woTicket&&i.woTicket!=='\u2014'){w=WO.find(function(x){return x.ticket===i.woTicket;});}
@@ -8080,8 +8080,8 @@ function invContactFor(inv){
   var optOut=!!(cx&&cx.prefs&&cx.prefs.inv===false);
   return{cx:cx,email:email,tel:tel,optOut:optOut};
 }
-function autoSendInvoice(id){
-  if(shop.autoNotify===false)return;
+function autoSendInvoice(id,force){
+  if(!force&&shop.autoNotify===false)return;
   var inv=INV[id];if(!inv)return;
   var c=invContactFor(inv);
   if(c.optOut||(!c.email&&!c.tel))return;
