@@ -972,14 +972,14 @@ function vWO(id){
   var tO=TECH.map(function(t){var tn=typeof t==='string'?t:t.name;return'<option'+(w.tech===tn?' selected':'')+'>'+tn+'</option>';}).join('');
   var lineItemsHtml=w.jobs
     ?('<div id="wjb'+id+'">'+bJobLns(id)+'</div>'
-      +'<div style="margin-bottom:8px"><button class="btn bl xs" onclick="WO['+id+'].jobs.push({desc:\'\',hrs:1,rate:shop.laborRate,tax:true,laborSubtotal:shop.laborRate,parts:[],subtotal:shop.laborRate});rJobLns('+id+')"><i class="ti ti-plus"></i>'+t('jbAddLabor')+'</button></div>'
+      +'<div style="margin-bottom:8px"><button class="btn bl xs" onclick="WO['+id+'].jobs.push({desc:\'\',hrs:1,rate:shop.laborRate,tax:false,laborSubtotal:shop.laborRate,parts:[],subtotal:shop.laborRate});rJobLns('+id+')"><i class="ti ti-plus"></i>'+t('jbAddLabor')+'</button></div>'
       +'<div id="wje'+id+'">'+bJobExtras(id)+'</div>'
       +'<div style="margin-bottom:12px"><button class="btn xs" style="background:#FBF4E6;color:#8a5a00;border:1px solid #BA7517" onclick="WO['+id+'].extras.push({desc:\'\',sell:0,tax:true,subtotal:0});rJobLns('+id+')"><i class="ti ti-plus"></i>'+t('jbAddFee')+'</button></div>')
     :('<div style="overflow-x:auto;margin-bottom:10px"><table style="width:100%;border-collapse:collapse;font-size:11px;min-width:360px">'
       +'<thead><tr><th style="padding:5px;text-align:left;background:#f5f5f7;font-size:9px;color:#888;text-transform:uppercase;border-bottom:0.5px solid var(--bd)">Type</th><th style="padding:5px;text-align:left;background:#f5f5f7;font-size:9px;color:#888;text-transform:uppercase;border-bottom:0.5px solid var(--bd)">Description</th><th style="padding:5px;text-align:left;background:#f5f5f7;font-size:9px;color:#888;text-transform:uppercase;border-bottom:0.5px solid var(--bd)">Qty/Hrs</th><th style="padding:5px;text-align:left;background:#f5f5f7;font-size:9px;color:#888;text-transform:uppercase;border-bottom:0.5px solid var(--bd)">Rate</th><th style="padding:5px;text-align:left;background:#f5f5f7;font-size:9px;color:#888;text-transform:uppercase;border-bottom:0.5px solid var(--bd)">Total</th><th style="width:24px"></th></tr></thead>'
       +'<tbody id="wln'+id+'">'+bLns(id)+'</tbody></table></div>'
       +'<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">'
-      +'<button class="btn bl xs" onclick="WO['+id+'].lines.push({type:\'labor\',desc:\'\',cat:LC[0],hrs:1,rate:shop.laborRate,tax:true,subtotal:shop.laborRate});rLns('+id+')"><i class="ti ti-plus"></i>Labor</button>'
+      +'<button class="btn bl xs" onclick="WO['+id+'].lines.push({type:\'labor\',desc:\'\',cat:LC[0],hrs:1,rate:shop.laborRate,tax:false,subtotal:shop.laborRate});rLns('+id+')"><i class="ti ti-plus"></i>Labor</button>'
       +'<button class="btn bl xs" onclick="WO['+id+'].lines.push({type:\'part\',partNum:\'\',desc:\'\',qty:1,cost:0,sell:0,markup:shop.markup,tax:true,subtotal:0});rLns('+id+')"><i class="ti ti-plus"></i>Part</button>'
       +'<button class="btn xs gr" onclick="scanPartToWO('+id+')"><i class="ti ti-scan"></i>Scan Part</button>'
       +'<button class="btn xs" onclick="svcMnu('+id+')">Services</button>'
@@ -1723,7 +1723,8 @@ function bEstLns(id){
 function calcEstTot(id){
   var est=ESTIMATES[id];
   var sub=(est.lines||[]).reduce(function(s,l){return s+(l.subtotal||0);},0);
-  var tax=sub*(est.taxPct||0)/100;
+  var txbl=(est.lines||[]).reduce(function(s,l){return s+(l.type==='labor'?0:(l.subtotal||0));},0);
+  var tax=txbl*(est.taxPct||0)/100;
   est.subtotal=sub;est.tax=tax;est.total=sub+tax;
   return{sub:sub,tax:tax,total:sub+tax};
 }
@@ -2341,7 +2342,8 @@ function saveAIEstimate(data, customer, vehicle){
   var cx=CUST.findIndex(function(c){return c.name===customer;});
   var est={id:ESTIMATES.length,num:estc++,customer:customer||'New Customer',phone:'',email:'',vehicle:vehicle||'',description:data.notes||'',lines:data.lines||[],subtotal:0,tax:0,taxPct:parseFloat(shop.tax)||0,total:0,status:'Draft',date:td()};
   var sub=(data.lines||[]).reduce(function(s,l){return s+(l.subtotal||0);},0);
-  var tax=sub*(est.taxPct/100);
+  var txbl=(data.lines||[]).reduce(function(s,l){return s+(l.type==='labor'?0:(l.subtotal||0));},0);
+  var tax=txbl*(est.taxPct/100);
   est.subtotal=+sub.toFixed(2);est.tax=+tax.toFixed(2);est.total=+(sub+tax).toFixed(2);
   ESTIMATES.push(est);saveAll();cM();goP('e');setTimeout(function(){vEst(est.id);},200);
 }
@@ -2604,7 +2606,7 @@ function svInvFeeLine(id){
 }
 function addInvLaborLine(id){
   if(!INV[id].lines)INV[id].lines=[];
-  INV[id].lines.push({type:'labor',desc:'Labor',hrs:1,rate:parseFloat(shop.labor)||125,subtotal:parseFloat(shop.labor)||125});
+  INV[id].lines.push({type:'labor',desc:'Labor',hrs:1,rate:parseFloat(shop.labor)||125,tax:false,subtotal:parseFloat(shop.labor)||125});
   recalcInv(id);eInv(id);
 }
 function addInvPartLine(id){
@@ -2895,7 +2897,7 @@ function ni2CustChange(){
   spSetup('ni2-u',unitPickerItems({units:units}),function(idx){el('ni2-u').value=idx;});
 }
 function niJobAddLabor(){
-  _niJobs.push({desc:'',hrs:1,rate:shop.laborRate,tax:true,laborSubtotal:shop.laborRate,parts:[],subtotal:shop.laborRate});
+  _niJobs.push({desc:'',hrs:1,rate:shop.laborRate,tax:false,laborSubtotal:shop.laborRate,parts:[],subtotal:shop.laborRate});
   niJobRender();
 }
 function niJobDelJob(ji){_niJobs.splice(ji,1);niJobRender();}
