@@ -1432,6 +1432,7 @@ function prtLines(lines, blanks, showPN){
   (lines||[]).forEach(function(l){
     if(l.type==='labor')h+='<tr><td>'+(l.desc||'Labor')+'</td><td>Labor</td><td class="r">'+l.hrs+' hrs</td><td class="r">$'+l.rate+'/hr</td><td class="r"><strong>'+fm(l.subtotal)+'</strong></td></tr>';
     else if(l.type==='part')h+='<tr><td>'+((showPN&&l.partNum)?'<strong>'+l.partNum+'</strong> — ':'')+l.desc+'</td><td>Part</td><td class="r">'+l.qty+'</td><td class="r">'+fm(l.sell)+'</td><td class="r"><strong>'+fm(l.subtotal)+'</strong></td></tr>';
+    else if(l.type==='fee')h+='<tr><td>'+l.desc+'</td><td>Fee</td><td class="r">—</td><td class="r">—</td><td class="r"><strong>'+fm(l.subtotal)+'</strong></td></tr>';
     else h+='<tr><td>'+l.desc+'</td><td>Service</td><td class="r">1</td><td class="r">'+fm(l.rate)+'</td><td class="r"><strong>'+fm(l.subtotal)+'</strong></td></tr>';
   });
   for(var b=0;b<(blanks||0);b++)h+='<tr><td style="height:26px">&nbsp;</td><td></td><td></td><td></td><td></td></tr>';
@@ -1580,7 +1581,7 @@ function rEST(){
       +'<td style="padding:7px 9px"><span style="background:'+s.bg+';color:'+s.c+';border-radius:20px;padding:2px 8px;font-size:10px;font-weight:600">'+est.status+'</span></td>'
       +'<td style="padding:7px 9px;display:flex;gap:3px">'
         +'<button class="btn xs" onclick="vEst('+est.id+')">Open</button>'
-        +(est.status==='Approved'&&!est.convertedToWO?'<button class="btn xs bl" onclick="estToWO('+est.id+')"><i class="ti ti-arrow-right"></i>WO</button>':'')
+        +(est.status==='Approved'&&!est.convertedToWO&&!est.convertedToInv?'<button class="btn xs bl" onclick="estToWO('+est.id+')"><i class="ti ti-arrow-right"></i>WO</button><button class="btn xs bl" onclick="estToInv('+est.id+')"><i class="ti ti-file-invoice"></i>INV</button>':'')
         +(est.status!=='Converted'?'<button class="btn xs bl" onclick="sndEst('+est.id+')"><i class="ti ti-send"></i></button>':'')
       +'</td>'
     +'</tr>';
@@ -1647,8 +1648,8 @@ function svNEst(){
     email:el('est-em')?el('est-em').value.trim():cx?cx.email||'':'',
     vehicle:el('est-veh')?el('est-veh').value.trim():'',
     description:el('est-desc')?el('est-desc').value.trim():'',
-    lines:[],subtotal:0,tax:0,taxPct:parseFloat(shop.tax)||0,total:0,
-    status:'Draft',sentAt:'',notes:'',convertedToWO:null,date:td()
+    lines:[],subtotal:0,tax:0,taxPct:parseFloat(shop.taxRate)||0,total:0,
+    status:'Draft',sentAt:'',notes:'',convertedToWO:null,convertedToInv:null,date:td()
   };
   ESTIMATES.push(est);saveAll();cM();vEst(est.id);
 }
@@ -1656,32 +1657,42 @@ function vEst(id){
   var est=ESTIMATES[id];if(!est)return;
   var sc={Draft:{bg:'#F1EFE8',c:'#444441'},Sent:{bg:'#E6F1FB',c:'#0C447C'},Approved:{bg:'#EAF3DE',c:'#27500A'},Declined:{bg:'#FCEBEB',c:'#501313'},Converted:{bg:'#EEEDFE',c:'#3C3489'}};
   var s=sc[est.status]||sc.Draft;
-  var lns=bEstLns(id);
   var tot=calcEstTot(id);
+  var canEdit=est.status!=='Converted';
+  var dis=canEdit?'':' disabled';
   oM('Estimate #'+est.num,
     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
-    +'<div><div style="font-size:15px;font-weight:600">'+est.customer+'</div>'
-    +'<div style="font-size:13px;color:#888">'+est.vehicle+'</div>'
-    +(est.description?'<div style="font-size:13px;color:#555;margin-top:4px">'+est.description+'</div>':'')
-    +'</div><span style="background:'+s.bg+';color:'+s.c+';border-radius:20px;padding:3px 12px;font-size:11px;font-weight:600">'+est.status+'</span>'
+    +'<div style="font-size:15px;font-weight:600">'+est.customer+'</div>'
+    +'<span style="background:'+s.bg+';color:'+s.c+';border-radius:20px;padding:3px 12px;font-size:11px;font-weight:600">'+est.status+'</span>'
     +'</div>'
-    +'<div style="border-top:0.5px solid var(--bd);padding-top:10px">'
-    +lns
-    +'<div style="margin-top:6px;display:flex;gap:6px">'
-    +'<button class="btn xs" onclick="aEstLn('+id+',this.dataset.t)" data-t="labor"><i class="ti ti-plus"></i>Labor</button>'
-    +'<button class="btn xs" onclick="aEstLn('+id+',this.dataset.t)" data-t="part"><i class="ti ti-plus"></i>Part</button>'
-    +'</div></div>'
+    +'<div class="g2" style="margin-bottom:10px">'
+    +'<div class="fg"><label>Vehicle</label><input value="'+(est.vehicle||'')+'" onchange="ESTIMATES['+id+'].vehicle=this.value.trim();saveAll()" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"'+dis+'></div>'
+    +'<div class="fg"><label>Tax %</label><input type="number" step="0.1" value="'+(est.taxPct||0)+'" onchange="ESTIMATES['+id+'].taxPct=parseFloat(this.value)||0;calcEstTot('+id+');saveAll();vEst('+id+')" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"'+dis+'></div>'
+    +'<div class="fg"><label>Phone</label><input value="'+(est.phone||'')+'" onchange="ESTIMATES['+id+'].phone=this.value.trim();saveAll()" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"'+dis+'></div>'
+    +'<div class="fg"><label>Email</label><input value="'+(est.email||'')+'" onchange="ESTIMATES['+id+'].email=this.value.trim();saveAll()" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"'+dis+'></div>'
+    +'<div class="fg full"><label>Description of Work</label><textarea rows="2" onchange="ESTIMATES['+id+'].description=this.value.trim();saveAll()" style="width:100%;padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;font-family:inherit;resize:none;background:#f5f5f7"'+dis+'>'+(est.description||'')+'</textarea></div>'
+    +'</div>'
+    +'<div class="tbl" style="margin-bottom:8px"><table><thead><tr><th>Type</th><th>Description</th><th>Qty/Hrs</th><th>Rate/$</th><th>Tax</th><th>Total</th><th></th></tr></thead><tbody>'
+    +bEstRows(id,canEdit)
+    +'</tbody></table></div>'
+    +(canEdit?('<div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">'
+      +'<button onclick="addEstLaborLine('+id+')" class="btn xs bl"><i class="ti ti-plus"></i>Add Labor</button>'
+      +'<button onclick="addEstPartLine('+id+')" class="btn xs gr"><i class="ti ti-plus"></i>Add Part</button>'
+      +'<button onclick="addEstFeeLine('+id+')" class="btn xs" style="background:#BA7517;color:#fff"><i class="ti ti-plus"></i>Add Fee</button>'
+      +'</div>'):'')
     +'<div style="text-align:right;padding:10px 0;border-top:0.5px solid var(--bd);margin-top:8px">'
-    +'<div style="font-size:13px;color:#888">Subtotal: '+fm(tot.sub)+' &nbsp;|&nbsp; Tax ('+est.taxPct+'%): '+fm(tot.tax)+'</div>'
+    +'<div style="font-size:13px;color:#888">Labor: '+fm(est.labor||0)+' &nbsp;|&nbsp; Parts/Fees: '+fm(est.parts||0)+' &nbsp;|&nbsp; Tax ('+(est.taxPct||0)+'%): '+fm(tot.tax)+'</div>'
     +'<div style="font-size:20px;font-weight:700;color:#185FA5;margin-top:4px">Total: '+fm(tot.total)+'</div>'
     +'</div>'
     +(est.status==='Sent'?'<div style="background:#FFF3CD;border-radius:8px;padding:8px 12px;font-size:12px;color:#664D03;margin-top:4px">Sent to customer '+est.sentAt+' — awaiting response</div>':'')
     +(est.status==='Approved'?'<div style="background:#EAF3DE;border-radius:8px;padding:8px 12px;font-size:12px;color:#27500A;margin-top:4px">✓ Customer approved this estimate</div>':'')
     +(est.status==='Declined'?'<div style="background:#FCEBEB;border-radius:8px;padding:8px 12px;font-size:12px;color:#A32D2D;margin-top:4px">✗ Customer declined — saved for records</div>':'')
-    +(est.convertedToWO!==null?'<div style="background:#EEEDFE;border-radius:8px;padding:8px 12px;font-size:12px;color:#3C3489;margin-top:4px">Converted to SO #'+WO[est.convertedToWO].ticket+'</div>':''),
-    '<button class="btn gr" onclick="prtEst('+id+')"><i class="ti ti-printer"></i>Print</button><button class="btn bl" onclick="sndEst('+id+')"><i class="ti ti-send"></i>Send to Customer</button>'
+    +(est.convertedToWO!=null?'<div style="background:#EEEDFE;border-radius:8px;padding:8px 12px;font-size:12px;color:#3C3489;margin-top:4px">Converted to SO #'+WO[est.convertedToWO].ticket+'</div>':'')
+    +(est.convertedToInv!=null&&INV[est.convertedToInv]?'<div style="background:#EEEDFE;border-radius:8px;padding:8px 12px;font-size:12px;color:#3C3489;margin-top:4px">Converted to Invoice #'+INV[est.convertedToInv].num+'</div>':''),
+    '<button class="btn gr" onclick="prtEst('+id+')"><i class="ti ti-printer"></i>Print</button>'
+    +(est.status!=='Converted'?'<button class="btn bl" onclick="sndEst('+id+')"><i class="ti ti-send"></i>Send to Customer</button>':'')
     +(est.status==='Sent'?'<button class="btn gr" onclick="estResp('+id+',this.dataset.r)" data-r="Approved">✓ Approved</button><button class="btn rd" onclick="estResp('+id+',this.dataset.r)" data-r="Declined">✗ Declined</button>':'')
-    +(est.status==='Approved'&&est.convertedToWO===null?'<button class="btn" style="background:#EEEDFE;color:#3C3489" onclick="estToWO('+id+')"><i class="ti ti-arrow-right"></i>Convert to Work Order</button>':'')
+    +(est.status==='Approved'&&est.convertedToWO==null&&est.convertedToInv==null?'<button class="btn" style="background:#EEEDFE;color:#3C3489" onclick="estToWO('+id+')"><i class="ti ti-arrow-right"></i>Convert to Work Order</button><button class="btn bl" onclick="estToInv('+id+')"><i class="ti ti-file-invoice"></i>Convert to Invoice</button>':'')
     +(ROLE==='owner'?'<button class="btn rd" onclick="softDeleteEst('+id+')"><i class="ti ti-trash"></i></button>':'')
     +'<button class="btn" onclick="cM()">Close</button>'
   );
@@ -1715,62 +1726,138 @@ function rESTDeleted(){
   el('pg-body').innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px"><div style="font-size:14px;font-weight:700">'+t('showDeletedBtn')+'</div><button class="btn xs" onclick="rEST()">'+t('backToActiveBtn')+'</button></div>'
     +'<div class="tbl"><table><thead><tr><th>EST#</th><th>Customer</th><th>Total</th><th>'+t('deletedOn')+'</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
-function bEstLns(id){
-  var est=ESTIMATES[id];if(!est||!est.lines||!est.lines.length)return'<div style="font-size:13px;color:#888;padding:8px 0">No line items yet — add labor or parts below.</div>';
-  return'<div class="tbl"><table><thead><tr><th>Description</th><th>Detail</th><th>Total</th><th></th></tr></thead><tbody>'
-    +est.lines.map(function(l,i){
-      var detail=l.type==='labor'?(l.hrs+' hrs @ $'+l.rate+'/hr'):(l.qty+' x $'+l.sell);
-      return'<tr><td style="padding:6px 9px">'+l.desc+'</td><td style="padding:6px 9px;font-size:12px">'+detail+'</td><td style="padding:6px 9px;font-weight:600">'+fm(l.subtotal)+'</td><td style="padding:6px 9px"><button class="btn rd xs" onclick="delEstLn('+id+','+i+')">×</button></td></tr>';
-    }).join('')
-    +'</tbody></table></div>';
-}
+// Effective taxability of an estimate line: explicit l.tax wins; otherwise
+// labor defaults to untaxed and parts/fees default to taxed (CA sales-tax rule).
+function estLnTaxed(l){return l.tax!=null?l.tax:(l.type!=='labor');}
 function calcEstTot(id){
   var est=ESTIMATES[id];
-  var sub=(est.lines||[]).reduce(function(s,l){return s+(l.subtotal||0);},0);
-  var txbl=(est.lines||[]).reduce(function(s,l){return s+(l.type==='labor'?0:(l.subtotal||0));},0);
+  var labor=0,parts=0,txbl=0;
+  (est.lines||[]).forEach(function(l){
+    var st=l.subtotal||0;
+    if(l.type==='labor')labor+=st;else parts+=st;
+    if(estLnTaxed(l))txbl+=st;
+  });
   var tax=txbl*(est.taxPct||0)/100;
-  est.subtotal=sub;est.tax=tax;est.total=sub+tax;
-  return{sub:sub,tax:tax,total:sub+tax};
+  est.labor=+labor.toFixed(2);est.parts=+parts.toFixed(2);
+  est.subtotal=+(labor+parts).toFixed(2);est.tax=+tax.toFixed(2);est.total=+(labor+parts+tax).toFixed(2);
+  return{sub:est.subtotal,tax:est.tax,total:est.total};
 }
-function aEstLn(id,type){
-  if(type==='labor'){
-    oM('Add Labor Line',
-      '<div class="g2">'
-      +'<div class="fg full"><label>Description *</label><input id="el-desc" placeholder="e.g. Engine oil change, brake inspection..." style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;width:100%"></div>'
-      +'<div class="fg"><label>Hours *</label><input id="el-hrs" type="number" min="0.25" step="0.25" value="1" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;width:100%"></div>'
-      +'<div class="fg"><label>Rate ($/hr)</label><input id="el-rate" type="number" value="'+(shop.labor||125)+'" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;width:100%"></div>'
-      +'</div>',
-      '<button class="btn bl" onclick="svEstLn('+id+',this.dataset.t)" data-t="labor"><i class="ti ti-check"></i>Add</button><button class="btn" onclick="vEst('+id+')">Cancel</button>'
-    );
-  } else {
-    oM('Add Part Line',
-      '<div class="g2">'
-      +'<div class="fg full"><label>Part Description *</label><input id="ep-desc" placeholder="e.g. Oil filter, brake pads..." style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;width:100%"></div>'
-      +'<div class="fg"><label>Quantity</label><input id="ep-qty" type="number" min="1" value="1" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;width:100%"></div>'
-      +'<div class="fg"><label>Unit Price ($)</label><input id="ep-price" type="number" min="0" step="0.01" value="0" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;width:100%"></div>'
-      +'</div>',
-      '<button class="btn bl" onclick="svEstLn('+id+',this.dataset.t)" data-t="part"><i class="ti ti-check"></i>Add</button><button class="btn" onclick="vEst('+id+')">Cancel</button>'
-    );
-  }
+function bEstRows(id,canEdit){
+  var est=ESTIMATES[id];if(!est)return'';
+  if(!est.lines||!est.lines.length)return'<tr><td colspan="7" style="padding:10px;color:#888;font-size:13px">No line items'+(canEdit?' — add labor, a part, or a fee below':'')+'</td></tr>';
+  var esc=function(s){return((s==null?'':''+s)).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');};
+  return est.lines.map(function(l,li){
+    var badge=l.type==='labor'?'<span style="background:#E6F1FB;color:#0C447C;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:600">Labor</span>':l.type==='fee'?'<span style="background:#FAEEDA;color:#633806;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:600">Fee</span>':'<span style="background:#EAF3DE;color:#27500A;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:600">Part</span>';
+    if(!canEdit){
+      var detail=l.type==='labor'?(l.hrs+' hrs @ $'+l.rate+'/hr'):l.type==='fee'?'Flat':(l.qty+' x $'+l.sell);
+      return'<tr><td style="padding:6px 9px">'+badge+'</td><td style="padding:6px 9px">'+esc(l.desc)+'</td><td style="padding:6px 9px;font-size:12px" colspan="2">'+detail+'</td><td style="padding:6px 9px;text-align:center;font-size:12px">'+(estLnTaxed(l)?'✓':'—')+'</td><td style="padding:6px 9px;font-weight:600">'+fm(l.subtotal)+'</td><td></td></tr>';
+    }
+    if(l.type==='fee'){
+      return'<tr>'
+        +'<td style="padding:5px 6px">'+badge+'</td>'
+        +'<td style="padding:5px 6px"><input value="'+esc(l.desc||'')+'" onchange="ESTIMATES['+id+'].lines['+li+'].desc=this.value;saveAll()" style="width:100%;padding:5px;font-size:13px;border:0.5px solid var(--bd);border-radius:5px;font-family:inherit"></td>'
+        +'<td style="padding:5px 6px"><span style="font-size:12px;color:#888">Flat</span></td>'
+        +'<td style="padding:5px 6px"><input type="number" value="'+(l.sell||0)+'" onchange="var L=ESTIMATES['+id+'].lines['+li+'];L.sell=parseFloat(this.value)||0;L.subtotal=+L.sell.toFixed(2);calcEstTot('+id+');saveAll();vEst('+id+')" style="width:65px;padding:5px;font-size:13px;border:0.5px solid var(--bd);border-radius:5px;font-family:inherit"></td>'
+        +'<td style="padding:5px 6px;text-align:center"><input type="checkbox" '+(estLnTaxed(l)?'checked':'')+' onchange="ESTIMATES['+id+'].lines['+li+'].tax=this.checked;calcEstTot('+id+');saveAll();vEst('+id+')"></td>'
+        +'<td style="padding:5px 6px;font-weight:600;font-size:13px">'+fm(l.subtotal)+'</td>'
+        +'<td style="padding:5px 6px"><button onclick="ESTIMATES['+id+'].lines.splice('+li+',1);calcEstTot('+id+');saveAll();vEst('+id+')" style="background:#FCEBEB;color:#A32D2D;border:none;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:13px">×</button></td>'
+        +'</tr>';
+    } else if(l.type==='labor'){
+      return'<tr>'
+        +'<td style="padding:5px 6px">'+badge+'</td>'
+        +'<td style="padding:5px 6px"><input value="'+esc(l.desc||'')+'" onchange="ESTIMATES['+id+'].lines['+li+'].desc=this.value;saveAll()" style="width:100%;padding:5px;font-size:13px;border:0.5px solid var(--bd);border-radius:5px;font-family:inherit"></td>'
+        +'<td style="padding:5px 6px"><input type="number" step="0.25" value="'+(l.hrs||1)+'" onchange="var L=ESTIMATES['+id+'].lines['+li+'];L.hrs=parseFloat(this.value)||0;L.subtotal=+(L.hrs*L.rate).toFixed(2);calcEstTot('+id+');saveAll();vEst('+id+')" style="width:55px;padding:5px;font-size:13px;border:0.5px solid var(--bd);border-radius:5px;font-family:inherit"></td>'
+        +'<td style="padding:5px 6px"><input type="number" value="'+(l.rate||shop.laborRate||125)+'" onchange="var L=ESTIMATES['+id+'].lines['+li+'];L.rate=parseFloat(this.value)||0;L.subtotal=+(L.hrs*L.rate).toFixed(2);calcEstTot('+id+');saveAll();vEst('+id+')" style="width:65px;padding:5px;font-size:13px;border:0.5px solid var(--bd);border-radius:5px;font-family:inherit"></td>'
+        +'<td style="padding:5px 6px;text-align:center"><input type="checkbox" '+(estLnTaxed(l)?'checked':'')+' onchange="ESTIMATES['+id+'].lines['+li+'].tax=this.checked;calcEstTot('+id+');saveAll();vEst('+id+')"></td>'
+        +'<td style="padding:5px 6px;font-weight:600;font-size:13px">'+fm(l.subtotal)+'</td>'
+        +'<td style="padding:5px 6px"><button onclick="ESTIMATES['+id+'].lines.splice('+li+',1);calcEstTot('+id+');saveAll();vEst('+id+')" style="background:#FCEBEB;color:#A32D2D;border:none;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:13px">×</button></td>'
+        +'</tr>';
+    } else {
+      return'<tr>'
+        +'<td style="padding:5px 6px">'+badge+'</td>'
+        +'<td style="padding:5px 6px;position:relative"><input value="'+esc(l.desc||'')+'" placeholder="Part name or #..." autocomplete="off" oninput="esiSrchP('+id+','+li+',this)" onchange="ESTIMATES['+id+'].lines['+li+'].desc=this.value;saveAll()" style="width:100%;padding:5px;font-size:13px;border:0.5px solid var(--bd);border-radius:5px;font-family:inherit"><div id="esipd_'+id+'_'+li+'" style="display:none;border:0.5px solid var(--bd);border-radius:5px;max-height:150px;overflow-y:auto;background:#fff;position:relative;z-index:60;margin-top:2px;box-shadow:0 4px 12px rgba(0,0,0,0.12)"></div>'
+        +'<div style="display:flex;gap:3px;margin-top:3px;align-items:center"><span style="font-size:10px;color:#888">Cost$</span><input type="number" step="0.01" value="'+(l.cost||0)+'" onchange="var L=ESTIMATES['+id+'].lines['+li+'];L.cost=parseFloat(this.value)||0;if(!L.mkMan)L.markup=getMarkup(L.cost);L.sell=+(L.cost*(1+(L.markup!==undefined?L.markup:getMarkup(L.cost))/100)).toFixed(2);L.subtotal=+(L.qty*L.sell).toFixed(2);calcEstTot('+id+');saveAll();vEst('+id+')" style="width:58px;padding:3px 4px;font-size:11px;border:0.5px solid var(--bd);border-radius:4px;font-family:inherit"><span style="font-size:10px;color:#888">Mk%</span><input type="number" value="'+(l.markup!==undefined?l.markup:shop.markup)+'" onchange="var L=ESTIMATES['+id+'].lines['+li+'];L.markup=parseFloat(this.value)||0;L.mkMan=true;if(L.cost){L.sell=+(L.cost*(1+L.markup/100)).toFixed(2);L.subtotal=+(L.qty*L.sell).toFixed(2);}calcEstTot('+id+');saveAll();vEst('+id+')" style="width:44px;padding:3px 4px;font-size:11px;border:0.5px solid var(--bd);border-radius:4px;font-family:inherit"></div></td>'
+        +'<td style="padding:5px 6px"><input type="number" value="'+(l.qty||1)+'" onchange="var L=ESTIMATES['+id+'].lines['+li+'];L.qty=parseFloat(this.value)||0;L.subtotal=+(L.qty*L.sell).toFixed(2);calcEstTot('+id+');saveAll();vEst('+id+')" style="width:55px;padding:5px;font-size:13px;border:0.5px solid var(--bd);border-radius:5px;font-family:inherit"></td>'
+        +'<td style="padding:5px 6px"><input type="number" value="'+(l.sell||0)+'" onchange="var L=ESTIMATES['+id+'].lines['+li+'];L.sell=parseFloat(this.value)||0;L.subtotal=+(L.qty*L.sell).toFixed(2);calcEstTot('+id+');saveAll();vEst('+id+')" style="width:65px;padding:5px;font-size:13px;border:0.5px solid var(--bd);border-radius:5px;font-family:inherit"></td>'
+        +'<td style="padding:5px 6px;text-align:center"><input type="checkbox" '+(estLnTaxed(l)?'checked':'')+' onchange="ESTIMATES['+id+'].lines['+li+'].tax=this.checked;calcEstTot('+id+');saveAll();vEst('+id+')"></td>'
+        +'<td style="padding:5px 6px;font-weight:600;font-size:13px">'+fm(l.subtotal)+'</td>'
+        +'<td style="padding:5px 6px"><button onclick="ESTIMATES['+id+'].lines.splice('+li+',1);calcEstTot('+id+');saveAll();vEst('+id+')" style="background:#FCEBEB;color:#A32D2D;border:none;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:13px">×</button></td>'
+        +'</tr>';
+    }
+  }).join('');
 }
-function svEstLn(id,type){
-  var est=ESTIMATES[id];if(!est)return;
-  if(!est.lines)est.lines=[];
-  if(type==='labor'){
-    var desc=el('el-desc');var hrs=el('el-hrs');var rate=el('el-rate');
-    if(!desc||!desc.value.trim()){alert('Enter a description');return;}
-    var h=parseFloat(hrs.value)||1;var r=parseFloat(rate.value)||125;
-    est.lines.push({type:'labor',desc:desc.value.trim(),hrs:h,rate:r,subtotal:h*r});
-  } else {
-    var desc2=el('ep-desc');var qty=el('ep-qty');var price=el('ep-price');
-    if(!desc2||!desc2.value.trim()){alert('Enter a part description');return;}
-    var q=parseFloat(qty.value)||1;var p=parseFloat(price.value)||0;
-    est.lines.push({type:'part',desc:desc2.value.trim(),qty:q,sell:p,subtotal:q*p});
-  }
+function esiSrchP(id,li,inp){
+  var dd=el('esipd_'+id+'_'+li);if(!dd)return;
+  var q=(inp.value||'').toLowerCase().trim();
+  if(q.length<1){dd.style.display='none';return;}
+  var esc=function(s){return((s==null?'':''+s)).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;');};
+  var m=_invPartPool().filter(function(p){return(p.name||'').toLowerCase().indexOf(q)>-1||(''+(p.partNum||'')).toLowerCase().indexOf(q)>-1;}).slice(0,8);
+  if(!m.length){dd.style.display='none';return;}
+  dd.innerHTML=m.map(function(p){
+    return'<div onmousedown="esiSelP('+id+','+li+',this)" data-nm="'+esc(p.name||'')+'" data-pn="'+esc(p.partNum||'')+'" data-cost="'+(p.cost!=null?p.cost:'')+'" data-mk="'+(p.markup!=null?p.markup:'')+'" data-sell="'+(p.sell!=null?p.sell:'')+'" style="padding:7px 9px;cursor:pointer;border-bottom:0.5px solid var(--bd);font-size:12px;line-height:1.4">'+(p.partNum?'<span style="color:#185FA5;font-weight:600">'+esc(p.partNum)+'</span> ':'')+esc(p.name||'')+(p.cost!=null&&p.cost!==''?' <span style="color:#888">cost $'+p.cost+'</span>':'')+'</div>';
+  }).join('');
+  dd.style.display='block';
+}
+function esiSelP(id,li,elm){
+  var L=ESTIMATES[id]&&ESTIMATES[id].lines&&ESTIMATES[id].lines[li];if(!L)return;
+  L.desc=elm.getAttribute('data-nm')||L.desc;
+  L.partNum=elm.getAttribute('data-pn')||L.partNum||'';
+  var cost=parseFloat(elm.getAttribute('data-cost'));if(isNaN(cost))cost=0;
+  var mkA=elm.getAttribute('data-mk');var mk=(mkA!==''&&mkA!=null)?parseFloat(mkA):getMarkup(cost);if(isNaN(mk))mk=getMarkup(cost);
+  var sellA=elm.getAttribute('data-sell');var sell=(sellA!==''&&sellA!=null)?parseFloat(sellA):NaN;if(isNaN(sell))sell=+(cost*(1+mk/100)).toFixed(2);
+  L.cost=cost;L.markup=mk;L.mkMan=false;L.sell=sell;L.qty=L.qty||1;
+  L.subtotal=+(L.qty*L.sell).toFixed(2);
   calcEstTot(id);saveAll();vEst(id);
 }
-function delEstLn(id,i){
-  ESTIMATES[id].lines.splice(i,1);calcEstTot(id);saveAll();vEst(id);
+function addEstLaborLine(id){
+  var est=ESTIMATES[id];if(!est)return;
+  if(!est.lines)est.lines=[];
+  var rate=parseFloat(shop.laborRate)||125;
+  est.lines.push({type:'labor',desc:'Labor',hrs:1,rate:rate,tax:false,subtotal:rate});
+  calcEstTot(id);saveAll();vEst(id);
+}
+function addEstPartLine(id){
+  var est=ESTIMATES[id];if(!est)return;
+  if(!est.lines)est.lines=[];
+  est.lines.push({type:'part',desc:'Part',qty:1,cost:0,sell:0,subtotal:0});
+  calcEstTot(id);saveAll();vEst(id);
+}
+function addEstFeeLine(id){
+  var presets=[
+    {name:'Shop Supplies (3%)',amt:0,pct:3},
+    {name:'Environmental / Hazmat Fee',amt:25},
+    {name:'Tire Disposal Fee',amt:15},
+    {name:'Miscellaneous Fee',amt:0}
+  ];
+  var opts=presets.map(function(p,i){return'<option value="'+i+'">'+p.name+(p.amt?' — $'+p.amt:'')+'</option>';}).join('');
+  oM('Add Fee / Misc Charge',
+    '<div class="g2">'
+    +'<div class="fg full"><label>Quick Select (or type custom below)</label>'
+    +'<select id="fee-preset" onchange="feePresetChange('+id+')" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%;font-family:inherit">'
+    +'<option value="">— Select or type custom —</option>'+opts
+    +'</select></div>'
+    +'<div class="fg full"><label>Fee Description *</label><input id="fee-desc" placeholder="e.g. Tire Disposal Fee" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
+    +'<div class="fg"><label>Amount ($)</label><input id="fee-amt" type="number" min="0" step="0.01" value="0" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
+    +'<div class="fg"><label>Or % of subtotal</label><input id="fee-pct" type="number" min="0" max="100" step="0.1" value="0" placeholder="e.g. 3 for 3%" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
+    +'</div>',
+    '<button class="btn" style="background:#BA7517;color:#fff" onclick="svEstFeeLine('+id+')"><i class="ti ti-check"></i>Add Fee</button>'
+    +'<button class="btn" onclick="vEst('+id+')">Cancel</button>'
+  );
+  window._feePresets=presets;
+}
+function svEstFeeLine(id){
+  var est=ESTIMATES[id];if(!est)return;
+  var desc=el('fee-desc');var amt=el('fee-amt');var pct=el('fee-pct');
+  if(!desc||!desc.value.trim()){alert('Enter a fee description');return;}
+  var amount=parseFloat(amt?amt.value:0)||0;
+  var pctVal=parseFloat(pct?pct.value:0)||0;
+  if(pctVal>0){
+    var sub=(est.lines||[]).reduce(function(s,l){return s+(l.subtotal||0);},0);
+    amount=+(sub*pctVal/100).toFixed(2);
+  }
+  if(!est.lines)est.lines=[];
+  est.lines.push({type:'fee',desc:desc.value.trim(),qty:1,sell:amount,subtotal:amount});
+  calcEstTot(id);saveAll();vEst(id);
 }
 function sndEst(id){
   var est=ESTIMATES[id];if(!est)return;
@@ -1808,8 +1895,10 @@ function estToWO(id){
     CUST.push({name:est.customer,phone:est.phone,email:est.email,units:[],jobs:0,lastVisit:td()});
     cx=CUST.length-1;
   }
-  var lines=est.lines.map(function(l){
-    return l.type==='labor'?{type:'labor',desc:l.desc,hrs:l.hrs,rate:l.rate,subtotal:l.subtotal}:{type:'part',partNum:'',desc:l.desc,qty:l.qty,cost:l.sell,sell:l.sell,subtotal:l.subtotal};
+  var lines=(est.lines||[]).map(function(l){
+    if(l.type==='labor')return{type:'labor',desc:l.desc,hrs:l.hrs,rate:l.rate,tax:estLnTaxed(l),subtotal:l.subtotal};
+    if(l.type==='fee')return{type:'svc',desc:l.desc,rate:l.sell,tax:estLnTaxed(l),subtotal:l.subtotal};
+    return{type:'part',partNum:l.partNum||'',desc:l.desc,qty:l.qty,cost:l.cost!=null?l.cost:l.sell,sell:l.sell,markup:l.markup,tax:estLnTaxed(l),subtotal:l.subtotal};
   });
   var newWO={id:WO.length,ticket:woc++,custId:cx,customer:est.customer,phone:est.phone,vehicle:est.vehicle,unit:{},complaint:est.description||'See estimate #'+est.num,status:'Open',tech:'',date:td(),notes:'From Estimate #'+est.num,lines:lines,isNew:true,authorizer:'',poNum:'',fromEstimate:est.num};
   WO.push(newWO);
@@ -1818,6 +1907,28 @@ function estToWO(id){
   saveAll();cM();
   alert('Work Order #'+newWO.ticket+' created from Estimate #'+est.num+'!');
   goP('w');
+}
+function estToInv(id){
+  var est=ESTIMATES[id];if(!est)return;
+  var cx=CUST.findIndex(function(c){return c.name===est.customer;});
+  if(cx===-1){
+    CUST.push({name:est.customer,phone:est.phone,email:est.email,units:[],jobs:0,lastVisit:td()});
+    cx=CUST.length-1;
+  }
+  var lines=(est.lines||[]).map(function(l){
+    if(l.type==='labor')return{type:'labor',desc:l.desc,hrs:l.hrs,rate:l.rate,tax:estLnTaxed(l),subtotal:l.subtotal};
+    if(l.type==='fee')return{type:'fee',desc:l.desc,qty:1,sell:l.sell,tax:estLnTaxed(l),subtotal:l.subtotal};
+    return{type:'part',partNum:l.partNum||'',desc:l.desc,qty:l.qty,cost:l.cost!=null?l.cost:l.sell,sell:l.sell,markup:l.markup,tax:estLnTaxed(l),subtotal:l.subtotal};
+  });
+  calcEstTot(id);
+  var ni={id:INV.length,num:invc++,customer:est.customer,phone:est.phone||'',vehicle:est.vehicle||'',vin:'',woTicket:'—',taxPct:est.taxPct,labor:est.labor||0,parts:est.parts||0,supplies:0,subtotal:est.subtotal||0,tax:est.tax||0,total:est.total||0,status:'Unpaid',payment:'',date:td(),lines:lines,notes:est.description||'',fromEstimate:est.num};
+  INV.push(ni);
+  var cust=CUST[cx];if(cust)cust.jobs=(cust.jobs||0)+1;
+  ESTIMATES[id].status='Converted';
+  ESTIMATES[id].convertedToInv=ni.id;
+  saveAll();cM();
+  if(confirm('Invoice #'+ni.num+' created from Estimate #'+est.num+'! Total: '+fm(ni.total)+'\n\nSend it to the customer now?'))autoSendInvoice(ni.id,true);
+  goP('i');
 }
 
 function eiSrchP(id,li,inp){
@@ -2344,12 +2455,10 @@ async function runAIEstimate(){
 }
 function saveAIEstimate(data, customer, vehicle){
   var cx=CUST.findIndex(function(c){return c.name===customer;});
-  var est={id:ESTIMATES.length,num:estc++,customer:customer||'New Customer',phone:'',email:'',vehicle:vehicle||'',description:data.notes||'',lines:data.lines||[],subtotal:0,tax:0,taxPct:parseFloat(shop.tax)||0,total:0,status:'Draft',date:td()};
-  var sub=(data.lines||[]).reduce(function(s,l){return s+(l.subtotal||0);},0);
-  var txbl=(data.lines||[]).reduce(function(s,l){return s+(l.type==='labor'?0:(l.subtotal||0));},0);
-  var tax=txbl*(est.taxPct/100);
-  est.subtotal=+sub.toFixed(2);est.tax=+tax.toFixed(2);est.total=+(sub+tax).toFixed(2);
-  ESTIMATES.push(est);saveAll();cM();goP('e');setTimeout(function(){vEst(est.id);},200);
+  var est={id:ESTIMATES.length,num:estc++,customer:customer||'New Customer',phone:'',email:'',vehicle:vehicle||'',description:data.notes||'',lines:data.lines||[],subtotal:0,tax:0,taxPct:parseFloat(shop.taxRate)||0,total:0,status:'Draft',convertedToWO:null,convertedToInv:null,date:td()};
+  ESTIMATES.push(est);
+  calcEstTot(est.id);
+  saveAll();cM();goP('e');setTimeout(function(){vEst(est.id);},200);
 }
 
 // ── 5. LOW STOCK ORDER SUGGESTIONS ────────────────────────
