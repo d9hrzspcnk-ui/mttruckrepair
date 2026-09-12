@@ -205,6 +205,7 @@ tr:last-child td{border-bottom:none}
     <div class="ni" id="n-p" onclick="goP('p')"><i class="ti ti-box"></i>Inventory<span class="nb" id="nb-p">0</span></div>
     <div class="ni" id="n-pm" onclick="goP('pm')"><i class="ti ti-engine"></i>PM<span class="nb" id="nb-pm" style="display:none">0</span></div>
     <div class="ni" id="n-a" onclick="goP('a')"><i class="ti ti-calendar"></i>Appts</div>
+    <div class="ni" id="n-sr" onclick="goP('sr')"><i class="ti ti-clipboard-list"></i>Requests<span class="nb" id="nb-sr" style="display:none">0</span></div>
     <div class="ni" id="n-r" onclick="goP('r')"><i class="ti ti-chart-bar"></i>Reports</div><div class="ni" id="n-pf" onclick="goP('pf')"><i class="ti ti-chart-pie"></i>Profit</div><div class="ni" id="n-t" onclick="goP('t')"><i class="ti ti-id-badge"></i>Techs<span class="nb" id="nb-t">0</span></div><div class="ni" id="n-s" onclick="goP('s')"><i class="ti ti-settings"></i>Settings</div>
   </div>
   <div onclick="goHome()" style="position:fixed;bottom:78px;right:12px;background:#fff;border:0.5px solid var(--bd);border-radius:50px;padding:8px 14px;font-size:12px;color:#888;cursor:pointer;display:flex;align-items:center;gap:5px;box-shadow:0 1px 3px rgba(0,0,0,0.1);z-index:25"><i class="ti ti-lock"></i>Lock</div>
@@ -307,7 +308,7 @@ tr:last-child td{border-bottom:none}
 var SB='https://hkiydqsvvorhvazpmkwb.supabase.co',SK='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhraXlkcXN2dm9yaHZhenBta3diIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxNTM5NjAsImV4cCI6MjA5NDcyOTk2MH0.LKEcb5SlZqT2RYQRx9Pr3gW6H3pVCboIXGrSjqq5f_0';
 var ES='service_72vdqgv',ET='template_eia8k4h',EK='QC4JaQRWi_9mkE1ze';
 var PIN='1234',OPIN='',ROLE='owner',pe='',APP_LANG='en';
-var WO=[],INV=[],CUST=[],PARTS=[],TECH=['Guillermo'],PMS=[],APPTS=[],VENDORS=[],KITS=[],ESTIMATES=[],EXPENSES=[];
+var WO=[],INV=[],CUST=[],PARTS=[],TECH=['Guillermo'],PMS=[],APPTS=[],VENDORS=[],KITS=[],ESTIMATES=[],EXPENSES=[],SVCREQ=[];
 // Soft-delete: records are never spliced out (their array index is their .id,
 // and other code depends on that staying stable). Every list/search/report/
 // export must read through these instead of the raw arrays so a deleted
@@ -478,7 +479,7 @@ function el(id){return document.getElementById(id);}
 function gv(id){var e=el(id);return e?e.value.trim():'';}
 function fm(n){return '$'+parseFloat(n||0).toFixed(2);}
 function td(){return new Date().toLocaleDateString();}
-function bdg(s,p){var m={'Open':'#E6F1FB,#0C447C','In Progress':'#FFF3CD,#664D03','Completed':'#D1E7DD,#0A3622','Waiting Parts':'#F8D7DA,#58151C','Paid':'#D1E7DD,#0A3622','Unpaid':'#F8D7DA,#58151C','Partial':'#FFF3CD,#664D03','Written Off':'#E5E5EA,#48484A'};var c=(m[s]||'#E6F1FB,#0C447C').split(',');return'<span style="background:'+c[0]+';color:'+c[1]+';padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600">'+s+'</span>';}
+function bdg(s,p){var m={'Open':'#E6F1FB,#0C447C','In Progress':'#FFF3CD,#664D03','Completed':'#D1E7DD,#0A3622','Waiting Parts':'#F8D7DA,#58151C','Paid':'#D1E7DD,#0A3622','Unpaid':'#F8D7DA,#58151C','Partial':'#FFF3CD,#664D03','Written Off':'#E5E5EA,#48484A','Pending':'#FFF3CD,#664D03','Approved':'#D1E7DD,#0A3622','Declined':'#F8D7DA,#58151C'};var c=(m[s]||'#E6F1FB,#0C447C').split(',');return'<span style="background:'+c[0]+';color:'+c[1]+';padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600">'+s+'</span>';}
 function invActive(iv){return iv.status!=='Paid'&&iv.status!=='Written Off';}
 
 async function dbS(k,v){try{await fetch(SB+'/rest/v1/shop_data',{method:'POST',headers:{'Content-Type':'application/json','apikey':SK,'Authorization':'Bearer '+SK,'Prefer':'resolution=merge-duplicates'},body:JSON.stringify({key:k,value:v,updated_at:new Date().toISOString()})});}catch(e){}}
@@ -553,11 +554,11 @@ function getWODiagPhotos(woId){
   return saved.concat(mem.filter(function(p){return p.startsWith('data:');}));
 }
 async function saveAll(){
-  await Promise.all([dbS('mttr-wo',JSON.stringify(WO)),dbS('mttr-inv',JSON.stringify(INV)),dbS('mttr-cust',JSON.stringify(CUST)),dbS('mttr-parts',JSON.stringify(PARTS)),dbS('mttr-shop',JSON.stringify(shop)),dbS('mttr-tech',JSON.stringify(TECH)),dbS('mttr-pms',JSON.stringify(PMS)),dbS('mttr-appts',JSON.stringify(APPTS)),dbS('mttr-vendors',JSON.stringify(VENDORS)),dbS('mttr-kits',JSON.stringify(KITS)),dbS('mttr-ctrs',JSON.stringify({woc:woc,invc:invc,PIN:PIN,OPIN:OPIN})),dbS('mttr-tech-reqs',JSON.stringify(TECH_REQS)),dbS('mttr-tech-clocks',JSON.stringify(TECH_CLOCKS)),dbS('mttr-tech-codes',JSON.stringify(TECH_CODES)),dbS('mttr-estimates',JSON.stringify(ESTIMATES)),dbS('mttr-notifs',JSON.stringify(NOTIFS)),dbS('mttr-estc',JSON.stringify({estc:estc})),dbS('mttr-tech-timelog',JSON.stringify(TECH_TIMELOG)),dbS('mttr-tech-findings',JSON.stringify(TECH_FINDINGS)),dbS('mttr-exp',JSON.stringify(EXPENSES))]);
+  await Promise.all([dbS('mttr-wo',JSON.stringify(WO)),dbS('mttr-inv',JSON.stringify(INV)),dbS('mttr-cust',JSON.stringify(CUST)),dbS('mttr-parts',JSON.stringify(PARTS)),dbS('mttr-shop',JSON.stringify(shop)),dbS('mttr-tech',JSON.stringify(TECH)),dbS('mttr-pms',JSON.stringify(PMS)),dbS('mttr-appts',JSON.stringify(APPTS)),dbS('mttr-vendors',JSON.stringify(VENDORS)),dbS('mttr-kits',JSON.stringify(KITS)),dbS('mttr-ctrs',JSON.stringify({woc:woc,invc:invc,PIN:PIN,OPIN:OPIN})),dbS('mttr-tech-reqs',JSON.stringify(TECH_REQS)),dbS('mttr-tech-clocks',JSON.stringify(TECH_CLOCKS)),dbS('mttr-tech-codes',JSON.stringify(TECH_CODES)),dbS('mttr-estimates',JSON.stringify(ESTIMATES)),dbS('mttr-notifs',JSON.stringify(NOTIFS)),dbS('mttr-estc',JSON.stringify({estc:estc})),dbS('mttr-tech-timelog',JSON.stringify(TECH_TIMELOG)),dbS('mttr-tech-findings',JSON.stringify(TECH_FINDINGS)),dbS('mttr-exp',JSON.stringify(EXPENSES)),dbS('mttr-svcreq',JSON.stringify(SVCREQ))]);
   var s=el('sv-ind');if(s){s.style.opacity='1';setTimeout(function(){s.style.opacity='0';},2500);}
 }
 async function loadAll(){
-  var ks=['wo','inv','cust','parts','shop','tech','pms','appts','vendors','kits','ctrs','estimates','estc','notifs','tech-reqs','tech-clocks','tech-codes','tech-timelog','tech-findings','exp'];
+  var ks=['wo','inv','cust','parts','shop','tech','pms','appts','vendors','kits','ctrs','estimates','estc','notifs','tech-reqs','tech-clocks','tech-codes','tech-timelog','tech-findings','exp','svcreq'];
   var vs=await Promise.all(ks.map(function(k){return dbL('mttr-'+k);}));
   ks.forEach(function(k,i){
     if(!vs[i])return;
@@ -565,7 +566,7 @@ async function loadAll(){
       if(k==='wo')WO=d;else if(k==='inv')INV=d;else if(k==='cust')CUST=d;else if(k==='parts')PARTS=d;
       else if(k==='shop')Object.assign(shop,d);else if(k==='tech')TECH=d;
       else if(k==='pms')PMS=d;else if(k==='appts')APPTS=d;else if(k==='vendors')VENDORS=d;else if(k==='kits')KITS=d;
-      else if(k==='tech-reqs')TECH_REQS=d;else if(k==='tech-clocks')TECH_CLOCKS=d;else if(k==='tech-codes')TECH_CODES=d;else if(k==='estimates')ESTIMATES=d;else if(k==='notifs')NOTIFS=d;else if(k==='estc'&&d.estc)estc=d.estc;else if(k==='tech-timelog')TECH_TIMELOG=d;else if(k==='tech-findings')TECH_FINDINGS=d;else if(k==='exp')EXPENSES=d;
+      else if(k==='tech-reqs')TECH_REQS=d;else if(k==='tech-clocks')TECH_CLOCKS=d;else if(k==='tech-codes')TECH_CODES=d;else if(k==='estimates')ESTIMATES=d;else if(k==='notifs')NOTIFS=d;else if(k==='estc'&&d.estc)estc=d.estc;else if(k==='tech-timelog')TECH_TIMELOG=d;else if(k==='tech-findings')TECH_FINDINGS=d;else if(k==='exp')EXPENSES=d;else if(k==='svcreq')SVCREQ=d;
       else if(k==='ctrs'){if(d.woc)woc=d.woc;if(d.invc)invc=d.invc;if(d.PIN)PIN=d.PIN;if(d.OPIN!=null)OPIN=d.OPIN;}
     }catch(ex){}
   });
@@ -598,13 +599,13 @@ function updD(){for(var i=0;i<4;i++){var d=el('d'+i);if(d){d.style.background=i<
 function goP(p){
   if(ROLE==='office'&&['r','pf','t','s'].indexOf(p)>-1)p='d';
   curP=p;
-  var t={d:'Dashboard',w:'Service Orders',e:'Estimates',i:'Invoices',c:'Customers',p:'Inventory',pm:'PM Tracker',a:'Appointments',r:'Reports & QuickBooks',s:'Settings',t:'Tech Activity',pf:'Profit Dashboard'};
-  var b={d:'New Order',w:'New Order',e:'New Estimate',i:'New Invoice',c:'New Customer',p:'Add Part',pm:'Add PM',a:'New Appt',r:'Export to QB',s:'Save',t:'',pf:''};
+  var t={d:'Dashboard',w:'Service Orders',e:'Estimates',i:'Invoices',c:'Customers',p:'Inventory',pm:'PM Tracker',a:'Appointments',sr:'Service Requests',r:'Reports & QuickBooks',s:'Settings',t:'Tech Activity',pf:'Profit Dashboard'};
+  var b={d:'New Order',w:'New Order',e:'New Estimate',i:'New Invoice',c:'New Customer',p:'Add Part',pm:'Add PM',a:'New Appt',sr:'',r:'Export to QB',s:'Save',t:'',pf:''};
   el('pg-title').textContent=t[p]||p;
   el('hdr-lbl').textContent=b[p]||'New';
   document.querySelectorAll('.ni').forEach(function(n){n.classList.remove('on');});
   var nav=el('n-'+p);if(nav)nav.classList.add('on');
-  if(p==='d')rDash();else if(p==='w')rWO();else if(p==='e')rEST();else if(p==='i')rINV();else if(p==='c')rCUST();else if(p==='p')rParts();else if(p==='pm')rPM();else if(p==='a')rAppts();else if(p==='r')rReports();else if(p==='s')rSet();else if(p==='t')rOwnerTechs();else if(p==='pf')rProfit();
+  if(p==='d')rDash();else if(p==='w')rWO();else if(p==='e')rEST();else if(p==='i')rINV();else if(p==='c')rCUST();else if(p==='p')rParts();else if(p==='pm')rPM();else if(p==='a')rAppts();else if(p==='sr')rSvcReq();else if(p==='r')rReports();else if(p==='s')rSet();else if(p==='t')rOwnerTechs();else if(p==='pf')rProfit();
 }
 function hdrAct(){
   if(curP==='d'||curP==='w')nWO();else if(curP==='e')nEst();else if(curP==='i')nInv();else if(curP==='c')nCust();else if(curP==='p')nPart();else if(curP==='pm')nPM();else if(curP==='a')nAppt();else if(curP==='s')saveSet();
@@ -696,9 +697,12 @@ function rDash(){
   var ni=el('nb-i');if(ni){ni.textContent=unp.length;ni.style.display=unp.length?'':'none';}
   var np=el('nb-p');if(np){np.textContent=low.length;np.style.display=low.length?'':'none';}
   var npm=el('nb-pm');if(npm){var dpm=PMS.filter(isDue).length;npm.textContent=dpm;npm.style.display=dpm?'':'none';}
+  var srq=SVCREQ.filter(function(r){return r.status==='Pending';});
+  var nsr=el('nb-sr');if(nsr){nsr.textContent=srq.length;nsr.style.display=srq.length?'':'none';}
   var capped=unp.filter(function(i){return i.reminderCapped;});
   var h='';
   if(nc.length)h+='<div style="background:#E6F1FB;border:0.5px solid #B5D4F4;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px"><i class="ti ti-bell" style="color:#185FA5;font-size:18px"></i><div style="font-size:13px;color:#0C447C"><strong>'+nc.length+'</strong> new check-in(s) — <span style="text-decoration:underline;cursor:pointer" onclick="goP(\'w\')">view orders</span></div></div>';
+  if(srq.length)h+='<div style="background:#FBF4E6;border:0.5px solid #E8C27A;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px"><i class="ti ti-clipboard-list" style="color:#BA7517;font-size:18px"></i><div style="font-size:13px;color:#8a5a00"><strong>'+srq.length+'</strong> customer service request(s) waiting for review — <span style="text-decoration:underline;cursor:pointer" onclick="goP(\'sr\')">review now</span></div></div>';
   if(capped.length)h+='<div style="background:#FCEBEB;border:0.5px solid #F0B8B8;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px"><i class="ti ti-phone-off" style="color:#A32D2D;font-size:18px"></i><div style="font-size:13px;color:#A32D2D"><strong>'+capped.length+'</strong> invoice(s) auto-reminded 4x with no response — <span style="text-decoration:underline;cursor:pointer" onclick="goP(\'i\')">needs a personal follow-up</span></div></div>';
   h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">';
   function st(l,v,c){return'<div class="stat"><div class="sl">'+l+'</div><div class="sv"'+(c?' style="color:'+c+'"':'')+'">'+v+'</div></div>';}
@@ -3588,6 +3592,7 @@ function vCust(i){
     +'<div class="tbc" id="ti">'+(unp>0.005?'<button class="btn xs bl" style="margin-bottom:10px" onclick="custBulkPay('+i+')"><i class="ti ti-cash"></i>Record Payment</button>':'')+iRows+'</div>';
   oM(c.name,body,
     '<button class="btn bl" onclick="svCust('+i+')"><i class="ti ti-check"></i>Save Info</button>'
+    +'<button class="btn" style="background:#534AB7;color:#fff" onclick="fleetPortalLink('+i+')"><i class="ti ti-world"></i>Customer Portal</button>'
     +'<button class="btn rd" onclick="if(confirm(\'Delete '+c.name+'? This cannot be undone.\'))deleteCust('+i+')"><i class="ti ti-trash"></i>Delete</button>'
     +'<button class="btn" onclick="cM()">Close</button>');
 }
@@ -4311,6 +4316,51 @@ function rAppts(){
 function nAppt(){var svcs=['Oil Change','Tire Rotation','Brake Service','DOT Inspection','Engine Diagnostic','PM Service','A/C Service','Electrical','General Repair','Other'];oM('New Appointment','<div class="g2"><div class="fg"><label>Customer</label>'+spHtml('aa-c','Type customer name...')+'<input type="hidden" id="aa-c"></div><div class="fg"><label>Or new customer</label><input id="aa-n" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%" placeholder="Customer name"></div><div class="fg"><label>Vehicle</label><input id="aa-v" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%" placeholder="Year Make Model"></div><div class="fg"><label>Phone</label><input id="aa-ph" type="tel" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%" placeholder="(555) 555-5555"></div><div class="fg"><label>Date *</label><input id="aa-d" type="date" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div><div class="fg"><label>Time</label><input id="aa-t" type="time" value="08:00" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div><div class="fg full"><label>Service</label><select id="aa-s" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;font-family:inherit;background:#f5f5f7;width:100%">'+svcs.map(function(s){return'<option>'+s+'</option>';}).join('')+'</select></div></div>','<button class="btn bl" onclick="svAppt()">Save</button><button class="btn" onclick="cM()">Cancel</button>');spSetup('aa-c',custPickerItems(),function(idx,item){el('aa-c').value=item.label;});}
 function svAppt(){var sel=el('aa-c');var cn=(sel&&sel.value)?sel.value:gv('aa-n');if(!cn){alert('Enter customer');return;}var d=gv('aa-d');if(!d){alert('Select a date');return;}var a={customer:cn,vehicle:gv('aa-v'),phone:gv('aa-ph'),date:d,time:gv('aa-t')||'08:00',service:el('aa-s').value,status:'Scheduled'};APPTS.push(a);saveAll();cM();rAppts();if(a.phone&&confirm('Send confirmation text to '+a.phone+'?'))sms(a.phone,'Hi '+cn+', your appointment at '+shop.name+' is confirmed for '+d+' at '+a.time+' for '+a.service+'. Address: '+shop.addr+'. Call '+shop.phone+' to reschedule.');}
 function aRem(i){var a=APPTS[i];var ph=a.phone||(CUST.find(function(c){return c.name===a.customer;})||{}).phone||'';var msg='Hi '+a.customer+', reminder: appointment at '+shop.name+' on '+a.date+' at '+a.time+' for '+a.service+'. Call '+shop.phone+' to reschedule.';if(ph)sms(ph,msg);else alert('No phone on file.');}
+
+// ── CUSTOMER SERVICE REQUESTS (submitted from the Customer Portal) ──
+function rSvcReq(){
+  var pending=SVCREQ.filter(function(r){return r.status==='Pending';}).sort(function(a,b){return new Date(b.date)-new Date(a.date);});
+  var history=SVCREQ.filter(function(r){return r.status!=='Pending';}).sort(function(a,b){return new Date(b.date)-new Date(a.date);}).slice(0,40);
+  function reqCard(r){
+    var idx=SVCREQ.indexOf(r);
+    return '<div class="card" style="margin-bottom:10px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px">'
+      +'<div><div style="font-size:14px;font-weight:600">'+r.customer+(r.vehicle?' · <span style="color:#888;font-weight:400">'+r.vehicle+'</span>':'')+'</div>'
+      +'<div style="font-size:11px;color:#888;margin-top:2px">'+r.date+(r.phone?' · '+r.phone:'')+' · Submitted via Customer Portal</div></div>'
+      +bdg(r.status)
+      +'</div>'
+      +'<div style="font-size:13px;color:#333;margin-top:8px;white-space:pre-wrap">'+(r.desc||'')+'</div>'
+      +(r.status==='Pending'?'<div style="display:flex;gap:8px;margin-top:10px"><button class="btn xs" style="background:#EAF3DE;color:#27500A" onclick="approveSvcReq('+idx+')"><i class="ti ti-check"></i>Approve → Create Order</button><button class="btn xs rd" onclick="declineSvcReq('+idx+')"><i class="ti ti-x"></i>Decline</button></div>':'')
+      +(r.status==='Declined'&&r.declineReason?'<div style="font-size:12px;color:#A32D2D;margin-top:6px">Reason: '+r.declineReason+'</div>':'')
+      +(r.status==='Approved'&&r.woTicket?'<div style="font-size:12px;color:#3B6D11;margin-top:6px">Created as Service Order #'+r.woTicket+' — <span style="text-decoration:underline;cursor:pointer" onclick="vWO('+r.woId+')">view</span></div>':'')
+      +'</div>';
+  }
+  var h='<div style="font-size:13px;font-weight:700;margin-bottom:8px">Pending ('+pending.length+')</div>';
+  h+=pending.length?pending.map(reqCard).join(''):'<div class="card" style="font-size:13px;color:#888">No pending requests.</div>';
+  if(history.length)h+='<div style="font-size:13px;font-weight:700;margin:18px 0 8px">History</div>'+history.map(reqCard).join('');
+  el('pg-body').innerHTML=h;
+}
+function approveSvcReq(idx){
+  var r=SVCREQ[idx];if(!r||r.status!=='Pending')return;
+  var ci=CUST.findIndex(function(c){return c.name===r.customer;});
+  var phone=r.phone||(ci>-1?CUST[ci].phone:'')||'';
+  var newWO={id:WO.length,ticket:woc++,custId:ci>-1?ci:null,customer:r.customer,phone:phone,vehicle:r.vehicle||'',unit:{},complaint:r.desc||'Service requested via Customer Portal',status:'Open',tech:'',date:td(),notes:'',jobs:[],extras:[],isNew:true,authorizer:'',poNum:'',custPO:''};
+  WO.push(newWO);
+  if(ci>-1)CUST[ci].lastVisit=td();
+  r.status='Approved';r.woTicket=newWO.ticket;r.woId=newWO.id;
+  saveAll();rSvcReq();
+  autoNotify('wo_created',newWO);
+  alert('Approved. Created Service Order #'+newWO.ticket+'.');
+}
+function declineSvcReq(idx){
+  var r=SVCREQ[idx];if(!r||r.status!=='Pending')return;
+  var reason=prompt('Reason for declining (optional — shown only if you choose to text the customer):')||'';
+  r.status='Declined';r.declineReason=reason;
+  saveAll();rSvcReq();
+  if(r.phone&&confirm('Send a text to '+r.customer+' letting them know?')){
+    sms(r.phone,'Hi '+r.customer+', re: your service request ("'+(r.desc||'').slice(0,60)+'") — '+(reason?reason:('we are not able to schedule this right now, please call us at '+shop.phone+'.'))+' — '+shop.name);
+  }
+}
 
 function toggleAIKeyVis(){var i=document.getElementById('s-aikey');if(i)i.type=i.type==='password'?'text':'password';}
 function rSet(){
@@ -8234,13 +8284,14 @@ function sendPortalLinkAuto(cx){
   if(!cx.portalCode)cx.portalCode=fpGenCode();
   var url=location.origin+location.pathname+'?portal='+cx.portalCode;
   var es=cx.lang==='es';
+  var isF=!!cx.isFleet;
   var helpUrl=location.origin+location.pathname.replace(/[^\/]*$/,'')+'fleet-portal-help.html'+(es?'?lang=es':'');
   var msg=es
-    ? '\u00a1Hola! Aqu\u00ed est\u00e1 su acceso al Portal de Flotilla de '+shop.name+': '+url+' C\u00f3digo: '+cx.portalCode+'. \u00bfPrimera vez? Vea c\u00f3mo usarlo aqu\u00ed: '+helpUrl
-    : 'Hi! Here\'s your Fleet Portal access for '+shop.name+': '+url+' Code: '+cx.portalCode+'. First time? See how to use it here: '+helpUrl;
+    ? '\u00a1Hola! Aqu\u00ed est\u00e1 su acceso a'+(isF?'l Portal de Flotilla de ':' su Portal de Cliente de ')+shop.name+': '+url+' C\u00f3digo: '+cx.portalCode+'. \u00bfPrimera vez? Vea c\u00f3mo usarlo aqu\u00ed: '+helpUrl
+    : 'Hi! Here\'s your '+(isF?'Fleet Portal':'Customer Portal')+' access for '+shop.name+': '+url+' Code: '+cx.portalCode+'. First time? See how to use it here: '+helpUrl;
   var jobs=[];
   if(cx.email&&typeof emailjs!=='undefined'){
-    jobs.push(emailjs.send(ES,ET,{email:cx.email,to_name:cx.name,from_name:shop.name,subject:es?('Su Portal de Flotilla \u2014 '+shop.name):('Your Fleet Portal \u2014 '+shop.name),message:msg,shop_phone:shop.phone,shop_addr:shop.addr})
+    jobs.push(emailjs.send(ES,ET,{email:cx.email,to_name:cx.name,from_name:shop.name,subject:es?((isF?'Su Portal de Flotilla':'Su Portal de Cliente')+' \u2014 '+shop.name):((isF?'Your Fleet Portal':'Your Customer Portal')+' \u2014 '+shop.name),message:msg,shop_phone:shop.phone,shop_addr:shop.addr})
       .then(function(){return{channel:'email',ok:true};}).catch(function(){return{channel:'email',ok:false};}));
   }
   if(cx.phone){
@@ -8987,10 +9038,10 @@ function fpGenCode(){var s='',ch='ABCDEFGHJKMNPQRSTUVWXYZ23456789';for(var i=0;i
 // Customer profile) so their portal, and the messages that go with it, show
 // up in the language they actually read.
 var FP_TR={
-  en:{title:'Fleet Customer Portal',badcode:'Code not recognized. Check with the shop or try again.',entercode:'Enter your fleet access code',viewbtn:'View My Fleet',needcode:'Need a code? Call us at ',header:' \u2014 Fleet Portal',trucks:'Trucks',inshop:'In Shop Now',openbal:'Open Balance',pmsdue:'PMs Due',inshopnow:'In the Shop Right Now',truckFallback:'Truck',openinv:'Open Invoices',invoice:'Invoice',payBtn:'\ud83d\udcb3 Pay',viewLink:'View',totaldue:'Total Due:',allpaid:'\u2713 All paid up. Thank you!',pmsched:'PM Schedule',due:'Due',dueat:'Due @',duesoon:'DUE SOON',ok:'OK',nopms:'No PM schedules on file yet. Call us to set up preventive maintenance tracking for your fleet.',yourtrucks:'Your Trucks',unit:'Unit',plate:'Plate',inshopbadge:'IN SHOP',onroad:'ON ROAD',notrucks:'No trucks on file yet.',svchist:'Service History',thDate:'Date',thVeh:'Vehicle',thInv:'Inv#',thTotal:'Total',nohist:'No service history yet.',poweredby:'Powered by',thStatus:'Status',stPaid:'Paid',stUnpaid:'Unpaid',stPartial:'Partial',stWrittenOff:'Written Off'},
-  es:{title:'Portal de Clientes de Flotilla',badcode:'C\u00f3digo no reconocido. Verifique con el taller o intente de nuevo.',entercode:'Ingrese su c\u00f3digo de acceso de flotilla',viewbtn:'Ver Mi Flotilla',needcode:'\u00bfNecesita un c\u00f3digo? Ll\u00e1menos al ',header:' \u2014 Portal de Flotilla',trucks:'Camiones',inshop:'En Taller Ahora',openbal:'Saldo Pendiente',pmsdue:'Mant. Pr\u00f3ximos',inshopnow:'En el Taller Ahora Mismo',truckFallback:'Cami\u00f3n',openinv:'Facturas Pendientes',invoice:'Factura',payBtn:'\ud83d\udcb3 Pagar',viewLink:'Ver',totaldue:'Total Adeudado:',allpaid:'\u2713 Todo pagado. \u00a1Gracias!',pmsched:'Programa de Mantenimiento',due:'Vence',dueat:'Vence a las',duesoon:'PRONTO',ok:'BIEN',nopms:'A\u00fan no hay programas de mantenimiento registrados. Ll\u00e1menos para configurar el seguimiento de mantenimiento preventivo de su flotilla.',yourtrucks:'Sus Camiones',unit:'Unidad',plate:'Placa',inshopbadge:'EN TALLER',onroad:'EN CAMINO',notrucks:'A\u00fan no hay camiones registrados.',svchist:'Historial de Servicio',thDate:'Fecha',thVeh:'Veh\u00edculo',thInv:'Factura#',thTotal:'Total',nohist:'A\u00fan no hay historial de servicio.',poweredby:'Desarrollado por',thStatus:'Estado',stPaid:'Pagada',stUnpaid:'Sin Pagar',stPartial:'Parcial',stWrittenOff:'Cancelada'}
+  en:{title:'Customer Portal',badcode:'Code not recognized. Check with the shop or try again.',entercode:'Enter your access code',viewbtn:'View My Account',needcode:'Need a code? Call us at ',header:' \u2014 Fleet Portal',headerGen:' \u2014 Customer Portal',trucks:'Trucks',inshop:'In Shop Now',openbal:'Open Balance',pmsdue:'PMs Due',inshopnow:'In the Shop Right Now',truckFallback:'Truck',openinv:'Open Invoices',invoice:'Invoice',payBtn:'\ud83d\udcb3 Pay',viewLink:'View',totaldue:'Total Due:',allpaid:'\u2713 All paid up. Thank you!',pmsched:'PM Schedule',due:'Due',dueat:'Due @',duesoon:'DUE SOON',ok:'OK',nopms:'No PM schedules on file yet. Call us to set up preventive maintenance tracking for your fleet.',yourtrucks:'Your Trucks',unit:'Unit',plate:'Plate',inshopbadge:'IN SHOP',onroad:'ON ROAD',notrucks:'No trucks on file yet.',svchist:'Service History',thDate:'Date',thVeh:'Vehicle',thInv:'Inv#',thTotal:'Total',nohist:'No service history yet.',poweredby:'Powered by',thStatus:'Status',stPaid:'Paid',stUnpaid:'Unpaid',stPartial:'Partial',stWrittenOff:'Written Off',reqTitle:'Request Service',reqDesc:'Tell us what you need \u2014 we will review it and follow up.',reqPlaceholder:'Describe what you need (e.g. Brakes squealing on unit 12)...',reqNoVehicle:'\u2014 General / Not sure \u2014',reqSubmit:'Send Request',reqEmpty:'Please describe what you need.',reqSent:'Request sent! We will review it and reach out.',reqPending:'Pending Review',reqApproved:'Approved',reqDeclined:'Declined'},
+  es:{title:'Portal de Clientes',badcode:'C\u00f3digo no reconocido. Verifique con el taller o intente de nuevo.',entercode:'Ingrese su c\u00f3digo de acceso',viewbtn:'Ver Mi Cuenta',needcode:'\u00bfNecesita un c\u00f3digo? Ll\u00e1menos al ',header:' \u2014 Portal de Flotilla',headerGen:' \u2014 Portal de Clientes',trucks:'Camiones',inshop:'En Taller Ahora',openbal:'Saldo Pendiente',pmsdue:'Mant. Pr\u00f3ximos',inshopnow:'En el Taller Ahora Mismo',truckFallback:'Cami\u00f3n',openinv:'Facturas Pendientes',invoice:'Factura',payBtn:'\ud83d\udcb3 Pagar',viewLink:'Ver',totaldue:'Total Adeudado:',allpaid:'\u2713 Todo pagado. \u00a1Gracias!',pmsched:'Programa de Mantenimiento',due:'Vence',dueat:'Vence a las',duesoon:'PRONTO',ok:'BIEN',nopms:'A\u00fan no hay programas de mantenimiento registrados. Ll\u00e1menos para configurar el seguimiento de mantenimiento preventivo de su flotilla.',yourtrucks:'Sus Camiones',unit:'Unidad',plate:'Placa',inshopbadge:'EN TALLER',onroad:'EN CAMINO',notrucks:'A\u00fan no hay camiones registrados.',svchist:'Historial de Servicio',thDate:'Fecha',thVeh:'Veh\u00edculo',thInv:'Factura#',thTotal:'Total',nohist:'A\u00fan no hay historial de servicio.',poweredby:'Desarrollado por',thStatus:'Estado',stPaid:'Pagada',stUnpaid:'Sin Pagar',stPartial:'Parcial',stWrittenOff:'Cancelada',reqTitle:'Solicitar Servicio',reqDesc:'D\u00edganos qu\u00e9 necesita \u2014 lo revisaremos y le responderemos.',reqPlaceholder:'Describa lo que necesita (ej. Frenos chillando en unidad 12)...',reqNoVehicle:'\u2014 General / No seguro \u2014',reqSubmit:'Enviar Solicitud',reqEmpty:'Por favor describa lo que necesita.',reqSent:'\u00a1Solicitud enviada! La revisaremos y le responderemos.',reqPending:'En Revisi\u00f3n',reqApproved:'Aprobada',reqDeclined:'Rechazada'}
 };
-var _fpLang='en',_fpCustIdx=-1;
+var _fpLang='en',_fpCustIdx=-1,_fpMyIdx=-1;
 function fpT(k){return (FP_TR[_fpLang]||FP_TR.en)[k]||FP_TR.en[k]||k;}
 function fpStatusBadge(status){
   var key=status==='Paid'?'stPaid':status==='Partial'?'stPartial':status==='Written Off'?'stWrittenOff':'stUnpaid';
@@ -9004,8 +9055,8 @@ function fleetPortalLink(ci){
   if(!cx.portalCode){cx.portalCode=fpGenCode();saveAll();}
   _fpUrl=location.origin+location.pathname+'?portal='+cx.portalCode;
   _fpCustIdx=ci;
-  oM('Fleet Portal \u2014 '+cx.name,
-    '<div style="font-size:13px;color:#555;margin-bottom:10px">Send this link to '+cx.name+'. They will see <strong>their trucks, open invoices, PM due dates, and full service history</strong> \u2014 read-only, no login needed. This is a big selling point for winning fleet accounts.</div>'
+  oM((cx.isFleet?'Fleet Portal':'Customer Portal')+' \u2014 '+cx.name,
+    '<div style="font-size:13px;color:#555;margin-bottom:10px">Send this link to '+cx.name+'. They will see <strong>their trucks, open invoices, PM due dates, and full service history</strong>, and can submit a service request for you to approve.</div>'
     +'<div style="background:#f5f5f7;border-radius:8px;padding:10px;font-size:12px;word-break:break-all;margin-bottom:8px;font-family:monospace">'+_fpUrl+'</div>'
     +'<div style="font-size:12px;color:#888;margin-bottom:10px">Access code: <strong>'+cx.portalCode+'</strong> <button class="btn xs" onclick="fpResetCode('+ci+')" style="margin-left:6px">Random New Code</button></div>'
     +'<div class="fg"><label>Or set a custom code (4-10 letters/numbers)</label><div style="display:flex;gap:6px"><input id="fp-custom-code" maxlength="10" value="'+cx.portalCode+'" style="flex:1;padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;text-transform:uppercase;font-family:monospace"><button class="btn xs bl" onclick="fpSetCustomCode('+ci+')">Save Code</button></div></div>',
@@ -9041,7 +9092,7 @@ function fpQR(){showQRCode(_fpUrl);}
 function buildFleetPortal(code){
   var body=el('sfp-body');if(!body)return;
   var cx=null;
-  if(code){var cu=String(code).trim().toUpperCase();cx=CUST.find(function(c){return c.isFleet&&c.portalCode&&String(c.portalCode).toUpperCase()===cu;});}
+  if(code){var cu=String(code).trim().toUpperCase();cx=CUST.find(function(c){return c.portalCode&&String(c.portalCode).toUpperCase()===cu;});}
   if(!cx){
     function langBtn(l,lbl){return'<button onclick="fpSetLang(\''+l+'\')" style="background:'+(_fpLang===l?'#185FA5':'#f0f0f2')+';color:'+(_fpLang===l?'#fff':'#555')+';border:none;border-radius:7px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">'+lbl+'</button>';}
     body.innerHTML='<div style="max-width:420px;margin:0 auto;padding:40px 20px;text-align:center">'
@@ -9060,8 +9111,20 @@ function buildFleetPortal(code){
   fpRender(CUST.indexOf(cx));
 }
 function fpLogin(){buildFleetPortal(gv('fp-code'));}
+function fpSubmitRequest(){
+  var cx=CUST[_fpMyIdx];if(!cx)return;
+  var ta=el('fp-req-txt');var desc=ta?ta.value.trim():'';
+  if(!desc){alert(fpT('reqEmpty'));return;}
+  var vsel=el('fp-req-veh');var veh=vsel&&vsel.value?vsel.value:'';
+  SVCREQ.push({id:Date.now(),customer:cx.name,phone:cx.phone||'',email:cx.email||'',vehicle:veh,desc:desc,status:'Pending',date:td(),source:'Customer Portal'});
+  NOTIFS.unshift({id:'N-'+Date.now(),type:'svcreq',icon:'ti-clipboard-list',color:'#BA7517',bg:'#FBF4E6',msg:'New service request: '+cx.name+(veh?' | '+veh:'')+' | '+desc.slice(0,60),read:false,ts:Date.now(),link:'sr'});
+  saveAll();
+  alert(fpT('reqSent'));
+  fpRender(_fpMyIdx);
+}
 function fpRender(ci){
   var cx=CUST[ci];var body=el('sfp-body');if(!cx||!body)return;
+  _fpMyIdx=ci;
   var base=location.origin+location.pathname;
   var openWOs=activeWO().filter(function(w){return w.customer===cx.name&&w.status!=='Completed';});
   var myInvs=activeInv().filter(function(i){return i.customer===cx.name;});
@@ -9073,7 +9136,7 @@ function fpRender(ci){
   function sect(icon,title){return'<div style="font-size:13px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:6px"><i class="ti ti-'+icon+'" style="color:#185FA5"></i>'+title+'</div>';}
   var h='<div style="background:#185FA5;color:#fff;padding:18px 16px 16px">'
     +'<div style="max-width:760px;margin:0 auto">'
-    +'<div style="font-size:11px;opacity:0.8;text-transform:uppercase;letter-spacing:1px">'+shop.name+fpT('header')+'</div>'
+    +'<div style="font-size:11px;opacity:0.8;text-transform:uppercase;letter-spacing:1px">'+shop.name+(cx.isFleet?fpT('header'):fpT('headerGen'))+'</div>'
     +'<div style="font-size:21px;font-weight:700;margin-top:2px">'+cx.name+'</div>'
     +'<div style="font-size:12px;opacity:0.85;margin-top:2px">'+shop.phone+' \u00b7 '+shop.addr+'</div>'
     +'</div></div>';
@@ -9084,6 +9147,20 @@ function fpRender(ci){
     +'<div style="background:#fff;border-radius:10px;padding:10px;text-align:center;border:0.5px solid rgba(0,0,0,0.08)"><div style="font-size:20px;font-weight:700;color:'+(unpaidAmt>0?'#A32D2D':'#3B6D11')+'">'+fm(unpaidAmt)+'</div><div style="font-size:10px;color:#888">'+fpT('openbal')+'</div></div>'
     +'<div style="background:#fff;border-radius:10px;padding:10px;text-align:center;border:0.5px solid rgba(0,0,0,0.08)"><div style="font-size:20px;font-weight:700;color:'+(pmsDue.length?'#A32D2D':'#3B6D11')+'">'+pmsDue.length+'</div><div style="font-size:10px;color:#888">'+fpT('pmsdue')+'</div></div>'
     +'</div>';
+  // Request Service
+  var myReqs=SVCREQ.filter(function(r){return r.customer===cx.name;}).slice().reverse();
+  var vehOpts='<option value="">'+fpT('reqNoVehicle')+'</option>'+((cx.units||[]).map(function(u){var lbl=((u.year||'')+' '+(u.make||'')+' '+(u.model||'')).trim()+(u.num?' (#'+u.num+')':'');return'<option value="'+lbl.replace(/"/g,'&quot;')+'">'+lbl+'</option>';}).join(''));
+  h+=card(sect('clipboard-list',fpT('reqTitle'))
+    +'<div style="font-size:12px;color:#888;margin-bottom:8px">'+fpT('reqDesc')+'</div>'
+    +'<textarea id="fp-req-txt" rows="3" placeholder="'+fpT('reqPlaceholder')+'" style="width:100%;padding:9px 10px;font-size:13px;border-radius:8px;border:0.5px solid rgba(0,0,0,0.15);background:#f5f5f7;font-family:inherit;resize:vertical;margin-bottom:8px;box-sizing:border-box"></textarea>'
+    +((cx.units&&cx.units.length)?'<select id="fp-req-veh" style="width:100%;padding:9px 10px;font-size:13px;border-radius:8px;border:0.5px solid rgba(0,0,0,0.15);background:#f5f5f7;font-family:inherit;margin-bottom:8px;box-sizing:border-box">'+vehOpts+'</select>':'')
+    +'<button onclick="fpSubmitRequest()" style="width:100%;padding:11px;background:#185FA5;color:#fff;border:none;border-radius:9px;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer">'+fpT('reqSubmit')+'</button>'
+    +(myReqs.length?'<div style="margin-top:12px">'+myReqs.map(function(r){
+        var stKey=r.status==='Approved'?'reqApproved':r.status==='Declined'?'reqDeclined':'reqPending';
+        var stColor=r.status==='Approved'?'#27500A':r.status==='Declined'?'#A32D2D':'#8a5a00';
+        var stBg=r.status==='Approved'?'#EAF3DE':r.status==='Declined'?'#FCEBEB':'#FFF3CD';
+        return'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:8px 0;border-top:0.5px solid rgba(0,0,0,0.06)"><div style="font-size:12px;color:#555;flex:1">'+r.desc+(r.vehicle?' <span style="color:#aaa">· '+r.vehicle+'</span>':'')+'</div><span style="background:'+stBg+';color:'+stColor+';padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;white-space:nowrap">'+fpT(stKey)+'</span></div>';
+      }).join('')+'</div>':''));
   // In shop now
   if(openWOs.length){
     h+=card(sect('tools',fpT('inshopnow'))+openWOs.map(function(w){
