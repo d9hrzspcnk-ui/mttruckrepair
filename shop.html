@@ -4357,8 +4357,48 @@ function rSet(){
     +'<input id="s-codeurl" value="'+(shop.codeUrl||'')+'" placeholder="Default: quickserve.cummins.com — paste another URL to change" style="width:100%;padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7">'
     +'<div style="font-size:11px;color:#888;margin-top:4px">Techs get a button in the Codes tab that opens this site for official code documentation.</div>'
     +'</div></div>'
+    +(ROLE==='owner'?'<div class="card" style="border:1.5px solid #A32D2D;margin-bottom:12px">'
+    +'<div style="font-size:14px;font-weight:600;margin-bottom:4px;color:#A32D2D"><i class="ti ti-tools" style="font-size:16px;vertical-align:-2px"></i> One-Time Fix: Stop Taxing Labor</div>'
+    +'<div style="font-size:12px;color:#888;margin-bottom:10px">California generally does not tax repair labor — only parts. New invoices now follow that automatically. This tool corrects the tax on <strong>still-Unpaid</strong> invoices that were created before the fix. Paid, Partial, and Written Off invoices are left untouched so your records match what was actually collected.</div>'
+    +'<button class="btn rd xs" onclick="previewLaborTaxFix()"><i class="ti ti-search"></i>Preview Invoices to Fix</button>'
+    +'</div>':'')
     +'<button class="btn bl" style="width:100%;justify-content:center;padding:14px;font-size:15px" onclick="saveSet()"><i class="ti ti-check"></i>Save All Settings</button>';
   rTechs();rVendors();setTimeout(rMarkupTiers,100);
+}
+function previewLaborTaxFix(){
+  var hits=[];
+  INV.forEach(function(inv){
+    if(inv.status!=='Unpaid')return;
+    var has=false;
+    if(inv.jobs)(inv.jobs||[]).forEach(function(j){if(j.tax!==false)has=true;});
+    else (inv.lines||[]).forEach(function(l){if(l.type==='labor'&&l.tax!==false)has=true;});
+    if(has)hits.push(inv);
+  });
+  if(!hits.length){alert('No Unpaid invoices currently have taxed labor — nothing to fix.');return;}
+  var oldTax=hits.reduce(function(s,i){return s+(parseFloat(i.tax)||0);},0);
+  var rows=hits.map(function(i){return '<tr><td style="padding:6px 9px">#'+i.num+'</td><td style="padding:6px 9px">'+(i.customer||'')+'</td><td style="padding:6px 9px">'+fm(i.total)+'</td></tr>';}).join('');
+  oM('Fix Labor Tax — '+hits.length+' Invoice'+(hits.length===1?'':'s'),
+    '<div style="font-size:13px;color:#555;margin-bottom:10px">These Unpaid invoices currently tax labor. Fixing them will remove tax from labor lines only (parts stay taxed) and lower each invoice\'s total accordingly. Current combined tax on these invoices: <strong>'+fm(oldTax)+'</strong>.</div>'
+    +'<div class="tbl" style="max-height:240px;overflow-y:auto"><table><thead><tr><th>Invoice</th><th>Customer</th><th>Current Total</th></tr></thead><tbody>'+rows+'</tbody></table></div>',
+    '<button class="btn rd" onclick="runLaborTaxFix()"><i class="ti ti-check"></i>Fix These '+hits.length+'</button><button class="btn" onclick="cM()">Cancel</button>'
+  );
+}
+function runLaborTaxFix(){
+  var fixed=0;
+  INV.forEach(function(inv){
+    if(inv.status!=='Unpaid')return;
+    var touched=false;
+    if(inv.jobs){
+      (inv.jobs||[]).forEach(function(j){if(j.tax!==false){j.tax=false;touched=true;}});
+      if(touched){recalcInvJobs(inv);fixed++;}
+    } else {
+      (inv.lines||[]).forEach(function(l){if(l.type==='labor'&&l.tax!==false){l.tax=false;touched=true;}});
+      if(touched){recalcInv(inv.id);fixed++;}
+    }
+  });
+  saveAll();cM();
+  alert('Fixed '+fixed+' invoice'+(fixed===1?'':'s')+'. Labor is no longer taxed on those — parts tax is unchanged.');
+  if(curP==='i')rINV();
 }
 function rTechs(){
   var tl=el('tech-lst');if(!tl)return;
