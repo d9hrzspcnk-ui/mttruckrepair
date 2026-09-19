@@ -482,7 +482,7 @@ function td(){return new Date().toLocaleDateString();}
 function bdg(s,p){var m={'Open':'#E6F1FB,#0C447C','In Progress':'#FFF3CD,#664D03','Completed':'#D1E7DD,#0A3622','Waiting Parts':'#F8D7DA,#58151C','Paid':'#D1E7DD,#0A3622','Unpaid':'#F8D7DA,#58151C','Partial':'#FFF3CD,#664D03','Written Off':'#E5E5EA,#48484A','Pending':'#FFF3CD,#664D03','Approved':'#D1E7DD,#0A3622','Declined':'#F8D7DA,#58151C'};var c=(m[s]||'#E6F1FB,#0C447C').split(',');return'<span style="background:'+c[0]+';color:'+c[1]+';padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600">'+s+'</span>';}
 function invActive(iv){return iv.status!=='Paid'&&iv.status!=='Written Off';}
 
-async function dbS(k,v){try{await fetch(SB+'/rest/v1/shop_data',{method:'POST',headers:{'Content-Type':'application/json','apikey':SK,'Authorization':'Bearer '+SK,'Prefer':'resolution=merge-duplicates'},body:JSON.stringify({key:k,value:v,updated_at:new Date().toISOString()})});}catch(e){}}
+async function dbS(k,v,tries){tries=tries||0;try{var r=await fetch(SB+'/rest/v1/shop_data',{method:'POST',headers:{'Content-Type':'application/json','apikey':SK,'Authorization':'Bearer '+SK,'Prefer':'resolution=merge-duplicates'},body:JSON.stringify({key:k,value:v,updated_at:new Date().toISOString()})});if(!r.ok){if(tries<2){await new Promise(function(res){setTimeout(res,800);});return dbS(k,v,tries+1);}return false;}return true;}catch(e){if(tries<2){await new Promise(function(res){setTimeout(res,800);});return dbS(k,v,tries+1);}return false;}}
 async function dbL(k){try{var r=await fetch(SB+'/rest/v1/shop_data?key=eq.'+k+'&select=value',{headers:{'apikey':SK,'Authorization':'Bearer '+SK}});var d=await r.json();return(d&&d.length)?d[0].value:null;}catch(e){return null;}}
 
 async function uploadToStorage(base64data, path){
@@ -553,9 +553,23 @@ function getWODiagPhotos(woId){
   var mem=(TP_PHOTOS[woId]&&TP_PHOTOS[woId].diag)||[];
   return saved.concat(mem.filter(function(p){return p.startsWith('data:');}));
 }
+var _saveInFlight=0;
+window.addEventListener('beforeunload',function(e){if(_saveInFlight>0){e.preventDefault();e.returnValue='';return '';}});
 async function saveAll(){
-  await Promise.all([dbS('mttr-wo',JSON.stringify(WO)),dbS('mttr-inv',JSON.stringify(INV)),dbS('mttr-cust',JSON.stringify(CUST)),dbS('mttr-parts',JSON.stringify(PARTS)),dbS('mttr-shop',JSON.stringify(shop)),dbS('mttr-tech',JSON.stringify(TECH)),dbS('mttr-pms',JSON.stringify(PMS)),dbS('mttr-appts',JSON.stringify(APPTS)),dbS('mttr-vendors',JSON.stringify(VENDORS)),dbS('mttr-kits',JSON.stringify(KITS)),dbS('mttr-ctrs',JSON.stringify({woc:woc,invc:invc,PIN:PIN,OPIN:OPIN})),dbS('mttr-tech-reqs',JSON.stringify(TECH_REQS)),dbS('mttr-tech-clocks',JSON.stringify(TECH_CLOCKS)),dbS('mttr-tech-codes',JSON.stringify(TECH_CODES)),dbS('mttr-estimates',JSON.stringify(ESTIMATES)),dbS('mttr-notifs',JSON.stringify(NOTIFS)),dbS('mttr-estc',JSON.stringify({estc:estc})),dbS('mttr-tech-timelog',JSON.stringify(TECH_TIMELOG)),dbS('mttr-tech-findings',JSON.stringify(TECH_FINDINGS)),dbS('mttr-exp',JSON.stringify(EXPENSES)),dbS('mttr-svcreq',JSON.stringify(SVCREQ))]);
-  var s=el('sv-ind');if(s){s.style.opacity='1';setTimeout(function(){s.style.opacity='0';},2500);}
+  _saveInFlight++;
+  var results;
+  try{
+    results=await Promise.all([dbS('mttr-wo',JSON.stringify(WO)),dbS('mttr-inv',JSON.stringify(INV)),dbS('mttr-cust',JSON.stringify(CUST)),dbS('mttr-parts',JSON.stringify(PARTS)),dbS('mttr-shop',JSON.stringify(shop)),dbS('mttr-tech',JSON.stringify(TECH)),dbS('mttr-pms',JSON.stringify(PMS)),dbS('mttr-appts',JSON.stringify(APPTS)),dbS('mttr-vendors',JSON.stringify(VENDORS)),dbS('mttr-kits',JSON.stringify(KITS)),dbS('mttr-ctrs',JSON.stringify({woc:woc,invc:invc,PIN:PIN,OPIN:OPIN})),dbS('mttr-tech-reqs',JSON.stringify(TECH_REQS)),dbS('mttr-tech-clocks',JSON.stringify(TECH_CLOCKS)),dbS('mttr-tech-codes',JSON.stringify(TECH_CODES)),dbS('mttr-estimates',JSON.stringify(ESTIMATES)),dbS('mttr-notifs',JSON.stringify(NOTIFS)),dbS('mttr-estc',JSON.stringify({estc:estc})),dbS('mttr-tech-timelog',JSON.stringify(TECH_TIMELOG)),dbS('mttr-tech-findings',JSON.stringify(TECH_FINDINGS)),dbS('mttr-exp',JSON.stringify(EXPENSES)),dbS('mttr-svcreq',JSON.stringify(SVCREQ))]);
+  }finally{_saveInFlight--;}
+  var s=el('sv-ind');
+  var failed=results.indexOf(false)>-1;
+  if(failed){
+    if(s){s.innerHTML='<i class="ti ti-alert-triangle"></i>NOT SAVED';s.style.color='#A32D2D';s.style.opacity='1';}
+    alert('⚠️ Could not save to the server — check your internet connection.\n\nDo NOT close this page or your changes could be lost. Tap OK, then try the action again once you have a signal.');
+  }else{
+    if(s){s.innerHTML='<i class="ti ti-circle-check"></i>Saved';s.style.color='var(--gr)';s.style.opacity='1';setTimeout(function(){s.style.opacity='0';},2500);}
+  }
+  return !failed;
 }
 async function loadAll(){
   var ks=['wo','inv','cust','parts','shop','tech','pms','appts','vendors','kits','ctrs','estimates','estc','notifs','tech-reqs','tech-clocks','tech-codes','tech-timelog','tech-findings','exp','svcreq'];
