@@ -1879,17 +1879,46 @@ function sndEst(id){
   // Build estimate text
   var lines=est.lines.map(function(l){return l.type==='labor'?(l.desc+': '+l.hrs+'hrs @ $'+l.rate+'/hr = $'+l.subtotal.toFixed(2)):(l.desc+': '+l.qty+' x $'+l.sell+' = $'+l.subtotal.toFixed(2));}).join(', ');
   var msg='Estimate #'+est.num+' from '+shop.name+' for your '+est.vehicle+'. Work: '+(est.description||lines)+'. Estimated Total: $'+tot.total.toFixed(2)+'. Please call '+shop.phone+' to approve or for questions.';
-  if(est.email){
-    // Send via EmailJS
-    emailjs.send(ES,ET,{to_email:est.email,to_name:est.customer,subject:'Estimate #'+est.num+' from '+shop.name,message:'Estimate #'+est.num+' — Customer: '+est.customer+' | Vehicle: '+est.vehicle+' | Total: $'+tot.total.toFixed(2)+' | Call '+shop.phone+' to approve.',shop_name:shop.name,shop_phone:shop.phone},EK);
-  }
-  if(est.phone){
-    window.open('sms:'+est.phone.replace(/[^0-9]/g,'')+'?body='+encodeURIComponent(msg));
-  }
   if(!est.email&&!est.phone){alert('No phone or email on file for this customer.');return;}
-  ESTIMATES[id].status='Sent';
-  ESTIMATES[id].sentAt=new Date().toLocaleString();
-  saveAll();vEst(id);
+  var tasks=[];
+  if(est.phone){
+    var digits=est.phone.replace(/\D/g,'');
+    var tel=(digits.length===10)?('+1'+digits):((digits.length===11&&digits.charAt(0)==='1')?('+'+digits):'');
+    if(tel){
+      tasks.push(fetch(AIPROXY+'/send-sms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:tel,body:msg})}).then(function(r){
+        return r.json().then(function(data){return{ok:r.ok&&data&&data.success,channel:'text',detail:data&&(data.message||data.error)};});
+      }).catch(function(e){return{ok:false,channel:'text',detail:e&&e.message?e.message:String(e)};}));
+    }else{
+      tasks.push(Promise.resolve({ok:false,channel:'text',detail:'Invalid phone number on file'}));
+    }
+  }
+  if(est.email){
+    if(typeof emailjs==='undefined'){
+      tasks.push(Promise.resolve({ok:false,channel:'email',detail:'Email service not loaded'}));
+    }else{
+      tasks.push(emailjs.send(ES,ET,{to_email:est.email,to_name:est.customer,subject:'Estimate #'+est.num+' from '+shop.name,message:'Estimate #'+est.num+' — Customer: '+est.customer+' | Vehicle: '+est.vehicle+' | Total: $'+tot.total.toFixed(2)+' | Call '+shop.phone+' to approve.',shop_name:shop.name,shop_phone:shop.phone},EK).then(function(){
+        return{ok:true,channel:'email'};
+      }).catch(function(e){return{ok:false,channel:'email',detail:(e&&e.text)?e.text:(e&&e.message?e.message:String(e))};}));
+    }
+  }
+  var btn=event&&event.target?event.target.closest('button'):null;
+  if(btn){btn._orig=btn.innerHTML;btn.disabled=true;btn.innerHTML='<i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i> Sending...';}
+  Promise.all(tasks).then(function(results){
+    if(btn){btn.disabled=false;btn.innerHTML=btn._orig;}
+    var ok=results.filter(function(r){return r.ok;});
+    var fail=results.filter(function(r){return !r.ok;});
+    if(ok.length){
+      ESTIMATES[id].status='Sent';
+      ESTIMATES[id].sentAt=new Date().toLocaleString();
+      saveAll();
+      var note=fail.length?(' (Note: '+fail.map(function(r){return r.channel+' failed'+(r.detail?': '+r.detail:'');}).join('; ')+')'):'';
+      alert('Estimate #'+est.num+' sent via '+ok.map(function(r){return r.channel;}).join(' & ')+'!'+note);
+      vEst(id);
+    }else{
+      var detail=fail.map(function(r){return r.channel+': '+(r.detail||'unknown error');}).join('; ');
+      alert('Could not send estimate. '+detail+'\n\nCheck Settings > AI/Email setup, or tap Print to share it another way.');
+    }
+  });
 }
 function estResp(id,resp){
   ESTIMATES[id].status=resp;
