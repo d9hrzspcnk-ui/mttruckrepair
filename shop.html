@@ -1873,13 +1873,18 @@ function svEstFeeLine(id){
   est.lines.push({type:'fee',desc:desc.value.trim(),qty:1,sell:amount,subtotal:amount});
   calcEstTot(id);saveAll();vEst(id);
 }
-function sndEst(id){
+async function sndEst(id){
   var est=ESTIMATES[id];if(!est)return;
   var tot=calcEstTot(id);
+  if(!est.email&&!est.phone){alert('No phone or email on file for this customer.');return;}
+  var btn=event&&event.target?event.target.closest('button'):null;
+  if(btn){btn._orig=btn.innerHTML;btn.disabled=true;btn.innerHTML='<i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i> Sending...';}
+  var pdfUrl=await buildEstimatePdfUrl(id);
   // Build estimate text
   var lines=est.lines.map(function(l){return l.type==='labor'?(l.desc+': '+l.hrs+'hrs @ $'+l.rate+'/hr = $'+l.subtotal.toFixed(2)):(l.desc+': '+l.qty+' x $'+l.sell+' = $'+l.subtotal.toFixed(2));}).join(', ');
-  var msg='Estimate #'+est.num+' from '+shop.name+' for your '+est.vehicle+'. Work: '+(est.description||lines)+'. Estimated Total: $'+tot.total.toFixed(2)+'. Please call '+shop.phone+' to approve or for questions.';
-  if(!est.email&&!est.phone){alert('No phone or email on file for this customer.');return;}
+  var msg='Estimate #'+est.num+' from '+shop.name+' for your '+est.vehicle+'. Work: '+(est.description||lines)+'. Estimated Total: $'+tot.total.toFixed(2)+'.'
+    +(pdfUrl?' See the full breakdown: '+pdfUrl:'')
+    +' Please call '+shop.phone+' to approve or for questions.';
   var tasks=[];
   if(est.phone){
     var digits=est.phone.replace(/\D/g,'');
@@ -1896,13 +1901,11 @@ function sndEst(id){
     if(typeof emailjs==='undefined'){
       tasks.push(Promise.resolve({ok:false,channel:'email',detail:'Email service not loaded'}));
     }else{
-      tasks.push(emailjs.send(ES,ET,{to_email:est.email,to_name:est.customer,subject:'Estimate #'+est.num+' from '+shop.name,message:'Estimate #'+est.num+' — Customer: '+est.customer+' | Vehicle: '+est.vehicle+' | Total: $'+tot.total.toFixed(2)+' | Call '+shop.phone+' to approve.',shop_name:shop.name,shop_phone:shop.phone},EK).then(function(){
+      tasks.push(emailjs.send(ES,ET,{to_email:est.email,to_name:est.customer,subject:'Estimate #'+est.num+' from '+shop.name,message:'Estimate #'+est.num+' — Customer: '+est.customer+' | Vehicle: '+est.vehicle+' | Total: $'+tot.total.toFixed(2)+(pdfUrl?' | Full PDF: '+pdfUrl:'')+' | Call '+shop.phone+' to approve.',shop_name:shop.name,shop_phone:shop.phone},EK).then(function(){
         return{ok:true,channel:'email'};
       }).catch(function(e){return{ok:false,channel:'email',detail:(e&&e.text)?e.text:(e&&e.message?e.message:String(e))};}));
     }
   }
-  var btn=event&&event.target?event.target.closest('button'):null;
-  if(btn){btn._orig=btn.innerHTML;btn.disabled=true;btn.innerHTML='<i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i> Sending...';}
   Promise.all(tasks).then(function(results){
     if(btn){btn.disabled=false;btn.innerHTML=btn._orig;}
     var ok=results.filter(function(r){return r.ok;});
@@ -6389,6 +6392,135 @@ async function buildInvoicePdfUrl(id){
     return pdfUrl;
   }catch(err){
     console.error('PDF error:',err);
+    return null;
+  }
+}
+async function buildEstimatePdfUrl(id){
+  var est=ESTIMATES[id];if(!est)return null;
+  if(typeof window.jspdf==='undefined'||!window.jspdf.jsPDF)return null;
+  try{
+    var jsPDF=window.jspdf.jsPDF;
+    var doc=new jsPDF({orientation:'portrait',unit:'mm',format:'letter'});
+    var W=215.9, margin=15, y=margin, colR=W-margin;
+    var estTot=calcEstTot(id);
+
+    // Header bar
+    doc.setFillColor(24,95,165);
+    doc.rect(0,0,W,60,'F');
+    doc.setTextColor(255,255,255);
+    doc.setFontSize(20);doc.setFont('helvetica','bold');
+    doc.text(shop.name||'MT Truck And Trailer Repair',margin,30);
+    doc.setFontSize(10);doc.setFont('helvetica','normal');
+    doc.text((shop.addr||'12200 Hibiscus Rd, Adelanto CA')+'   |   Tel: '+(shop.phone||'909-600-8440'),margin,45);
+    y=90;
+
+    // ESTIMATE title
+    doc.setTextColor(24,95,165);
+    doc.setFontSize(26);doc.setFont('helvetica','bold');
+    doc.text('ESTIMATE #'+est.num,margin,y);
+    y+=20;
+
+    // Date, status
+    doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(80,80,80);
+    doc.text('Date: '+(est.date||td()),margin,y);
+    var esc2=est.status==='Approved'?[39,80,10]:est.status==='Declined'?[163,45,45]:[138,90,0];
+    doc.setTextColor(esc2[0],esc2[1],esc2[2]);
+    doc.text('Status: '+(est.status||'Draft'),margin+150,y);
+    doc.setTextColor(80,80,80);
+    y+=25;
+
+    // Prepared For
+    doc.setFillColor(245,245,247);
+    doc.rect(margin,y,250,55,'F');
+    doc.setFontSize(8);doc.setTextColor(130,130,130);doc.setFont('helvetica','bold');
+    doc.text('PREPARED FOR',margin+8,y+14);
+    doc.setFontSize(13);doc.setTextColor(29,29,31);doc.setFont('helvetica','bold');
+    doc.text(est.customer||'',margin+8,y+30);
+    doc.setFontSize(10);doc.setFont('helvetica','normal');doc.setTextColor(100,100,100);
+    if(est.vehicle)doc.text(est.vehicle,margin+8,y+44);
+    y+=70;
+
+    // Work description
+    if(est.description){
+      doc.setFontSize(9);doc.setTextColor(100,100,100);doc.setFont('helvetica','bold');
+      doc.text('WORK DESCRIPTION',margin,y);y+=14;
+      doc.setFont('helvetica','normal');doc.setTextColor(60,60,60);
+      var descLines=doc.splitTextToSize(est.description,W-2*margin);
+      doc.text(descLines,margin,y);
+      y+=descLines.length*12+10;
+    }
+
+    // Table header
+    doc.setFillColor(24,95,165);
+    doc.rect(margin,y,W-2*margin,20,'F');
+    doc.setTextColor(255,255,255);doc.setFontSize(10);doc.setFont('helvetica','bold');
+    doc.text('DESCRIPTION',margin+8,y+14);
+    doc.text('TYPE',margin+280,y+14);
+    doc.text('QTY/HRS',margin+340,y+14);
+    doc.text('RATE',margin+400,y+14);
+    doc.text('AMOUNT',colR-8,y+14,{align:'right'});
+    y+=20;
+
+    // Lines
+    var estLines=est.lines||[];
+    doc.setFont('helvetica','normal');
+    estLines.forEach(function(l,i2){
+      if(y>700){doc.addPage();y=margin;}
+      var bg=i2%2===0?[255,255,255]:[248,249,252];
+      doc.setFillColor(bg[0],bg[1],bg[2]);
+      doc.rect(margin,y,W-2*margin,18,'F');
+      doc.setTextColor(29,29,31);doc.setFontSize(10);
+      doc.text((l.desc||'').substring(0,38),margin+8,y+13);
+      var tl=l.type==='labor'?'Labor':l.type==='fee'?'Fee':'Part';
+      doc.text(tl,margin+280,y+13);
+      var qty2=l.type==='labor'?String(l.hrs||1)+'h':String(l.qty||1)+'x';
+      doc.text(qty2,margin+340,y+13);
+      var rt=l.type==='labor'?'$'+(l.rate||0)+'/h':l.type==='fee'?'flat':'$'+(l.sell||0);
+      doc.text(rt,margin+400,y+13);
+      doc.text('$'+((l.subtotal||0).toFixed(2)),colR-8,y+13,{align:'right'});
+      y+=18;
+    });
+
+    // Totals
+    y+=10;
+    if(y>700){doc.addPage();y=margin;}
+    doc.setDrawColor(220,220,220);doc.line(margin,y,colR,y);y+=15;
+    doc.setFontSize(10);doc.setTextColor(100,100,100);
+    doc.text('Subtotal:',margin+350,y);doc.text('$'+estTot.sub.toFixed(2),colR-8,y,{align:'right'});y+=16;
+    doc.text('Tax ('+(est.taxPct||0)+'%):',margin+350,y);doc.text('$'+estTot.tax.toFixed(2),colR-8,y,{align:'right'});y+=10;
+    doc.setFillColor(24,95,165);doc.rect(margin+250,y,W-margin-250,24,'F');
+    doc.setTextColor(255,255,255);doc.setFontSize(13);doc.setFont('helvetica','bold');
+    doc.text('ESTIMATED TOTAL:',margin+258,y+17);
+    doc.text('$'+estTot.total.toFixed(2),colR-8,y+17,{align:'right'});
+    y+=45;
+
+    // Validity note
+    if(y>700){doc.addPage();y=margin;}
+    doc.setFontSize(9);doc.setTextColor(100,100,100);doc.setFont('helvetica','italic');
+    var noteLines=doc.splitTextToSize('This estimate is valid for 30 days. Final invoice may vary if additional issues are found during repair — you will be contacted for approval before any additional work is performed.',W-2*margin);
+    doc.text(noteLines,margin,y);
+    y+=noteLines.length*12+20;
+
+    // Footer
+    doc.setFont('helvetica','normal');
+    doc.setTextColor(160,160,160);doc.setFontSize(9);
+    doc.text('Questions? Call '+(shop.phone||'909-600-8440'),margin,750);
+    doc.text(shop.name+' · '+(shop.addr||''),margin,763);
+
+    var pdfBlob=doc.output('blob');
+    var filename='estimate-'+est.num+'-'+Date.now()+'.pdf';
+    var path='estimates/'+filename;
+    var uploadRes=await fetch(SB+'/storage/v1/object/mt%20photos/'+path,{
+      method:'POST',
+      headers:{'Content-Type':'application/pdf','apikey':SK,'Authorization':'Bearer '+SK},
+      body:pdfBlob
+    });
+    if(!uploadRes.ok)return null;
+    var pdfUrl2=SB+'/storage/v1/object/public/mt%20photos/'+path;
+    est.pdfUrl=pdfUrl2;
+    return pdfUrl2;
+  }catch(err){
+    console.error('Estimate PDF error:',err);
     return null;
   }
 }
