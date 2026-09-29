@@ -2000,6 +2000,8 @@ function eiSelP(id,li,elm){
 function eInv(id){
   var inv=INV[id];if(!inv)return;
   if(inv.jobs){eInvJobs(id);return;}
+  var eiCustIdx=custIdxForInv(inv);
+  var eiCustNote=(eiCustIdx>-1&&CUST[eiCustIdx].receiptNote)?CUST[eiCustIdx].receiptNote:'';
   _modLock=true;
   function bRows(){
     var rows=(inv.lines||[]).map(function(l,li){
@@ -2051,7 +2053,8 @@ function eInv(id){
     +'<div class="fg"><label>Shop Supplies ($) \u2014 auto '+shop.suppliesRate+'% of labor</label><div style="display:flex;gap:4px"><input type="number" step="0.01" value="'+(parseFloat(inv.supplies)||0)+'" style="flex:1;padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7" onchange="INV['+id+'].supplies=parseFloat(this.value)||0;recalcInv('+id+');eInv('+id+')"><button type="button" title="Recalculate from labor" onclick="INV['+id+'].supplies=+((parseFloat(INV['+id+'].labor)||0)*shop.suppliesRate/100).toFixed(2);recalcInv('+id+');eInv('+id+')" style="padding:8px 10px;background:#E6F1FB;color:#0C447C;border:1px solid #185FA5;border-radius:8px;cursor:pointer;font-size:12px;font-family:inherit">Auto</button></div></div>'
     +'<div class="fg"><label>Discount</label><div style="display:flex;gap:4px"><input type="number" step="0.01" value="'+(parseFloat(inv.discount)||0)+'" style="flex:1;padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7" onchange="INV['+id+'].discount=parseFloat(this.value)||0;recalcInv('+id+');eInv('+id+')"><select style="width:56px;padding:8px 6px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;font-family:inherit" onchange="INV['+id+'].discountType=this.value;recalcInv('+id+');eInv('+id+')"><option'+(inv.discountType!=='%'?' selected':'')+'>$</option><option'+(inv.discountType==='%'?' selected':'')+'>%</option></select></div></div>'
     +'<div class="fg"><label>PO / Auth #</label><input id="ei-po" value="'+(inv.poNum||'')+'" placeholder="PO or authorization number" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
-    +'<div class="fg" style="grid-column:1/-1"><label>Notes (prints on the invoice)</label><textarea id="ei-notes" placeholder="e.g. Found worn brake pads during oil change; customer notified by phone, declined to proceed." style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%;min-height:50px;font-family:inherit;resize:vertical">'+(inv.notes||'')+'</textarea></div>'
+    +'<div class="fg" style="grid-column:1/-1"><label>Notes for This Invoice (prints on this invoice only)</label><textarea id="ei-notes" placeholder="e.g. Found worn brake pads during oil change; customer notified by phone, declined to proceed." style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%;min-height:50px;font-family:inherit;resize:vertical">'+(inv.notes||'')+'</textarea></div>'
+    +'<div class="fg" style="grid-column:1/-1"><label>Customer\'s Standing Note (prints on every invoice for '+inv.customer+')</label><textarea id="ei-custnote" placeholder="e.g. Thank you for your business! Please check tire pressure monthly." style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%;min-height:50px;font-family:inherit;resize:vertical">'+eiCustNote+'</textarea></div>'
     +'</div>'
     // Line items table
     +'<div class="tbl" style="margin-bottom:8px"><table><thead><tr><th>Type</th><th>Description</th><th>Qty/Hrs</th><th>Rate/$</th><th>Tax</th><th>Total</th><th></th></tr></thead><tbody id="ei-rows">'
@@ -2083,13 +2086,16 @@ function eInvJobs(id){
   _niExtras=JSON.parse(JSON.stringify(inv.extras||[]));
   _niSupMan=true;
   var taxPct=inv.taxPct!==undefined?inv.taxPct:(parseFloat(shop.taxRate)||0);
+  var eiCustIdx=custIdxForInv(inv);
+  var eiCustNote=(eiCustIdx>-1&&CUST[eiCustIdx].receiptNote)?CUST[eiCustIdx].receiptNote:'';
   oM('Edit Invoice #'+inv.num,
     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'
     +'<div class="fg"><label>Customer</label><input id="ei-cust" value="'+inv.customer+'" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>Vehicle</label><input id="ei-veh" value="'+(inv.vehicle||'')+'" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>Date</label><input id="ei-date" type="date" value="'+(inv.date||'')+'" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>PO / Auth #</label><input id="ei-po" value="'+(inv.poNum||'')+'" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
-    +'<div class="fg" style="grid-column:1/-1"><label>Notes (prints on the invoice)</label><textarea id="ei-notes" placeholder="e.g. Found worn brake pads during oil change; customer notified by phone, declined to proceed." style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%;min-height:50px;font-family:inherit;resize:vertical">'+(inv.notes||'')+'</textarea></div>'
+    +'<div class="fg" style="grid-column:1/-1"><label>Notes for This Invoice (prints on this invoice only)</label><textarea id="ei-notes" placeholder="e.g. Found worn brake pads during oil change; customer notified by phone, declined to proceed." style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%;min-height:50px;font-family:inherit;resize:vertical">'+(inv.notes||'')+'</textarea></div>'
+    +'<div class="fg" style="grid-column:1/-1"><label>Customer\'s Standing Note (prints on every invoice for '+inv.customer+')</label><textarea id="ei-custnote" placeholder="e.g. Thank you for your business! Please check tire pressure monthly." style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%;min-height:50px;font-family:inherit;resize:vertical">'+eiCustNote+'</textarea></div>'
     +'</div>'
     +'<div style="background:#f5f5f7;border-radius:12px;padding:12px">'
     +'<div id="nj-jobs"></div>'
@@ -2114,6 +2120,8 @@ function svEInvJobs(id){
   inv.date=gv('ei-date')||inv.date;
   inv.poNum=gv('ei-po');
   inv.notes=gv('ei-notes');
+  var eiCustIdx=custIdxForInv(inv);
+  if(eiCustIdx>-1&&el('ei-custnote'))CUST[eiCustIdx].receiptNote=gv('ei-custnote');
   inv.supplies=el('ni2-sup')?parseFloat(el('ni2-sup').value)||0:0;
   inv.taxPct=el('ni2-taxp')?parseFloat(el('ni2-taxp').value)||0:(parseFloat(shop.taxRate)||0);
   inv.discount=el('ni2-disc')?parseFloat(el('ni2-disc').value)||0:0;
@@ -2779,6 +2787,8 @@ function svEInv(id){
   if(date&&date.value)inv.date=date.value;
   if(po)inv.poNum=po.value.trim();
   if(notes)inv.notes=notes.value.trim();
+  var eiCustIdx=custIdxForInv(inv);
+  if(eiCustIdx>-1&&el('ei-custnote'))CUST[eiCustIdx].receiptNote=gv('ei-custnote');
   recalcInv(id);
   saveAll();cM();rINV();
   // Show confirmation
@@ -3283,6 +3293,12 @@ function svNI(){
   _niJobs=[];_niExtras=[];
   saveAll();cM();rDash();rINV();
   if(confirm('Invoice #'+INV[niId].num+' created! Total: $'+INV[niId].total+'\n\nSend it to the customer now?'))autoSendInvoice(niId,true);}
+function custIdxForInv(inv){
+  if(!inv)return -1;
+  var w=(inv.woTicket&&inv.woTicket!=='\u2014')?WO.find(function(x){return x.ticket===inv.woTicket;}):null;
+  if(w&&w.custId!=null&&CUST[w.custId])return w.custId;
+  return CUST.findIndex(function(c){return c.name===inv.customer;});
+}
 function prtInv(id){
   var i=INV[id];var vin=invVIN(i);
   var w=null;if(i.woTicket&&i.woTicket!=='\u2014'){w=WO.find(function(x){return x.ticket===i.woTicket;});}
