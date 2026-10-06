@@ -2850,10 +2850,44 @@ function paymentsFlat(){
   var out=[];
   activeInv().forEach(function(i){
     (i.payments||[]).forEach(function(p,pi){
-      out.push({invId:i.id,invNum:i.num,customer:i.customer,vehicle:i.vehicle,amt:parseFloat(p.amt)||0,method:p.method||'',date:p.date||i.date,note:p.note||'',pi:pi});
+      out.push({invId:i.id,invNum:i.num,customer:i.customer,vehicle:i.vehicle,amt:parseFloat(p.amt)||0,method:p.method||'',date:p.date||i.date,note:p.note||'',pi:pi,batchId:p.batchId||null});
     });
   });
   return out;
+}
+// Groups payments that were recorded together in one "Record Payment" action
+// (same batchId) so the Payments ledger can show "this $15,000 covered these
+// 5 invoices" instead of 5 unrelated-looking rows.
+function batchSummaries(){
+  var map={};
+  paymentsFlat().forEach(function(p){
+    if(!p.batchId)return;
+    if(!map[p.batchId])map[p.batchId]={total:0,count:0,customer:p.customer,date:p.date};
+    map[p.batchId].total+=p.amt;
+    map[p.batchId].count++;
+  });
+  return map;
+}
+function showPayBatch(batchId){
+  var rows=paymentsFlat().filter(function(p){return p.batchId===batchId;});
+  if(!rows.length){alert('Payment details not found.');return;}
+  var total=rows.reduce(function(s,p){return s+p.amt;},0);
+  var first=rows[0];
+  var lineRows=rows.map(function(p){
+    var iv=INV.find(function(x){return x.id===p.invId;});
+    var statusTxt=iv?(invBal(iv)<=0.005?'✓ Paid in full':'Balance remaining: '+fm(invBal(iv))):'';
+    return'<tr><td style="padding:8px 9px;color:#185FA5;cursor:pointer;font-weight:600" onclick="cM();vInv('+p.invId+')">#'+p.invNum+'</td>'
+      +'<td style="padding:8px 9px;font-weight:700;color:#27500A">'+fm(p.amt)+'<div style="font-size:10px;color:#888;font-weight:400">'+statusTxt+'</div></td></tr>';
+  }).join('');
+  var body='<div style="background:#f5f5f7;border-radius:10px;padding:12px 14px;margin-bottom:14px">'
+    +'<div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px">Customer</div><div style="font-size:16px;font-weight:700">'+first.customer+'</div>'
+    +'<div style="display:flex;gap:16px;margin-top:8px;font-size:13px;color:#555"><span><strong>Date:</strong> '+first.date+'</span><span><strong>Method:</strong> '+(first.method||'—')+'</span></div>'
+    +(first.note?'<div style="font-size:12px;color:#888;margin-top:4px">Note: '+first.note+'</div>':'')
+    +'</div>'
+    +'<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Applied To '+rows.length+' Invoice'+(rows.length===1?'':'s')+'</div>'
+    +'<div class="tbl"><table><thead><tr><th>Invoice</th><th>Amount Applied</th></tr></thead><tbody>'+lineRows+'</tbody></table></div>'
+    +'<div style="display:flex;justify-content:space-between;padding:10px 4px 0;font-size:15px;font-weight:800;border-top:1px solid var(--bd);margin-top:8px"><span>Total</span><span style="color:#185FA5">'+fm(total)+'</span></div>';
+  oM('Payment Breakdown — '+first.customer,body,'<button class="btn" onclick="cM()">Close</button>');
 }
 var _paySort={key:'date',dir:'desc'};
 function paySortArrow(key){return _paySort.key===key?(_paySort.dir==='asc'?' \u2191':' \u2193'):'';}
@@ -2862,8 +2896,10 @@ function paySortBy(key){
   else{_paySort.key=key;_paySort.dir=(key==='amt'||key==='date')?'desc':'asc';}
   payApplyFilters();
 }
-function payRowHtml(p){
-  return'<tr><td style="padding:7px 9px;color:#185FA5;cursor:pointer;font-weight:600" onclick="cM();vInv('+p.invId+')">#'+p.invNum+'</td><td style="padding:7px 9px;font-size:11px">'+p.date+'</td><td style="padding:7px 9px">'+p.customer+'</td><td style="padding:7px 9px;font-size:11px">'+(p.method||'\u2014')+'</td><td style="padding:7px 9px;font-size:11px">'+(p.note||'\u2014')+'</td><td style="padding:7px 9px;font-weight:700;color:#27500A">'+fm(p.amt)+'</td></tr>';
+function payRowHtml(p,batches){
+  var batchInfo=batches&&p.batchId?batches[p.batchId]:null;
+  var batchBadge=(batchInfo&&batchInfo.count>1)?('<div style="font-size:10px;color:#534AB7;margin-top:2px;cursor:pointer" onclick="event.stopPropagation();showPayBatch(\''+p.batchId+'\')" title="This payment was split across '+batchInfo.count+' invoices"><i class="ti ti-layers-linked"></i> Part of '+fm(batchInfo.total)+' payment ('+batchInfo.count+' invoices) \u2014 tap for breakdown</div>'):'';
+  return'<tr><td style="padding:7px 9px;color:#185FA5;cursor:pointer;font-weight:600" onclick="cM();vInv('+p.invId+')">#'+p.invNum+'</td><td style="padding:7px 9px;font-size:11px">'+p.date+'</td><td style="padding:7px 9px">'+p.customer+batchBadge+'</td><td style="padding:7px 9px;font-size:11px">'+(p.method||'\u2014')+'</td><td style="padding:7px 9px;font-size:11px">'+(p.note||'\u2014')+'</td><td style="padding:7px 9px;font-weight:700;color:#27500A">'+fm(p.amt)+'</td></tr>';
 }
 function payFilterSort(list){
   var q=(el('pay-q')?el('pay-q').value:'').toLowerCase().trim();
@@ -2890,8 +2926,9 @@ function payHeadHtml(){
 }
 function payApplyFilters(){
   var r=el('pay-tb');if(!r)return;
+  var batches=batchSummaries();
   var filtered=payFilterSort(paymentsFlat());
-  r.innerHTML=filtered.length?filtered.map(payRowHtml).join(''):'<tr><td colspan="6" style="padding:16px;color:#888;font-size:12px">No payments match your filters.</td></tr>';
+  r.innerHTML=filtered.length?filtered.map(function(p){return payRowHtml(p,batches);}).join(''):'<tr><td colspan="6" style="padding:16px;color:#888;font-size:12px">No payments match your filters.</td></tr>';
   var h=el('pay-thead');if(h)h.innerHTML=payHeadHtml();
   var total=filtered.reduce(function(s,p){return s+p.amt;},0);
   var cnt=el('pay-count');if(cnt)cnt.textContent=filtered.length+' payment'+(filtered.length===1?'':'s')+' \u00b7 '+fm(total)+' total';
@@ -3883,6 +3920,9 @@ function cbpApply(){
     picks.push({num:num,amt:amt});
   });
   var summary=[],total=0,blocked=false,newlyPaid=[];
+  // Shared ID so the Payments ledger can show "this one payment covered these
+  // N invoices" instead of looking like N separate, unrelated payments.
+  var batchId='B'+Date.now();
   picks.forEach(function(p){
     if(blocked)return;
     var iv=INV.find(function(x){return x.num===p.num;});
@@ -3890,7 +3930,7 @@ function cbpApply(){
     var bal=invBal(iv);
     if(p.amt>bal+0.005&&!confirm('Amount for #'+iv.num+' ('+fm(p.amt)+') is more than its balance ('+fm(bal)+'). Record anyway?')){blocked=true;return;}
     iv.payments=iv.payments||[];
-    iv.payments.push({amt:p.amt,method:mth,date:dstr,note:note});
+    iv.payments.push({amt:p.amt,method:mth,date:dstr,note:note,batchId:batchId});
     if(!iv.payment)iv.payment=mth;
     var wasPaid=iv.status==='Paid';
     syncInvStatus(iv);
