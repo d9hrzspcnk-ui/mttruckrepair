@@ -2887,7 +2887,7 @@ function showPayBatch(batchId){
     +'<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Applied To '+rows.length+' Invoice'+(rows.length===1?'':'s')+'</div>'
     +'<div class="tbl"><table><thead><tr><th>Invoice</th><th>Amount Applied</th></tr></thead><tbody>'+lineRows+'</tbody></table></div>'
     +'<div style="display:flex;justify-content:space-between;padding:10px 4px 0;font-size:15px;font-weight:800;border-top:1px solid var(--bd);margin-top:8px"><span>Total</span><span style="color:#185FA5">'+fm(total)+'</span></div>';
-  oM('Payment Breakdown — '+first.customer,body,'<button class="btn" onclick="cM()">Close</button>');
+  oM('Payment Breakdown — '+first.customer,body,'<button class="btn" onclick="ungroupPayBatch(\''+batchId+'\')"><i class="ti ti-unlink"></i>Ungroup</button><button class="btn" onclick="cM()">Close</button>');
 }
 var _paySort={key:'date',dir:'desc'};
 function paySortArrow(key){return _paySort.key===key?(_paySort.dir==='asc'?' \u2191':' \u2193'):'';}
@@ -2899,7 +2899,8 @@ function paySortBy(key){
 function payRowHtml(p,batches){
   var batchInfo=batches&&p.batchId?batches[p.batchId]:null;
   var batchBadge=(batchInfo&&batchInfo.count>1)?('<div style="font-size:10px;color:#534AB7;margin-top:2px;cursor:pointer" onclick="event.stopPropagation();showPayBatch(\''+p.batchId+'\')" title="This payment was split across '+batchInfo.count+' invoices"><i class="ti ti-layers-linked"></i> Part of '+fm(batchInfo.total)+' payment ('+batchInfo.count+' invoices) \u2014 tap for breakdown</div>'):'';
-  return'<tr><td style="padding:7px 9px;color:#185FA5;cursor:pointer;font-weight:600" onclick="cM();vInv('+p.invId+')">#'+p.invNum+'</td><td style="padding:7px 9px;font-size:11px">'+p.date+'</td><td style="padding:7px 9px">'+p.customer+batchBadge+'</td><td style="padding:7px 9px;font-size:11px">'+(p.method||'\u2014')+'</td><td style="padding:7px 9px;font-size:11px">'+(p.note||'\u2014')+'</td><td style="padding:7px 9px;font-weight:700;color:#27500A">'+fm(p.amt)+'</td></tr>';
+  var key=p.invId+':'+p.pi;
+  return'<tr><td style="padding:7px 9px"><input type="checkbox" class="pay-sel-chk" data-key="'+key+'" onchange="payToggleSel(this)" '+(_paySelKeys[key]?'checked':'')+'></td><td style="padding:7px 9px;color:#185FA5;cursor:pointer;font-weight:600" onclick="cM();vInv('+p.invId+')">#'+p.invNum+'</td><td style="padding:7px 9px;font-size:11px">'+p.date+'</td><td style="padding:7px 9px">'+p.customer+batchBadge+'</td><td style="padding:7px 9px;font-size:11px">'+(p.method||'\u2014')+'</td><td style="padding:7px 9px;font-size:11px">'+(p.note||'\u2014')+'</td><td style="padding:7px 9px;font-weight:700;color:#27500A">'+fm(p.amt)+'</td></tr>';
 }
 function payFilterSort(list){
   var q=(el('pay-q')?el('pay-q').value:'').toLowerCase().trim();
@@ -2922,16 +2923,17 @@ function payFilterSort(list){
   return list;
 }
 function payHeadHtml(){
-  return'<tr><th style="cursor:pointer" onclick="paySortBy(\'invNum\')">Inv#'+paySortArrow('invNum')+'</th><th style="cursor:pointer" onclick="paySortBy(\'date\')">Date'+paySortArrow('date')+'</th><th style="cursor:pointer" onclick="paySortBy(\'customer\')">Customer'+paySortArrow('customer')+'</th><th>Method</th><th>Note</th><th style="cursor:pointer" onclick="paySortBy(\'amt\')">Amount'+paySortArrow('amt')+'</th></tr>';
+  return'<tr><th></th><th style="cursor:pointer" onclick="paySortBy(\'invNum\')">Inv#'+paySortArrow('invNum')+'</th><th style="cursor:pointer" onclick="paySortBy(\'date\')">Date'+paySortArrow('date')+'</th><th style="cursor:pointer" onclick="paySortBy(\'customer\')">Customer'+paySortArrow('customer')+'</th><th>Method</th><th>Note</th><th style="cursor:pointer" onclick="paySortBy(\'amt\')">Amount'+paySortArrow('amt')+'</th></tr>';
 }
 function payApplyFilters(){
   var r=el('pay-tb');if(!r)return;
   var batches=batchSummaries();
   var filtered=payFilterSort(paymentsFlat());
-  r.innerHTML=filtered.length?filtered.map(function(p){return payRowHtml(p,batches);}).join(''):'<tr><td colspan="6" style="padding:16px;color:#888;font-size:12px">No payments match your filters.</td></tr>';
+  r.innerHTML=filtered.length?filtered.map(function(p){return payRowHtml(p,batches);}).join(''):'<tr><td colspan="7" style="padding:16px;color:#888;font-size:12px">No payments match your filters.</td></tr>';
   var h=el('pay-thead');if(h)h.innerHTML=payHeadHtml();
   var total=filtered.reduce(function(s,p){return s+p.amt;},0);
   var cnt=el('pay-count');if(cnt)cnt.textContent=filtered.length+' payment'+(filtered.length===1?'':'s')+' \u00b7 '+fm(total)+' total';
+  payUpdateSelBar();
 }
 function payClearFilters(){
   var q=el('pay-q'),mth=el('pay-method-f'),from=el('pay-from'),to=el('pay-to');
@@ -2949,8 +2951,63 @@ function rPayments(){
     +'<button class="btn xs" onclick="payClearFilters()">Clear</button>'
     +'</div>'
     +'<div id="pay-count" style="font-size:11px;color:#888;margin-bottom:6px"></div>'
+    +'<div id="pay-sel-bar"></div>'
     +'<div class="tbl"><table><thead id="pay-thead">'+payHeadHtml()+'</thead><tbody id="pay-tb"></tbody></table></div>';
+  _paySelKeys={};
   payApplyFilters();
+}
+// Lets the owner retroactively tie together payments that were recorded
+// separately but were really one transaction (e.g. an old lump-sum payment
+// made before batch grouping existed, or payments entered one invoice at a
+// time instead of via Record Payment).
+var _paySelKeys={};
+function payToggleSel(cb){
+  _paySelKeys[cb.dataset.key]=cb.checked;
+  payUpdateSelBar();
+}
+function payUpdateSelBar(){
+  var bar=el('pay-sel-bar');if(!bar)return;
+  var flat=paymentsFlat();
+  var selected=flat.filter(function(p){return _paySelKeys[p.invId+':'+p.pi];});
+  if(!selected.length){bar.innerHTML='';return;}
+  var total=selected.reduce(function(s,p){return s+p.amt;},0);
+  var customers=[...new Set(selected.map(function(p){return p.customer;}))];
+  bar.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;background:#EEEDFE;border-radius:8px;padding:8px 12px;margin-bottom:8px">'
+    +'<div style="font-size:12px;color:#3C3489"><strong>'+selected.length+' selected</strong> · '+fm(total)+' total'+(customers.length>1?' <span style="color:#A32D2D">(multiple customers)</span>':'')+'</div>'
+    +'<div style="display:flex;gap:6px">'
+    +'<button class="btn xs" style="background:#534AB7;color:#fff" onclick="payGroupSelected()"><i class="ti ti-layers-linked"></i>Group as One Payment</button>'
+    +'<button class="btn xs" onclick="payClearSelection()">Clear</button>'
+    +'</div></div>';
+}
+function payClearSelection(){_paySelKeys={};payApplyFilters();}
+function payGroupSelected(){
+  var flat=paymentsFlat();
+  var selected=flat.filter(function(p){return _paySelKeys[p.invId+':'+p.pi];});
+  if(selected.length<2){alert('Select at least 2 payments to group them together.');return;}
+  var customers=[...new Set(selected.map(function(p){return p.customer;}))];
+  if(customers.length>1){alert('These payments belong to different customers ('+customers.join(', ')+') — only payments from the same customer can be grouped together.');return;}
+  var total=selected.reduce(function(s,p){return s+p.amt;},0);
+  if(!confirm('Group these '+selected.length+' payments ('+fm(total)+' total) for '+customers[0]+' into one payment record?'))return;
+  var batchId='B'+Date.now();
+  selected.forEach(function(p){
+    var iv=INV.find(function(x){return x.id===p.invId;});
+    if(iv&&iv.payments&&iv.payments[p.pi])iv.payments[p.pi].batchId=batchId;
+  });
+  saveAll();
+  _paySelKeys={};
+  payApplyFilters();
+  alert('✓ Grouped. Tap the new "Part of '+fm(total)+' payment" tag to see the breakdown anytime.');
+}
+function ungroupPayBatch(batchId){
+  if(!confirm('Remove the grouping on these payments? They\'ll go back to showing as separate payments.'))return;
+  var flat=paymentsFlat().filter(function(p){return p.batchId===batchId;});
+  flat.forEach(function(p){
+    var iv=INV.find(function(x){return x.id===p.invId;});
+    if(iv&&iv.payments&&iv.payments[p.pi])iv.payments[p.pi].batchId=null;
+  });
+  saveAll();
+  cM();
+  if(el('pay-tb'))payApplyFilters();
 }
 function rINV(){
   el('pg-body').innerHTML='<div class="sr" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:6px">'
