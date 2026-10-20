@@ -9223,23 +9223,63 @@ function expCPAExport(range){
 function _receiptPrompt(){
   return 'This is a photo of a business receipt, invoice, or bill for a heavy-duty diesel truck & trailer repair shop. Read it and return ONLY valid JSON - no markdown, no commentary. Format exactly: {"vendor":"","invoice":"","date":"YYYY-MM-DD","subtotal":0,"tax":0,"total":0,"category":"","note":"","lines":[{"partNum":"","desc":"","qty":1,"cost":0,"custHint":""}]}. Rules: "vendor" is the seller/store name. "invoice" is the vendor invoice or receipt number printed on it (often labeled Invoice #, INV, Ticket, or Order #); use "" if none. "total" is the final amount paid including tax. "date" is the purchase date as YYYY-MM-DD (if the year is missing assume the current year; if unreadable use ""). "category" MUST be exactly one of these strings: '+EXP_CATS.join(' | ')+'. Choose the closest fit (a fuel/diesel receipt is Fuel; counter parts are Shop Supplies unless clearly tools/equipment; eating out is Other; a phone or internet bill is Phone / Internet, etc). "note" is one short line naming the main item(s) or purpose. "lines" is the itemized list of parts/products purchased: one object per line item with partNum, desc (short part name), qty (quantity, default 1), cost (UNIT cost before tax - the price paid per single item), and custHint. IMPORTANT: "partNum" is ONLY a manufacturer/vendor part number (letters and digits, e.g. "PF46269" or "241D/DDE A4722005052") - if none is printed, use "". Some shop trips buy parts for several different customers on one receipt, so a line may have a customer or job name printed next to it (a person\'s name or a company name) - if you see that, put it in "custHint" for that line and leave "partNum" as "". NEVER put a customer/job name in "partNum" and NEVER combine a customer name into "desc". If this is NOT an itemized parts receipt (for example a utility bill, fuel, rent, or a single service charge), return "lines":[]. Use 0 for any number you cannot read and "" for any text you cannot read.';
 }
+var _tpgpPending=null;
 async function tpGotParts(inp,woId){
   var f=inp.files&&inp.files[0];if(!f)return;inp.value='';
   var w=WO[woId]||null;
   var origURL;
   try{origURL=await new Promise(function(res,rej){var rd=new FileReader();rd.onload=function(e){res(e.target.result);};rd.onerror=rej;rd.readAsDataURL(f);});}
   catch(e){alert('Could not read that photo.');return;}
-  oM('Sending to owner\u2026','<div style="text-align:center;padding:30px 10px"><div class="spin" style="margin:0 auto 14px"></div><div style="font-size:13px;color:#888">Saving your parts receipt\u2026</div></div>','');
+  oM('Reading receipt\u2026','<div style="text-align:center;padding:30px 10px"><div class="spin" style="margin:0 auto 14px"></div><div style="font-size:13px;color:#888">Claude is reading your parts receipt\u2026</div></div>','');
   var small=await _rcResize(origURL,1400,0.7);
   var parsed=null;
   try{var raw=await callClaude(_receiptPrompt(),small.split(',')[1],'image/jpeg');if(raw!=null){raw=raw.replace(/```json|```/g,'').trim();parsed=JSON.parse(raw);}}catch(e){parsed=null;}
+  _tpgpPending={small:small,parsed:parsed,woId:woId,w:w};
+  tpGotPartsReview();
+}
+function tpGotPartsReview(){
+  var P=_tpgpPending;if(!P)return;
+  var w=P.w,parsed=P.parsed;
+  var lines=(parsed&&parsed.lines)?parsed.lines:[];
+  var custDL='<datalist id="tpgp-custlist">'+(((typeof CUST!=='undefined'&&CUST)||[]).map(function(c){return '<option value="'+_rcEsc(c.name)+'">';}).join(''))+'</datalist>';
+  var inS='padding:8px 9px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#fff;width:100%';
+  var body='<div style="font-size:12px;color:#888;line-height:1.5;margin-bottom:12px">'+(lines.length?'Type who each part is for \u2014 the owner will use this to put it on the right invoice.':'Claude couldn\u2019t pull line items off this photo. Just say who the parts are for below, and the owner can add the detail by hand.')+'</div>'
+    +custDL;
+  if(lines.length){
+    body+=lines.map(function(l,i){
+      var qty=parseFloat(l.qty)||1,cost=parseFloat(l.cost)||0;
+      var pre=(l.custHint||(w?w.customer:'')||'');
+      return '<div style="border:0.5px solid var(--bd);border-radius:10px;padding:10px;margin-bottom:8px">'
+        +'<div style="font-size:13px;font-weight:600;margin-bottom:2px">'+_rcEsc(l.desc||'Item')+'</div>'
+        +'<div style="font-size:11px;color:#888;margin-bottom:8px">Qty '+qty+(cost?' \u00b7 $'+cost.toFixed(2)+' ea':'')+(l.partNum?' \u00b7 #'+_rcEsc(l.partNum):'')+'</div>'
+        +'<input id="tpgp-who-'+i+'" list="tpgp-custlist" value="'+_rcEsc(pre)+'" placeholder="Who\u2019s this for? (customer or truck)" style="'+inS+'">'
+        +'</div>';
+    }).join('');
+  } else {
+    body+='<div class="fg"><label>Who are these parts for?</label><input id="tpgp-who-0" list="tpgp-custlist" value="'+_rcEsc(w?w.customer:'')+'" placeholder="Customer or truck name" style="'+inS+'"></div>';
+  }
+  oM('Who\u2019s This For?',body,'<button class="btn bl" onclick="tpGotPartsFinish()"><i class="ti ti-send"></i>Send to Owner</button>');
+  setTimeout(function(){var e=el('tpgp-who-0');if(e)e.focus();},100);
+}
+async function tpGotPartsFinish(){
+  var P=_tpgpPending;if(!P)return;
+  var w=P.w,parsed=P.parsed,woId=P.woId,small=P.small;
+  var lines=(parsed&&parsed.lines)?parsed.lines:[];
+  var topWho='';
+  if(lines.length){
+    lines.forEach(function(l,i){var v=gv('tpgp-who-'+i);l.custHint=(v||'').trim();});
+  } else {
+    topWho=(gv('tpgp-who-0')||'').trim();
+  }
+  oM('Sending to owner\u2026','<div style="text-align:center;padding:30px 10px"><div class="spin" style="margin:0 auto 14px"></div><div style="font-size:13px;color:#888">Saving your parts receipt\u2026</div></div>','');
   var path='';
   try{var fn=Date.now()+'-'+Math.floor(Math.random()*10000)+'.jpg';path=(await uploadReceiptPrivate(small,fn))||'';}catch(e){path='';}
-  var req={id:'GP-'+Date.now(),type:'got',techName:(TP_USER&&TP_USER.name)||'Tech',woId:woId,woTicket:w?w.ticket:'',truck:w?(w.vehicle||''):'',customer:w?(w.customer||''):'',receiptPath:path,parsed:parsed,status:'Pending',priority:'Normal',time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),date:td()};
+  var req={id:'GP-'+Date.now(),type:'got',techName:(TP_USER&&TP_USER.name)||'Tech',woId:woId,woTicket:w?w.ticket:'',truck:w?(w.vehicle||''):'',customer:topWho||(w?(w.customer||''):''),receiptPath:path,parsed:parsed,status:'Pending',priority:'Normal',time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),date:td()};
   TECH_REQS.unshift(req);
   await saveAll();updTechBadge();
   if(shop.phone){var msg='Parts receipt from '+req.techName+(w?' (SO #'+w.ticket+(w.vehicle?', '+w.vehicle:'')+')':'')+'. Open app Techs tab to review and route.';try{window.open('sms:'+shop.phone.replace(/\D/g,'')+'?body='+encodeURIComponent(msg));}catch(e){}}
-  oM('Sent \u2705','<div style="font-size:13px;color:#555;line-height:1.55;padding:6px 2px">Your parts receipt went to '+_rcEsc(shop.name||'the owner')+(parsed&&parsed.lines?'. Claude read '+parsed.lines.length+' item(s) off it.':'.')+' They\u2019ll add it to the job and inventory.</div>','<button class="btn bl" onclick="cM();tpRenderWO()">Done</button>');
+  _tpgpPending=null;
+  oM('Sent \u2705','<div style="font-size:13px;color:#555;line-height:1.55;padding:6px 2px">Your parts receipt went to '+_rcEsc(shop.name||'the owner')+(parsed&&parsed.lines&&parsed.lines.length?'. Claude read '+parsed.lines.length+' item(s) off it.':'.')+' They\u2019ll add it to the job and inventory.</div>','<button class="btn bl" onclick="cM();tpRenderWO()">Done</button>');
 }
 async function ownerViewGotPhoto(path){
   if(!path)return;
