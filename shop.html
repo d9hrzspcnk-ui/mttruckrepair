@@ -4696,13 +4696,7 @@ function rSet(){
     +'</div>'
     +'<div class="card" style="border:1.5px solid #534AB7">'
     +'<div style="font-size:14px;font-weight:600;margin-bottom:4px;color:#3C3489"><i class="ti ti-robot" style="font-size:16px;vertical-align:-2px"></i> AI Features (Scan Vendor Invoices)</div>'
-    +'<div style="font-size:12px;color:#888;margin-bottom:10px">Add your Anthropic API key to enable AI scanning of vendor invoices. Get a free key at <strong>console.anthropic.com</strong> → API Keys.</div>'
-    +'<div class="fg"><label>Anthropic API Key</label>'
-    +'<div style="display:flex;gap:6px"><input id="s-aikey" type="password" value="'+(shop.aiKey||'')+'" placeholder="sk-ant-..." style="flex:1;padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;font-family:monospace">'
-    +'<button onclick="toggleAIKeyVis()" style="padding:8px 12px;background:#f5f5f7;border:0.5px solid var(--bd);border-radius:8px;cursor:pointer;font-size:18px">👁</button>'
-    +'</div>'
-    +'<div style="font-size:11px;color:#888;margin-top:4px">Your key is saved to your private Supabase database and never shared.</div>'
-    +'</div>'
+    +'<div style="font-size:12px;color:#888;margin-bottom:10px">AI receipt scanning, translation, and code lookup already work automatically — no key needed.</div>'
     +'<div class="fg" style="margin-top:10px"><label>Fault Code Reference Website (optional)</label>'
     +'<input id="s-codeurl" value="'+(shop.codeUrl||'')+'" placeholder="Default: quickserve.cummins.com — paste another URL to change" style="width:100%;padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7">'
     +'<div style="font-size:11px;color:#888;margin-top:4px">Techs get a button in the Codes tab that opens this site for official code documentation.</div>'
@@ -6291,7 +6285,7 @@ async function submitFleetCI(){
   var notes=el('fc-notes')?el('fc-notes').value.trim():'';
   var complaint=_fcService+(notes?' — '+notes:'');
   // Translate notes if non-English
-  if(notes&&shop.aiKey){
+  if(notes){
     var translated=await translateText(notes);
     if(translated&&translated!==notes)complaint=_fcService+' — '+translated+' (Original: '+notes+')';
   }
@@ -6330,7 +6324,7 @@ async function submitFleetCI(){
 
 // ── AUTO-TRANSLATE ─────────────────────────────────────────
 async function translateText(text){
-  if(!shop.aiKey||!text)return text;
+  if(!text)return text;
   try{
     var result=await callClaude('Detect the language of this text and translate it to English. Return ONLY the English translation, nothing else. If it is already English, return it unchanged. Text: '+text);
     return result?result.trim():text;
@@ -6345,7 +6339,7 @@ function wrapSubmitCITranslate(){
   window._ciTranslateWrapped=true;
   window.submitCI=async function(){
     var cp=el('ci-complaint');
-    if(cp&&cp.value.trim()&&shop.aiKey){
+    if(cp&&cp.value.trim()){
       var translated=await translateText(cp.value.trim());
       if(translated&&translated!==cp.value.trim()){
         cp.dataset.original=cp.value;
@@ -7233,6 +7227,8 @@ function tpRenderDash(){
     var isMe=rTech.name===TP_USER.name;
     h+='<div style="background:'+(isMe?'#FAEEDA':'#fff')+';border:0.5px solid '+(isMe?'#BA7517':'rgba(0,0,0,0.1)')+';border-radius:10px;padding:9px 12px;margin-bottom:10px;font-size:12px;color:'+(isMe?'#633806':'#888')+';display:flex;align-items:center;gap:8px"><i class="ti ti-spray" style="font-size:15px"></i><span>'+(isMe?'<strong>'+t('tpRestroomYou')+'</strong>':t('tpRestroom')+': <strong style="color:#1d1d1f">'+rTech.name+'</strong>')+'</span></div>';
   }
+  h+='<label style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:#534AB7;color:#fff;border-radius:12px;padding:13px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:4px"><i class="ti ti-camera-ai" style="font-size:18px"></i>Got Parts — snap receipt<input type="file" accept="image/*" capture="environment" style="display:none" onchange="tpGotParts(this,null)"></label>'
+    +'<div style="font-size:11px;color:#888;text-align:center;margin-bottom:12px">For a parts run that’s not tied to one of your own jobs — snap it here and the owner will route each item to the right customer.</div>';
   h+='<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin:12px 0 6px">My Work Orders ('+myWOs.length+')</div>';
   if(!myWOs.length)h+='<div style="background:#fff;border-radius:10px;padding:12px;font-size:13px;color:#888;margin-bottom:8px">No open orders assigned to you</div>';
   // Show available jobs if any of their WOs are in waiting status
@@ -8928,7 +8924,6 @@ function _rcISO(s){return (/^\d{4}-\d{2}-\d{2}$/.test(s||''))?s:new Date().toISO
 function _rcResize(dataURL,maxDim,q){return new Promise(function(res){var img=new Image();img.onload=function(){var w=img.width,h=img.height;if(w>=h&&w>maxDim){h=Math.round(h*maxDim/w);w=maxDim;}else if(h>w&&h>maxDim){w=Math.round(w*maxDim/h);h=maxDim;}var c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);try{res(c.toDataURL('image/jpeg',q||0.7));}catch(e){res(dataURL);}};img.onerror=function(){res(dataURL);};img.src=dataURL;});}
 async function scanReceipt(input){
   var file=input.files&&input.files[0];if(!file)return;input.value='';
-  if(!shop.aiKey){alert('Add your Anthropic API key in Settings \u2192 AI Features first.');return;}
   var origURL;
   try{origURL=await new Promise(function(res,rej){var rd=new FileReader();rd.onload=function(e){res(e.target.result);};rd.onerror=rej;rd.readAsDataURL(file);});}
   catch(e){alert('Could not read that image.');return;}
@@ -9237,9 +9232,7 @@ async function tpGotParts(inp,woId){
   oM('Sending to owner\u2026','<div style="text-align:center;padding:30px 10px"><div class="spin" style="margin:0 auto 14px"></div><div style="font-size:13px;color:#888">Saving your parts receipt\u2026</div></div>','');
   var small=await _rcResize(origURL,1400,0.7);
   var parsed=null;
-  if(shop.aiKey){
-    try{var raw=await callClaude(_receiptPrompt(),small.split(',')[1],'image/jpeg');if(raw!=null){raw=raw.replace(/```json|```/g,'').trim();parsed=JSON.parse(raw);}}catch(e){parsed=null;}
-  }
+  try{var raw=await callClaude(_receiptPrompt(),small.split(',')[1],'image/jpeg');if(raw!=null){raw=raw.replace(/```json|```/g,'').trim();parsed=JSON.parse(raw);}}catch(e){parsed=null;}
   var path='';
   try{var fn=Date.now()+'-'+Math.floor(Math.random()*10000)+'.jpg';path=(await uploadReceiptPrivate(small,fn))||'';}catch(e){path='';}
   var req={id:'GP-'+Date.now(),type:'got',techName:(TP_USER&&TP_USER.name)||'Tech',woId:woId,woTicket:w?w.ticket:'',truck:w?(w.vehicle||''):'',customer:w?(w.customer||''):'',receiptPath:path,parsed:parsed,status:'Pending',priority:'Normal',time:new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}),date:td()};
