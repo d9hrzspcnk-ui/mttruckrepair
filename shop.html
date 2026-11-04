@@ -2802,7 +2802,7 @@ function svEInv(id){
 function invRowHtml(i){
   var paid=i.status==='Paid';var bal=invBal(i);
   var rowSt=i.status==='Unpaid'?' style="background:#FDF2F2;border-left:3px solid #A32D2D"':i.status==='Partial'?' style="background:#FFFBEB;border-left:3px solid #BA7517"':'';
-  return'<tr'+rowSt+'><td style="padding:7px 9px;color:#185FA5;cursor:pointer;font-weight:600" onclick="vInv('+i.id+')">#'+i.num+'</td><td style="padding:7px 9px;font-size:11px">'+i.date+'</td><td style="padding:7px 9px">'+i.customer+'</td><td style="padding:7px 9px;font-size:11px">'+(i.vehicle||'\u2014')+'</td><td style="padding:7px 9px">'+fm(parseFloat(i.labor)||0)+'</td><td style="padding:7px 9px">'+fm(parseFloat(i.parts)||0)+'</td><td style="padding:7px 9px">'+fm(parseFloat(i.tax)||0)+'</td><td style="padding:7px 9px;font-weight:600">'+fm(parseFloat(i.total)||0)+'</td><td style="padding:7px 9px;font-weight:700;color:'+(bal>0.005?'#A32D2D':'#27500A')+'">'+(bal>0.005?fm(bal):'\u2014')+'</td><td style="padding:7px 9px"><select style="font-size:11px;padding:3px 5px;border:0.5px solid var(--bd);border-radius:4px;font-family:inherit" onchange="INV['+i.id+'].payment=this.value;saveAll()"><option value="">\u2014</option><option'+(i.payment==='Cash'?' selected':'')+'>Cash</option><option'+(i.payment==='Card'?' selected':'')+'>Card</option><option'+(i.payment==='Check'?' selected':'')+'>Check</option><option'+(i.payment==='Zelle'?' selected':'')+'>Zelle</option><option'+(i.payment==='Net-30'?' selected':'')+'>Net-30</option></select></td><td style="padding:7px 9px">'+bdg(i.status)+(i.reminderCapped?' <i class="ti ti-phone-off" style="color:#A32D2D" title="4 auto-reminders sent, no response"></i>':'')+(i.notReady?' <i class="ti ti-clock-pause" style="color:#BA7517" title="Still working, paused from auto-send/reminders"></i>':'')+'</td><td style="padding:7px 9px;display:flex;gap:3px"><button class="btn xs'+(paid?'':' bl')+'" onclick="payInv('+i.id+')" title="Payments"><i class="ti ti-cash"></i></button><button class="btn xs" onclick="eInv('+i.id+')"><i class="ti ti-edit"></i></button><button class="btn xs gr" onclick="prtInv('+i.id+')"><i class="ti ti-printer"></i></button><button class="btn xs bl" onclick="sndInv('+i.id+')"><i class="ti ti-send"></i></button></td></tr>';
+  return'<tr'+rowSt+'><td style="padding:7px 9px;color:#185FA5;cursor:pointer;font-weight:600" onclick="vInv('+i.id+')">#'+i.num+'</td><td style="padding:7px 9px;font-size:11px">'+i.date+'</td><td style="padding:7px 9px">'+i.customer+'</td><td style="padding:7px 9px;font-size:11px">'+(i.vehicle||'\u2014')+'</td><td style="padding:7px 9px">'+fm(parseFloat(i.labor)||0)+'</td><td style="padding:7px 9px">'+fm(parseFloat(i.parts)||0)+'</td><td style="padding:7px 9px">'+fm(parseFloat(i.tax)||0)+'</td><td style="padding:7px 9px;font-weight:600">'+fm(parseFloat(i.total)||0)+'</td><td style="padding:7px 9px;font-weight:700;color:'+(bal>0.005?'#A32D2D':'#27500A')+'">'+(bal>0.005?fm(bal):'\u2014')+'</td><td style="padding:7px 9px"><select style="font-size:11px;padding:3px 5px;border:0.5px solid var(--bd);border-radius:4px;font-family:inherit" onchange="INV['+i.id+'].payment=this.value;saveAll()"><option value="">\u2014</option><option'+(i.payment==='Cash'?' selected':'')+'>Cash</option><option'+(i.payment==='Card'?' selected':'')+'>Card</option><option'+(i.payment==='Check'?' selected':'')+'>Check</option><option'+(i.payment==='Zelle'?' selected':'')+'>Zelle</option><option'+(i.payment==='Net-30'?' selected':'')+'>Net-30</option></select></td><td style="padding:7px 9px">'+bdg(i.status)+(i.reminderCapped?' <i class="ti ti-phone-off" style="color:#A32D2D" title="4 auto-reminders sent, no response"></i>':'')+(i.notReady?' <i class="ti ti-clock-pause" style="color:#BA7517" title="Still working, paused from auto-send/reminders"></i>':'')+'</td><td style="padding:7px 9px;display:flex;gap:3px"><button class="btn xs'+(paid?'':' bl')+'" onclick="payInv('+i.id+')" title="Payments"><i class="ti ti-cash"></i></button><button class="btn xs" onclick="eInv('+i.id+')"><i class="ti ti-edit"></i></button><button class="btn xs gr" onclick="prtInv('+i.id+')"><i class="ti ti-printer"></i></button><button class="btn xs bl" onclick="sndInv('+i.id+')"><i class="ti ti-send"></i></button>'+(i.status!=='Paid'&&i.status!=='Written Off'?'<button class="btn xs" title="'+(i.notReady?'Mark Ready to Send':'Pause - Still Working')+'" style="'+(i.notReady?'background:#FFF3CD;color:#664D03':'')+'" onclick="toggleInvNotReady('+i.id+',true)"><i class="ti ti-clock-pause"></i></button>':'')+'</td></tr>';
 }
 var _invSort={key:'date',dir:'desc'};
 function invSortArrow(key){return _invSort.key===key?(_invSort.dir==='asc'?' \u2191':' \u2193'):'';}
@@ -3035,11 +3035,12 @@ if(i.jobs){
   pl=(i.lines||[]).filter(function(l){return l.type==='part';}).map(function(l){return'<tr><td style="padding:6px 9px">'+(l.partNum?l.partNum+': ':'')+l.desc+'</td><td style="padding:6px 9px">'+l.qty+' x '+fm(l.sell)+'</td><td style="padding:6px 9px;font-weight:600">'+fm(l.subtotal)+'</td></tr>';}).join('');
 }
 oM('Invoice #'+i.num,'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;padding-bottom:10px;margin-bottom:10px;border-bottom:0.5px solid var(--bd)"><div><strong>'+shop.name+'</strong><br>'+shop.phone+'<br>'+shop.addr+'</div><div style="text-align:right">Invoice #'+i.num+'<br>'+i.date+'<br>'+bdg(i.status)+'</div></div>'+(i.notReady?'<div style="background:#FFF3CD;border:1px solid #BA7517;border-radius:8px;padding:9px 12px;margin-bottom:10px;font-size:12px;color:#633806"><i class="ti ti-clock-pause"></i> Still being worked on — paused from auto-send and payment reminders.</div>':'')+'<div style="background:#f5f5f7;padding:8px 12px;border-radius:8px;font-size:12px;margin-bottom:10px"><strong>Bill To:</strong> '+i.customer+' | '+(i.vehicle||'—')+(invVIN(i)?'<br><strong>VIN:</strong> '+invVIN(i):'')+'</div>'+(ll?'<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;margin-bottom:5px">Labor</div><div class="tbl"><table><thead><tr><th>Description</th><th>Detail</th><th>Total</th></tr></thead><tbody>'+ll+'</tbody></table></div>':'')+(pl?'<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;margin:8px 0 5px">Parts</div><div class="tbl"><table><thead><tr><th>Part</th><th>Qty/Price</th><th>Total</th></tr></thead><tbody>'+pl+'</tbody></table></div>':'')+'<div style="text-align:right;padding-top:8px;border-top:0.5px solid var(--bd);margin-top:8px"><div style="font-size:13px;color:#888">Labor: '+fm(parseFloat(i.labor)||0)+' | Parts: '+fm(parseFloat(i.parts)||0)+(parseFloat(i.supplies)>0?' | Supplies: '+fm(parseFloat(i.supplies)):'')+(parseFloat(i.discountAmt)>0?' | Discount: −'+fm(parseFloat(i.discountAmt)):'')+' | Tax: '+fm(parseFloat(i.tax)||0)+'</div><div style="font-size:18px;font-weight:700;color:#185FA5;margin-top:3px">Total: '+fm(parseFloat(i.total)||0)+'</div>'+(invPaidAmt(i)>0.005?'<div style="font-size:13px;color:#27500A;margin-top:2px">Paid: '+fm(invPaidAmt(i))+'</div>':'')+(invBal(i)>0.005?'<div style="font-size:15px;font-weight:700;color:#A32D2D;margin-top:1px">Balance Due: '+fm(invBal(i))+'</div>':(invPaidAmt(i)>0.005?'<div style="font-size:12px;font-weight:600;color:#27500A;margin-top:1px">\u2713 Paid in full</div>':''))+'</div>'+histHtml,'<button class="btn" onclick="cM();eInv('+id+')"><i class="ti ti-edit"></i>Edit</button><button class="btn gr" onclick="prtInv('+id+')"><i class="ti ti-printer"></i>Print</button><button class="btn bl" onclick="txtInv('+id+')"><i class="ti ti-message"></i>Text Invoice</button><button class="btn bl" onclick="sndInv('+id+')"><i class="ti ti-send"></i>Send</button><button class="btn'+(i.status==='Paid'?'':' bl')+'" onclick="cM();payInv('+id+')"><i class="ti ti-cash"></i>Payments</button>'+(i.status!=='Paid'&&i.status!=='Written Off'?'<button class="btn" onclick="toggleInvNotReady('+id+')"><i class="ti ti-clock-pause"></i>'+(i.notReady?'Mark Ready to Send':'Pause — Still Working')+'</button>':'')+(ROLE==='owner'?(i.status==='Written Off'?'<button class="btn" onclick="restoreWrittenOffInv('+id+')"><i class="ti ti-rotate"></i>Restore to Unpaid</button>':(i.status!=='Paid'?'<button class="btn" onclick="writeOffInv('+id+')"><i class="ti ti-file-off"></i>Write Off</button>':''))+'<button class="btn rd" onclick="softDeleteInv('+id+')"><i class="ti ti-trash"></i></button>':'')+'<button class="btn" onclick="cM()">Close</button>');}
-function toggleInvNotReady(id){
+function toggleInvNotReady(id,fromList){
   var i=INV[id];if(!i)return;
   i.notReady=!i.notReady;
   if(!i.notReady)i.lastReminderAt=Date.now();
-  saveAll();vInv(id);
+  saveAll();
+  if(fromList)invApplyFilters();else vInv(id);
 }
 function writeOffInv(id){
   var i=INV[id];if(!i)return;
@@ -4700,6 +4701,13 @@ function rSet(){
     +'<div style="font-size:12px;color:#888;margin-bottom:10px">When a work order is created, a truck is marked <strong>Completed</strong>, or an invoice is marked <strong>Paid</strong>: an email is sent automatically (if on file) and a pre-written text pops up ready to send in one tap. <strong>New invoices are texted and emailed to the customer automatically the moment they’re created</strong> — no need to tap Send. Unpaid invoices also get up to 4 automatic payment reminder texts/emails, spaced a few days apart, whenever you have the app open. Turn any of this off per customer under Customers → Preferences → “Receive Invoices.”</div>'
     +'<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;font-weight:500"><input type="checkbox" id="s-autonotif" '+(shop.autoNotify===false?'':'checked')+' style="width:18px;height:18px;accent-color:#185FA5"> Enable auto notifications</label>'
     +'<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;font-weight:500;margin-top:8px"><input type="checkbox" id="s-autoreminders" '+(shop.autoReminders===false?'':'checked')+' style="width:18px;height:18px;accent-color:#185FA5"> Send payment reminder texts/emails for unpaid invoices</label>'
+    +'<div style="margin-top:10px;padding:10px 12px;background:#f5f5f7;border-radius:8px">'
+    +'<div style="font-size:12px;font-weight:600;color:#555;margin-bottom:8px">Reminder Schedule</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
+    +'<div class="fg"><label style="font-size:11px">1st reminder after (days)</label><input id="s-remfirst" type="number" min="1" value="'+(shop.reminderFirstDays||3)+'" style="width:100%;padding:6px 8px;font-size:13px;border:0.5px solid var(--bd);border-radius:6px;background:#fff"></div>'
+    +'<div class="fg"><label style="font-size:11px">Then every (days)</label><input id="s-remgap" type="number" min="1" value="'+(shop.reminderGapDays||4)+'" style="width:100%;padding:6px 8px;font-size:13px;border:0.5px solid var(--bd);border-radius:6px;background:#fff"></div>'
+    +'<div class="fg"><label style="font-size:11px">Max reminders</label><input id="s-remmax" type="number" min="1" value="'+(shop.reminderMaxCount||4)+'" style="width:100%;padding:6px 8px;font-size:13px;border:0.5px solid var(--bd);border-radius:6px;background:#fff"></div>'
+    +'</div></div>'
     +'</div>'
     +'<div class="card" style="border:1.5px solid #534AB7">'
     +'<div style="font-size:14px;font-weight:600;margin-bottom:4px;color:#3C3489"><i class="ti ti-robot" style="font-size:16px;vertical-align:-2px"></i> AI Features (Scan Vendor Invoices)</div>'
@@ -5022,6 +5030,9 @@ function saveSet(){shop.name=gv('sn')||shop.name;shop.phone=gv('sp');shop.email=
   var sp2=el('s-paypal');if(sp2)shop.paypal=sp2.value.trim();
   var an=el('s-autonotif');if(an)shop.autoNotify=an.checked;
   var ar=el('s-autoreminders');if(ar)shop.autoReminders=ar.checked;
+  var rf=el('s-remfirst');if(rf)shop.reminderFirstDays=parseInt(rf.value)||3;
+  var rg=el('s-remgap');if(rg)shop.reminderGapDays=parseInt(rg.value)||4;
+  var rm=el('s-remmax');if(rm)shop.reminderMaxCount=parseInt(rm.value)||4;
   var aik=el('s-aikey');if(aik&&aik.value.trim())shop.aiKey=aik.value.trim();var curl=el('s-codeurl');if(curl)shop.codeUrl=curl.value.trim();var p1=gv('np1'),p2=gv('np2');if(p1){if(p1.length!==4||!/^\d+$/.test(p1)){alert('PIN must be 4 digits');return;}if(p1!==p2){alert('PINs do not match');return;}PIN=p1;el('np1').value='';el('np2').value='';}var op=gv('op1');if(op!=null){op=(''+op).trim();if(op===''){OPIN='';}else if(!/^\d{4}$/.test(op)){alert('Office PIN must be 4 digits (or blank to disable)');return;}else if(op===PIN){alert('Office PIN must be different from the owner PIN');return;}else{OPIN=op;}}el('h-addr').textContent=shop.addr;saveAll();alert('Settings saved!');}
 
 function buildCI(){
@@ -8640,9 +8651,10 @@ function sendAutoReminder(id){
   if(c.optOut||(!c.email&&!c.tel))return;
   var es=!!(c.cx&&c.cx.lang==='es');
   var n=(i.reminderCount||0)+1;
+  var maxCount=shop.reminderMaxCount||4;
   var invLink=window.location.origin+window.location.pathname+'?inv='+i.num;
   var bal=invBal(i).toFixed(2);
-  var lead=es?(n>=4?'\u00daltimo aviso':n===1?'Recordatorio amistoso':'Recordatorio'):(n>=4?'Final reminder':n===1?'Friendly reminder':'Reminder');
+  var lead=es?(n>=maxCount?'\u00daltimo aviso':n===1?'Recordatorio amistoso':'Recordatorio'):(n>=maxCount?'Final reminder':n===1?'Friendly reminder':'Reminder');
   var msg=es
     ? lead+' \u2014 Factura #'+i.num+' de '+shop.name+' tiene un saldo de $'+bal+'. Ver/pagar: '+invLink+'. \u00bfPreguntas? Llame al '+shop.phone
     : lead+' \u2014 Invoice #'+i.num+' from '+shop.name+' has a balance of $'+bal+'. View/pay: '+invLink+'. Questions? Call '+shop.phone;
@@ -8659,7 +8671,7 @@ function sendAutoReminder(id){
       .catch(function(){i.history.push({type:'auto-reminder',at:new Date().toLocaleString(),to:c.tel,status:'failed'});saveAll();});
   }
   i.reminderCount=n;i.lastReminderAt=Date.now();
-  if(n>=4)i.reminderCapped=true;
+  if(n>=maxCount)i.reminderCapped=true;
   saveAll();
 }
 // One-time catch-up tool: pushes every currently-unpaid invoice, plus every
@@ -8751,13 +8763,14 @@ function checkInvoiceReminders(){
     activeInv().forEach(function(i){if(invActive(i)&&invBal(i)>0.005&&!i.lastReminderAt)i.lastReminderAt=now;});
     shop._remindersMigrated=true;saveAll();return;
   }
+  var maxCount=shop.reminderMaxCount||4;
   activeInv().forEach(function(i){
     if(!invActive(i)||i.reminderCapped||i.notReady)return;
     if(invBal(i)<=0.005)return;
     var count=i.reminderCount||0;
-    if(count>=4){i.reminderCapped=true;saveAll();return;}
+    if(count>=maxCount){i.reminderCapped=true;saveAll();return;}
     var last=i.lastReminderAt||(new Date(i.date).getTime())||now;
-    var gapDays=count===0?3:4;
+    var gapDays=count===0?(shop.reminderFirstDays||3):(shop.reminderGapDays||4);
     if(now-last>=gapDays*24*60*60*1000)sendAutoReminder(i.id);
   });
 }
