@@ -308,7 +308,7 @@ tr:last-child td{border-bottom:none}
 var SB='https://hkiydqsvvorhvazpmkwb.supabase.co',SK='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhraXlkcXN2dm9yaHZhenBta3diIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxNTM5NjAsImV4cCI6MjA5NDcyOTk2MH0.LKEcb5SlZqT2RYQRx9Pr3gW6H3pVCboIXGrSjqq5f_0';
 var ES='service_72vdqgv',ET='template_eia8k4h',EK='QC4JaQRWi_9mkE1ze';
 var PIN='1234',OPIN='',ROLE='owner',pe='',APP_LANG='en';
-var WO=[],INV=[],CUST=[],PARTS=[],TECH=['Guillermo'],PMS=[],APPTS=[],VENDORS=[],KITS=[],ESTIMATES=[],EXPENSES=[],SVCREQ=[];
+var WO=[],INV=[],CUST=[],PARTS=[],TECH=['Guillermo'],PMS=[],APPTS=[],VENDORS=[],KITS=[],ESTIMATES=[],EXPENSES=[],SVCREQ=[],RETURNS=[];
 // Soft-delete: records are never spliced out (their array index is their .id,
 // and other code depends on that staying stable). Every list/search/report/
 // export must read through these instead of the raw arrays so a deleted
@@ -559,7 +559,7 @@ async function saveAll(){
   _saveInFlight++;
   var results;
   try{
-    results=await Promise.all([dbS('mttr-wo',JSON.stringify(WO)),dbS('mttr-inv',JSON.stringify(INV)),dbS('mttr-cust',JSON.stringify(CUST)),dbS('mttr-parts',JSON.stringify(PARTS)),dbS('mttr-shop',JSON.stringify(shop)),dbS('mttr-tech',JSON.stringify(TECH)),dbS('mttr-pms',JSON.stringify(PMS)),dbS('mttr-appts',JSON.stringify(APPTS)),dbS('mttr-vendors',JSON.stringify(VENDORS)),dbS('mttr-kits',JSON.stringify(KITS)),dbS('mttr-ctrs',JSON.stringify({woc:woc,invc:invc,PIN:PIN,OPIN:OPIN})),dbS('mttr-tech-reqs',JSON.stringify(TECH_REQS)),dbS('mttr-tech-clocks',JSON.stringify(TECH_CLOCKS)),dbS('mttr-tech-codes',JSON.stringify(TECH_CODES)),dbS('mttr-estimates',JSON.stringify(ESTIMATES)),dbS('mttr-notifs',JSON.stringify(NOTIFS)),dbS('mttr-estc',JSON.stringify({estc:estc})),dbS('mttr-tech-timelog',JSON.stringify(TECH_TIMELOG)),dbS('mttr-tech-findings',JSON.stringify(TECH_FINDINGS)),dbS('mttr-exp',JSON.stringify(EXPENSES)),dbS('mttr-svcreq',JSON.stringify(SVCREQ))]);
+    results=await Promise.all([dbS('mttr-wo',JSON.stringify(WO)),dbS('mttr-inv',JSON.stringify(INV)),dbS('mttr-cust',JSON.stringify(CUST)),dbS('mttr-parts',JSON.stringify(PARTS)),dbS('mttr-shop',JSON.stringify(shop)),dbS('mttr-tech',JSON.stringify(TECH)),dbS('mttr-pms',JSON.stringify(PMS)),dbS('mttr-appts',JSON.stringify(APPTS)),dbS('mttr-vendors',JSON.stringify(VENDORS)),dbS('mttr-kits',JSON.stringify(KITS)),dbS('mttr-ctrs',JSON.stringify({woc:woc,invc:invc,PIN:PIN,OPIN:OPIN})),dbS('mttr-tech-reqs',JSON.stringify(TECH_REQS)),dbS('mttr-tech-clocks',JSON.stringify(TECH_CLOCKS)),dbS('mttr-tech-codes',JSON.stringify(TECH_CODES)),dbS('mttr-estimates',JSON.stringify(ESTIMATES)),dbS('mttr-notifs',JSON.stringify(NOTIFS)),dbS('mttr-estc',JSON.stringify({estc:estc})),dbS('mttr-tech-timelog',JSON.stringify(TECH_TIMELOG)),dbS('mttr-tech-findings',JSON.stringify(TECH_FINDINGS)),dbS('mttr-exp',JSON.stringify(EXPENSES)),dbS('mttr-svcreq',JSON.stringify(SVCREQ)),dbS('mttr-returns',JSON.stringify(RETURNS))]);
   }finally{_saveInFlight--;}
   var s=el('sv-ind');
   var failed=results.indexOf(false)>-1;
@@ -572,7 +572,7 @@ async function saveAll(){
   return !failed;
 }
 async function loadAll(){
-  var ks=['wo','inv','cust','parts','shop','tech','pms','appts','vendors','kits','ctrs','estimates','estc','notifs','tech-reqs','tech-clocks','tech-codes','tech-timelog','tech-findings','exp','svcreq'];
+  var ks=['wo','inv','cust','parts','shop','tech','pms','appts','vendors','kits','ctrs','estimates','estc','notifs','tech-reqs','tech-clocks','tech-codes','tech-timelog','tech-findings','exp','svcreq','returns'];
   var vs=await Promise.all(ks.map(function(k){return dbL('mttr-'+k);}));
   ks.forEach(function(k,i){
     if(!vs[i])return;
@@ -580,7 +580,7 @@ async function loadAll(){
       if(k==='wo')WO=d;else if(k==='inv')INV=d;else if(k==='cust')CUST=d;else if(k==='parts')PARTS=d;
       else if(k==='shop')Object.assign(shop,d);else if(k==='tech')TECH=d;
       else if(k==='pms')PMS=d;else if(k==='appts')APPTS=d;else if(k==='vendors')VENDORS=d;else if(k==='kits')KITS=d;
-      else if(k==='tech-reqs')TECH_REQS=d;else if(k==='tech-clocks')TECH_CLOCKS=d;else if(k==='tech-codes')TECH_CODES=d;else if(k==='estimates')ESTIMATES=d;else if(k==='notifs')NOTIFS=d;else if(k==='estc'&&d.estc)estc=d.estc;else if(k==='tech-timelog')TECH_TIMELOG=d;else if(k==='tech-findings')TECH_FINDINGS=d;else if(k==='exp')EXPENSES=d;else if(k==='svcreq')SVCREQ=d;
+      else if(k==='tech-reqs')TECH_REQS=d;else if(k==='tech-clocks')TECH_CLOCKS=d;else if(k==='tech-codes')TECH_CODES=d;else if(k==='estimates')ESTIMATES=d;else if(k==='notifs')NOTIFS=d;else if(k==='estc'&&d.estc)estc=d.estc;else if(k==='tech-timelog')TECH_TIMELOG=d;else if(k==='tech-findings')TECH_FINDINGS=d;else if(k==='exp')EXPENSES=d;else if(k==='svcreq')SVCREQ=d;else if(k==='returns')RETURNS=d;
       else if(k==='ctrs'){if(d.woc)woc=d.woc;if(d.invc)invc=d.invc;if(d.PIN)PIN=d.PIN;if(d.OPIN!=null)OPIN=d.OPIN;}
     }catch(ex){}
   });
@@ -4767,7 +4767,7 @@ function rTechs(){
   tl2.forEach(function(t,i){
     var d=document.createElement('div');
     d.style.cssText='display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid var(--bd)';
-    d.innerHTML='<div><div style="font-size:14px;font-weight:500">'+t.name+'</div><div style="font-size:11px;color:#888">PIN: '+t.pin+(t.phone?' · '+t.phone:'')+'</div></div>';
+    d.innerHTML='<div><div style="font-size:14px;font-weight:500">'+t.name+(t.isParts?' <span style="color:#534AB7;font-size:11px;font-weight:600">· Parts Guy</span>':'')+'</div><div style="font-size:11px;color:#888">PIN: '+t.pin+(t.phone?' · '+t.phone:'')+'</div></div>';
     var btns=document.createElement('div');btns.style.display='flex';btns.style.gap='6px';
     var eBtn=document.createElement('button');eBtn.className='btn xs';eBtn.textContent='Edit';
     eBtn.addEventListener('click',function(){tpEditTech(i);});
@@ -4784,6 +4784,7 @@ function addTech(){
     +'<div class="fg"><label>Cell Phone (for SMS alerts)</label><input id="at-ph" type="tel" placeholder="(555) 555-5555" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>Role / Notes</label><input id="at-r" placeholder="e.g. Lead Tech" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>Tech Cost ($/hr) — for Profit reports</label><input id="at-pay" type="number" placeholder="e.g. 35" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
+    +'<div class="fg full" style="display:flex;align-items:center;gap:8px;background:#EEEDFE;border-radius:8px;padding:10px 12px"><input type="checkbox" id="at-isparts" style="width:18px;height:18px;accent-color:#534AB7;flex-shrink:0"><label for="at-isparts" style="font-size:13px;cursor:pointer">This is the <strong>Parts Guy</strong> — gets the Parts Portal (inventory, returns, requests, scan) instead of job tools when they log in.</label></div>'
     +'</div>'
     +'<div style="background:#E6F1FB;border-radius:8px;padding:10px;font-size:12px;color:#0C447C;margin-top:4px"><i class="ti ti-info-circle"></i> PIN is used to log into the Tech Portal. Phone enables SMS notifications when WOs are assigned.</div>',
     '<button class="btn bl" onclick="svAddTech()"><i class="ti ti-check"></i>Add Tech</button><button class="btn" onclick="cM()">Cancel</button>'
@@ -4797,7 +4798,7 @@ function svAddTech(){
   if(!p||p.length!==4||!/^\d{4}$/.test(p)){alert('PIN must be exactly 4 digits');return;}
   var exists=getTechList().find(function(t){return t.pin===p;});
   if(exists){alert('PIN '+p+' is already used by '+exists.name+'. Choose a different PIN.');return;}
-  TECH.push({name:n,pin:p,phone:el('at-ph')?el('at-ph').value.trim():'',pay:parseFloat(el('at-pay')?el('at-pay').value:'')||0});
+  TECH.push({name:n,pin:p,phone:el('at-ph')?el('at-ph').value.trim():'',pay:parseFloat(el('at-pay')?el('at-pay').value:'')||0,isParts:el('at-isparts')?el('at-isparts').checked:false});
   saveAll();cM();rTechs();
 }
 function tpEditTech(i){
@@ -4808,6 +4809,7 @@ function tpEditTech(i){
     +'<div class="fg"><label>Portal PIN (4 digits)</label><input id="et-p" type="tel" maxlength="4" value="'+t.pin+'" placeholder="1234" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>Cell Phone</label><input id="et-ph" type="tel" value="'+(t.phone||'')+'" placeholder="(555) 555-5555" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>Tech Cost ($/hr) — for Profit reports</label><input id="et-pay" type="number" value="'+(t.pay||'')+'" placeholder="e.g. 35" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
+    +'<div class="fg full" style="display:flex;align-items:center;gap:8px;background:#EEEDFE;border-radius:8px;padding:10px 12px"><input type="checkbox" id="et-isparts" '+(t.isParts?'checked':'')+' style="width:18px;height:18px;accent-color:#534AB7;flex-shrink:0"><label for="et-isparts" style="font-size:13px;cursor:pointer">This is the <strong>Parts Guy</strong> — gets the Parts Portal instead of job tools when they log in.</label></div>'
     +'</div>',
     ''
   );
@@ -4821,7 +4823,7 @@ function tpEditTech(i){
       if(!n){alert('Enter a name');return;}
       if(p&&(p.length!==4||!/^\d{4}$/.test(p))){alert('PIN must be exactly 4 digits');return;}
       var finalPin=p||t.pin;
-      TECH[i]={name:n,pin:finalPin,phone:ph,pay:parseFloat(el('et-pay')?el('et-pay').value:'')||0};
+      TECH[i]={name:n,pin:finalPin,phone:ph,pay:parseFloat(el('et-pay')?el('et-pay').value:'')||0,isParts:el('et-isparts')?el('et-isparts').checked:false};
       saveAll();cM();rTechs();
     });
     var cn=document.createElement('button');cn.className='btn';cn.textContent='Cancel';
@@ -7190,7 +7192,7 @@ function tpPk(n){
   if(TP_PIN.length===4){
     var techs=getTechList();
     var found=techs.find(function(t){return t.pin===TP_PIN;});
-    if(found){TP_USER=found;TP_PIN='';tpShowDash();}
+    if(found){TP_USER=found;TP_PIN='';if(found.isParts){ppShowDash();}else{tpShowDash();}}
     else{var e=el('tp-err');if(e)e.style.display='block';setTimeout(function(){TP_PIN='';tpUpdD();var e2=el('tp-err');if(e2)e2.style.display='none';},800);}
   }
 }
@@ -7891,7 +7893,20 @@ function tpSubmitParts(woId){
   TECH_REQS.unshift(req);
   saveAll();updTechBadge();_tpPrio='Normal';
   if(shop.phone){var msg='Parts needed: '+req.part+' x'+req.qty+' — '+TP_USER.name+', WO #'+(w?w.ticket:woId)+' ('+req.priority+'). Open app Techs tab to approve.';try{window.open('sms:'+shop.phone.replace(/\D/g,'')+'?body='+encodeURIComponent(msg));}catch(e){}}
+  notifyPartsGuy('Parts needed: '+req.part+' x'+req.qty+' — '+TP_USER.name+', WO #'+(w?w.ticket:woId)+' ('+req.priority+'). Open the Parts Portal to handle it.');
   tpRenderWO();
+}
+// Fires a real (no-tap-needed) text to whichever tech is flagged isParts, so
+// the parts guy hears about a need the moment it's logged instead of only
+// finding it next time he opens the app. Silent no-op if no parts guy is
+// set up or has no phone on file - this is a bonus channel, not the only one.
+function notifyPartsGuy(msg){
+  var pg=getTechList().find(function(t){return t.isParts&&t.phone;});
+  if(!pg)return;
+  var digits=(pg.phone||'').replace(/\D/g,'');
+  var tel=(digits.length===10)?('+1'+digits):((digits.length===11&&digits.charAt(0)==='1')?('+'+digits):'');
+  if(!tel)return;
+  fetch(AIPROXY+'/send-sms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:tel,body:msg})}).catch(function(){});
 }
 function tpSignOut(){
   if(TP_TICK){clearInterval(TP_TICK);TP_TICK=null;}
@@ -7904,6 +7919,309 @@ function updTechBadge(){
   var pending=TECH_REQS.filter(function(r){return r.status==='Pending';}).length;
   var nb=el('nb-t');if(nb){nb.textContent=pending;nb.style.display=pending?'':'none';}
 }
+
+// ── PARTS PORTAL ─────────────────────────────────────────────
+// Separate home screen a tech flagged isParts lands on instead of the normal
+// job dashboard (see tpPk). Shares the Tech Portal's PIN login, header, and
+// #tp-body container - just a different render function once logged in.
+var PP_TAB='needed',PP_AI=[];
+function ppShowDash(){
+  if(TP_TICK){clearInterval(TP_TICK);TP_TICK=null;}
+  el('tp-hdr-name').textContent='Parts Portal — '+TP_USER.name;
+  el('tp-hdr-btn').style.display='block';
+  var sp=el('tp-hdr-spacer');if(sp)sp.style.display='none';
+  PP_TAB='needed';
+  ppRender();
+}
+function ppSetTab(k){PP_TAB=k;ppRender();}
+function ppRender(){
+  if(!TP_USER)return;
+  var pendingReq=TECH_REQS.filter(function(r){return r.status==='Pending'&&r.type!=='got';});
+  var pendingGot=TECH_REQS.filter(function(r){return r.status==='Pending'&&r.type==='got';});
+  var openReturns=RETURNS.filter(function(r){return r.status!=='Returned';});
+  var badges={needed:pendingReq.length+pendingGot.length,returns:openReturns.length,inventory:0,scan:0,insights:0};
+  var tabs=[{k:'needed',l:'Needed'},{k:'returns',l:'Returns'},{k:'inventory',l:'Inventory'},{k:'scan',l:'Scan'},{k:'insights',l:'Insights'}];
+  var h='<div style="display:flex;border-bottom:0.5px solid rgba(0,0,0,0.1);margin-bottom:12px;overflow-x:auto">';
+  tabs.forEach(function(tab){
+    var active=PP_TAB===tab.k;var badge=badges[tab.k];
+    h+='<div onclick="ppSetTab(this.dataset.tab)" data-tab="'+tab.k+'" style="flex:0 0 auto;padding:8px 14px;font-size:12px;cursor:pointer;color:'+(active?'#185FA5':'#888')+';border-bottom:2px solid '+(active?'#185FA5':'transparent')+';font-weight:'+(active?'600':'400')+';display:flex;align-items:center;gap:4px">'
+      +tab.l+(badge>0?'<span style="background:'+(active?'#E6F1FB':'#f5f5f7')+';color:'+(active?'#0C447C':'#888')+';border-radius:10px;padding:1px 6px;font-size:10px">'+badge+'</span>':'')+'</div>';
+  });
+  h+='</div>';
+  if(PP_TAB==='needed')h+=ppNeededHTML(pendingReq,pendingGot);
+  else if(PP_TAB==='returns')h+=ppReturnsHTML();
+  else if(PP_TAB==='inventory')h+=ppInventoryHTML();
+  else if(PP_TAB==='scan')h+=ppScanHTML();
+  else if(PP_TAB==='insights')h+=ppInsightsHTML();
+  h+='<div style="height:20px"></div>';
+  el('tp-body').innerHTML=h;
+  if(PP_TAB==='returns')spSetup('pp-ret-part',partPickerItems(),function(p){var pn=el('pp-ret-partnum');if(pn)pn.value=p.partNum||'';var v=el('pp-ret-vendor');if(v&&!v.value)v.value=p.vendor||'';});
+  if(PP_TAB==='insights')ppInsightsInit();
+}
+
+// ── Needed tab: parts requests + "got parts" receipts waiting on him ──
+function ppNeededHTML(reqs,gots){
+  var h='<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Parts Needed ('+reqs.length+')</div>';
+  if(!reqs.length)h+='<div style="background:#fff;border-radius:10px;padding:12px;font-size:13px;color:#888;margin-bottom:14px">Nothing needed right now.</div>';
+  reqs.forEach(function(r){
+    var pc=r.priority==='Urgent'?'#A32D2D':r.priority==='High'?'#BA7517':'#185FA5';
+    var bc=r.priority==='Urgent'?{bg:'#FCEBEB',c:'#501313'}:r.priority==='High'?{bg:'#FAEEDA',c:'#633806'}:{bg:'#E6F1FB',c:'#0C447C'};
+    h+='<div style="background:#fff;border-radius:10px;padding:10px 12px;margin-bottom:8px;border-left:3px solid '+pc+';border-top:0.5px solid rgba(0,0,0,0.08);border-right:0.5px solid rgba(0,0,0,0.08);border-bottom:0.5px solid rgba(0,0,0,0.08)">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div>'
+      +'<div style="font-size:14px;font-weight:600">'+r.part+' <span style="font-weight:400;color:#888">x'+r.qty+'</span></div>'
+      +'<div style="font-size:11px;color:#888;margin-top:1px">'+r.techName+(r.woTicket?' · SO #'+r.woTicket:'')+(r.jobDesc?' · '+r.jobDesc:'')+' · '+r.time+'</div>'
+      +(r.reason?'<div style="font-size:12px;color:#555;margin-top:4px">'+r.reason+'</div>':'')
+      +'</div><span style="background:'+bc.bg+';color:'+bc.c+';border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;white-space:nowrap">'+r.priority+'</span></div>'
+      +'<div style="display:flex;gap:6px;margin-top:8px"><button class="btn xs bl" onclick="tpDecideYes(\''+r.id+'\')"><i class="ti ti-check"></i>Approve</button><button class="btn xs rd" onclick="tpDecideNo(\''+r.id+'\')"><i class="ti ti-x"></i>Deny</button></div>'
+      +'</div>';
+  });
+  h+='<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px">Receipts To Log ('+gots.length+')</div>';
+  if(!gots.length)h+='<div style="background:#fff;border-radius:10px;padding:12px;font-size:13px;color:#888">No parts receipts waiting.</div>';
+  gots.forEach(function(r){
+    h+='<div style="background:#fff;border-radius:10px;padding:10px 12px;margin-bottom:8px;border:0.5px solid rgba(0,0,0,0.1)">'
+      +'<div style="font-size:13px;font-weight:500"><i class="ti ti-package"></i> '+(r.parsed&&r.parsed.lines&&r.parsed.lines.length?r.parsed.lines.length+' item(s)':'Receipt')+' from '+r.techName+'</div>'
+      +'<div style="font-size:11px;color:#888;margin-top:1px">'+(r.woTicket?'SO #'+r.woTicket+' · ':'')+(r.customer?r.customer+' · ':'')+r.time+'</div>'
+      +'<div style="display:flex;gap:6px;margin-top:8px">'+(r.receiptPath?'<button class="btn xs" onclick="ownerViewGotPhoto(\''+r.receiptPath+'\')"><i class="ti ti-photo"></i>View</button>':'')+'<button class="btn xs bl" onclick="ownerReviewGot(\''+r.id+'\')"><i class="ti ti-route"></i>Route It</button></div>'
+      +'</div>';
+  });
+  return h;
+}
+
+// ── Returns tab ──
+function ppReturnsHTML(){
+  var pend=RETURNS.filter(function(r){return r.status!=='Returned';});
+  var done=RETURNS.filter(function(r){return r.status==='Returned';});
+  var h='<div style="background:#E6F1FB;border:0.5px solid #185FA5;border-radius:12px;padding:12px 14px;margin-bottom:14px">'
+    +'<div style="font-size:13px;font-weight:600;color:#0C447C;margin-bottom:8px">Flag a Part for Return</div>'
+    +spHtml('pp-ret-part','Search parts in stock, or type a name...','')
+    +'<input type="hidden" id="pp-ret-partnum">'
+    +'<div style="display:flex;gap:8px;margin:8px 0"><input id="pp-ret-qty" type="number" min="1" value="1" style="width:70px;padding:9px 8px;font-size:13px;border-radius:8px;border:0.5px solid rgba(0,0,0,0.15);background:#fff;text-align:center;font-family:inherit"><input id="pp-ret-vendor" placeholder="Vendor" style="flex:1;padding:9px 10px;font-size:13px;border-radius:8px;border:0.5px solid rgba(0,0,0,0.15);background:#fff;font-family:inherit"></div>'
+    +'<select id="pp-ret-reason" style="width:100%;padding:9px 10px;font-size:13px;border-radius:8px;border:0.5px solid rgba(0,0,0,0.15);background:#fff;font-family:inherit;margin-bottom:8px"><option>Wrong Part</option><option>Defective</option><option>Overstock / Not Needed</option><option>Core Return</option><option>Other</option></select>'
+    +'<textarea id="pp-ret-notes" placeholder="Notes (optional)" rows="2" style="width:100%;padding:9px 10px;font-size:13px;border-radius:8px;border:0.5px solid rgba(0,0,0,0.15);background:#fff;font-family:inherit;resize:none;margin-bottom:8px"></textarea>'
+    +'<button onclick="ppAddReturn()" style="background:#185FA5;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px;justify-content:center;width:100%;font-family:inherit"><i class="ti ti-arrow-back-up"></i>Add to Return List</button>'
+    +'</div>';
+  h+='<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Needs Returning ('+pend.length+')</div>';
+  if(!pend.length)h+='<div style="background:#fff;border-radius:10px;padding:12px;font-size:13px;color:#888;margin-bottom:14px">Nothing flagged for return.</div>';
+  pend.forEach(function(r){
+    h+='<div style="background:#fff;border-radius:10px;padding:10px 12px;margin-bottom:7px;border:0.5px solid rgba(0,0,0,0.1)">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div>'
+      +'<div style="font-size:13px;font-weight:600">'+r.name+(r.partNum?' <span style="color:#888;font-weight:400">#'+r.partNum+'</span>':'')+' <span style="color:#888;font-weight:400">x'+r.qty+'</span></div>'
+      +'<div style="font-size:11px;color:#888;margin-top:1px">'+(r.vendor?r.vendor+' · ':'')+r.reason+' · '+r.date+'</div>'
+      +(r.notes?'<div style="font-size:12px;color:#555;margin-top:3px">'+r.notes+'</div>':'')
+      +'</div><button onclick="ppDelReturn(\''+r.id+'\')" style="background:transparent;border:none;color:#888;cursor:pointer;font-size:18px;flex-shrink:0">×</button></div>'
+      +'<button class="btn xs bl" style="margin-top:7px" onclick="ppMarkReturned(\''+r.id+'\')"><i class="ti ti-check"></i>Mark Returned</button>'
+      +'</div>';
+  });
+  if(done.length){
+    h+='<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px">Returned ('+done.length+')</div>';
+    done.slice(0,10).forEach(function(r){
+      h+='<div style="background:#fff;border-radius:10px;padding:9px 12px;margin-bottom:6px;border:0.5px solid rgba(0,0,0,0.1);opacity:0.75">'
+        +'<div style="font-size:13px;font-weight:500">'+r.name+' <span style="color:#888;font-weight:400">x'+r.qty+'</span></div>'
+        +'<div style="font-size:11px;color:#27500A">Returned '+(r.returnedDate||'')+(r.credit?' · Credit '+fm(r.credit):'')+'</div>'
+        +'</div>';
+    });
+  }
+  return h;
+}
+function ppAddReturn(){
+  var t=el('pp-ret-part-t');
+  var name=t?t.value.trim():'';
+  if(!name){alert('Enter or pick a part name.');return;}
+  var ret={id:'RT-'+Date.now(),name:name,partNum:gv('pp-ret-partnum'),qty:parseInt(gv('pp-ret-qty'))||1,vendor:gv('pp-ret-vendor'),reason:el('pp-ret-reason')?el('pp-ret-reason').value:'Other',notes:gv('pp-ret-notes'),status:'Pending',date:td(),loggedBy:TP_USER?TP_USER.name:''};
+  RETURNS.unshift(ret);
+  saveAll();ppRender();
+}
+function ppDelReturn(id){
+  var i=RETURNS.findIndex(function(r){return r.id===id;});if(i===-1)return;
+  if(!confirm('Remove this return entry?'))return;
+  RETURNS.splice(i,1);saveAll();ppRender();
+}
+function ppMarkReturned(id){
+  var r=RETURNS.find(function(x){return x.id===id;});if(!r)return;
+  var credit=prompt('Credit amount received (optional, leave blank if none):','');
+  r.status='Returned';r.returnedDate=td();if(credit)r.credit=parseFloat(credit)||0;
+  saveAll();ppRender();
+}
+
+// ── Inventory tab — search, thumbnails, photo lookup ──
+function ppInventoryHTML(){
+  return '<input id="pp-inv-q" oninput="ppInvFilter()" placeholder="Search by name or part #..." style="width:100%;padding:10px 12px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#fff;margin-bottom:10px;font-family:inherit">'
+    +'<div id="pp-inv-list">'+ppInvRowsHTML(PARTS)+'</div>';
+}
+function ppInvRowsHTML(list){
+  if(!list.length)return '<div style="background:#fff;border-radius:10px;padding:14px;font-size:13px;color:#888;text-align:center">No parts found.</div>';
+  return list.map(function(p){
+    var i=PARTS.indexOf(p);
+    var isLow=(parseFloat(p.qty)||0)<=(parseFloat(p.min)||0);
+    return '<div onclick="ppPartDetail('+i+')" style="display:flex;align-items:center;gap:10px;background:#fff;border-radius:10px;padding:9px 10px;margin-bottom:7px;border:0.5px solid rgba(0,0,0,0.1);cursor:pointer">'
+      +(p.image?'<img src="'+p.image+'" style="width:44px;height:44px;object-fit:cover;border-radius:8px;flex-shrink:0;border:0.5px solid rgba(0,0,0,0.1)">':'<div style="width:44px;height:44px;border-radius:8px;background:#f5f5f7;display:flex;align-items:center;justify-content:center;flex-shrink:0"><i class="ti ti-package" style="color:#aaa;font-size:20px"></i></div>')
+      +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+p.name+'</div>'
+      +'<div style="font-size:11px;color:#888">'+(p.partNum?'#'+p.partNum+' · ':'')+'Qty: <span style="color:'+(isLow?'#A32D2D':'#3B6D11')+';font-weight:600">'+p.qty+'</span></div></div>'
+      +'</div>';
+  }).join('');
+}
+function ppInvFilter(){
+  var q=(el('pp-inv-q')?el('pp-inv-q').value:'').toLowerCase().trim();
+  var list=PARTS.filter(function(p){return !q||p.name.toLowerCase().indexOf(q)>-1||(p.partNum||'').toLowerCase().indexOf(q)>-1;});
+  var r=el('pp-inv-list');if(r)r.innerHTML=ppInvRowsHTML(list);
+}
+function ppPartDetail(i){
+  var p=PARTS[i];if(!p)return;
+  oM(p.name,
+    (p.image?'<img src="'+p.image+'" style="width:100%;max-height:200px;object-fit:contain;border-radius:8px;border:0.5px solid var(--bd);margin-bottom:12px;background:#f5f5f7">':'<div style="width:100%;height:120px;border-radius:8px;background:#f5f5f7;display:flex;align-items:center;justify-content:center;margin-bottom:12px"><i class="ti ti-package" style="font-size:36px;color:#ccc"></i></div>')
+    +'<input type="file" id="pp-photo-inp" accept="image/*" capture="environment" style="display:none" onchange="ppSetPhoto('+i+',this)">'
+    +'<button onclick="document.getElementById(\'pp-photo-inp\').click()" style="width:100%;padding:9px;background:#f5f5f7;border:0.5px solid rgba(0,0,0,0.15);border-radius:8px;font-size:13px;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:12px"><i class="ti ti-camera"></i>'+(p.image?'Replace Photo':'Add Photo')+'</button>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px">'
+    +infoBox('Part #',p.partNum||'—')
+    +infoBox('Vendor',p.vendor||'—')
+    +infoBox('Location',p.location||'—','#185FA5')
+    +infoBox('Status',p.status||'Active')
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:6px">'
+    +'<div style="background:#E6F1FB;border-radius:8px;padding:8px;text-align:center"><div style="font-size:10px;color:#888">Sell</div><div style="font-size:15px;font-weight:700;color:#185FA5">'+fm(p.sell)+'</div></div>'
+    +'<div style="background:'+((parseFloat(p.qty)||0)<=(parseFloat(p.min)||0)?'#F8D7DA':'#D1E7DD')+';border-radius:8px;padding:8px;text-align:center"><div style="font-size:10px;color:#888">In Stock</div><div style="font-size:15px;font-weight:700">'+(p.qty||0)+'</div></div>'
+    +'<div style="background:#f5f5f7;border-radius:8px;padding:8px;text-align:center"><div style="font-size:10px;color:#888">Min</div><div style="font-size:15px;font-weight:700">'+(p.min||0)+'</div></div>'
+    +'</div>',
+    '<button class="btn xs" onclick="ppAdjQty('+i+',-1)"><i class="ti ti-minus"></i>Use 1</button>'
+    +'<button class="btn xs gr" onclick="ppAdjQty('+i+',1)"><i class="ti ti-plus"></i>Received 1</button>'
+    +'<button class="btn xs" style="background:#FFF3CD;color:#664D03" onclick="ppFlagReturn('+i+')"><i class="ti ti-arrow-back-up"></i>Flag Return</button>'
+    +'<button class="btn" onclick="cM()">Close</button>'
+  );
+}
+function ppAdjQty(i,delta){
+  var p=PARTS[i];if(!p)return;
+  p.qty=Math.max(0,(parseInt(p.qty)||0)+delta);
+  saveAll();ppPartDetail(i);if(PP_TAB==='inventory')ppInvFilter();
+}
+async function ppSetPhoto(i,inp){
+  var f=inp.files&&inp.files[0];if(!f)return;inp.value='';
+  var p=PARTS[i];if(!p)return;
+  var raw;try{raw=await new Promise(function(res,rej){var rd=new FileReader();rd.onload=function(e){res(e.target.result);};rd.onerror=rej;rd.readAsDataURL(f);});}catch(e){return;}
+  var small=await _rcResize(raw,700,0.75);
+  p.image=small;
+  saveAll();ppPartDetail(i);if(PP_TAB==='inventory')ppInvFilter();
+}
+function ppFlagReturn(i){
+  var p=PARTS[i];if(!p)return;
+  cM();ppSetTab('returns');
+  setTimeout(function(){
+    var t=el('pp-ret-part-t');if(t)t.value=p.name;
+    var pn=el('pp-ret-partnum');if(pn)pn.value=p.partNum||'';
+    var v=el('pp-ret-vendor');if(v)v.value=p.vendor||'';
+  },50);
+}
+
+// ── Scan tab — camera barcode scan or type a part #, reuses openScanner ──
+function ppScanHTML(){
+  return '<div style="text-align:center;padding:30px 10px">'
+    +'<i class="ti ti-scan" style="font-size:48px;color:#185FA5;display:block;margin-bottom:14px"></i>'
+    +'<div style="font-size:15px;font-weight:600;margin-bottom:8px">Scan a part barcode</div>'
+    +'<div style="font-size:13px;color:#888;margin-bottom:20px">Look it up instantly, check stock, or add it if it is new.</div>'
+    +'<button onclick="ppScanOpen()" style="background:#185FA5;color:#fff;border:none;border-radius:10px;padding:12px 20px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;gap:8px"><i class="ti ti-camera"></i>Open Camera Scanner</button>'
+    +'<div style="margin:16px 0 8px;font-size:12px;color:#888">or type it</div>'
+    +'<div style="display:flex;gap:8px;max-width:320px;margin:0 auto"><input id="pp-scan-code" placeholder="Part number..." style="flex:1;padding:10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;font-family:inherit" onkeydown="if(event.key===\'Enter\')ppLookupCode(this.value)"><button onclick="ppLookupCode(el(\'pp-scan-code\').value)" style="background:#f5f5f7;border:0.5px solid var(--bd);border-radius:8px;padding:10px 14px;cursor:pointer"><i class="ti ti-search"></i></button></div>'
+    +'</div>';
+}
+function ppScanOpen(){openScanner(function(code){ppLookupCode(code);});}
+function ppLookupCode(code){
+  code=(code||'').trim();if(!code)return;
+  var idx=PARTS.findIndex(function(p){return (p.partNum&&p.partNum.toLowerCase()===code.toLowerCase())||(p.upc&&p.upc===code)||(p.name&&p.name.toLowerCase()===code.toLowerCase());});
+  if(idx>-1)ppPartDetail(idx);else ppQuickAdd(code);
+}
+function ppQuickAdd(code){
+  oM('Part Not Found — Add It',
+    '<div style="background:#FFF3CD;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:13px;color:#664D03"><i class="ti ti-info-circle"></i> "'+_rcEsc(code)+'" is not in inventory yet.</div>'
+    +'<div class="fg"><label>Part Name *</label><input id="pp-qa-name" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%" placeholder="e.g. Oil Filter"></div>'
+    +'<div class="g2">'
+    +'<div class="fg"><label>Cost ($)</label><input id="pp-qa-cost" type="number" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%" placeholder="0.00" oninput="var s=el(\'pp-qa-sell\');if(s)s.value=getSell(this.value).toFixed(2)"></div>'
+    +'<div class="fg"><label>Sell ($)</label><input id="pp-qa-sell" type="number" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%" placeholder="0.00"></div>'
+    +'<div class="fg"><label>Qty on hand</label><input id="pp-qa-qty" type="number" value="1" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
+    +'<div class="fg"><label>Vendor</label><input id="pp-qa-vendor" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
+    +'</div>',
+    '<button class="btn bl" onclick="ppSaveQuickAdd(\''+code.replace(/'/g,"\\'")+'\')"><i class="ti ti-plus"></i>Add to Inventory</button><button class="btn" onclick="cM();ppRender()">Cancel</button>'
+  );
+}
+function ppSaveQuickAdd(code){
+  var n=gv('pp-qa-name');if(!n){alert('Enter a part name.');return;}
+  var cost=parseFloat(gv('pp-qa-cost'))||0;
+  var sell=parseFloat(gv('pp-qa-sell'))||getSell(cost);
+  var qty=parseInt(gv('pp-qa-qty'))||0;
+  var mk=getMarkup(cost);
+  PARTS.push({name:n,partNum:code,cat:'General',vendor:gv('pp-qa-vendor'),cost:cost.toFixed(2),sell:sell.toFixed(2),markup:mk,qty:qty,min:2});
+  saveAll();cM();ppSetTab('inventory');
+}
+
+// ── Insights tab — what's moving, what's not, Ask AI ──
+function ppUsageStats(){
+  var now=Date.now(),d30=now-30*86400000,d90=now-90*86400000;
+  var agg={};
+  function add(name,partNum,qty,rev,ts){
+    name=(name||'').trim();if(!name)return;
+    var key=(name+'|'+(partNum||'')).toLowerCase();
+    if(!agg[key])agg[key]={name:name,partNum:partNum||'',qty30:0,qty90:0,qtyAll:0,rev30:0,rev90:0,revAll:0};
+    var a=agg[key];
+    a.qtyAll+=qty;a.revAll+=rev;
+    if(ts>=d90){a.qty90+=qty;a.rev90+=rev;}
+    if(ts>=d30){a.qty30+=qty;a.rev30+=rev;}
+  }
+  ((typeof INV!=='undefined'&&INV)||[]).forEach(function(iv){
+    var ts=new Date(iv.date).getTime()||now;
+    (iv.lines||[]).forEach(function(l){if(l&&l.type==='part')add(l.desc,l.partNum,parseFloat(l.qty)||0,parseFloat(l.subtotal)||0,ts);});
+    (iv.jobs||[]).forEach(function(j){(j.parts||[]).forEach(function(p){add(p.desc,p.partNum,parseFloat(p.qty)||0,parseFloat(p.subtotal)||0,ts);});});
+  });
+  return Object.keys(agg).map(function(k){return agg[k];});
+}
+function ppUsageListHTML(){
+  var stats=ppUsageStats().sort(function(a,b){return b.qty90-a.qty90;}).slice(0,12);
+  if(!stats.length)return '<div style="background:#fff;border-radius:10px;padding:14px;font-size:13px;color:#888">Not enough invoice history yet to show usage trends.</div>';
+  var max=stats[0].qty90||1;
+  return '<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Most Used — Last 90 Days</div>'
+    +stats.map(function(s){
+      var pct=Math.max(6,Math.round((s.qty90/max)*100));
+      return '<div style="background:#fff;border-radius:10px;padding:10px 12px;margin-bottom:7px;border:0.5px solid rgba(0,0,0,0.1)">'
+        +'<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;gap:8px"><div style="font-size:13px;font-weight:600">'+s.name+(s.partNum?' <span style="color:#888;font-weight:400">#'+s.partNum+'</span>':'')+'</div><div style="font-size:12px;color:#888;white-space:nowrap">'+s.qty90+' used · '+fm(s.rev90)+'</div></div>'
+        +'<div style="background:#f0f0f0;border-radius:4px;height:6px;overflow:hidden"><div style="background:#534AB7;height:100%;width:'+pct+'%"></div></div>'
+        +'</div>';
+    }).join('');
+}
+function ppInsightsHTML(){
+  return '<div id="pp-ins-body">'+ppUsageListHTML()+'</div>'
+    +'<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin:16px 0 8px">Ask AI</div>'
+    +'<div id="pp-ai-thread" style="display:flex;flex-direction:column;gap:8px;max-height:260px;overflow-y:auto;margin-bottom:10px"></div>'
+    +'<div style="display:flex;gap:6px"><input id="pp-ai-inp" placeholder="e.g. What should I order more of?" style="flex:1;padding:9px 10px;font-size:13px;border-radius:8px;border:0.5px solid rgba(0,0,0,0.15);background:#fff;font-family:inherit" onkeydown="if(event.key===\'Enter\')ppAiSend()"><button onclick="ppAiSend()" style="background:#534AB7;color:#fff;border:none;border-radius:8px;padding:9px 14px;font-size:13px;cursor:pointer;font-family:inherit"><i class="ti ti-send"></i></button></div>';
+}
+function ppInsightsInit(){
+  PP_AI=[];
+  var t=el('pp-ai-thread');
+  if(t)t.innerHTML='<div style="font-size:12px;color:#888;padding:6px 2px">Ask me what\'s moving, what to stock up on, or what\'s sitting unused.</div>';
+}
+function ppAiSys(){
+  var stats=ppUsageStats().sort(function(a,b){return b.qtyAll-a.qtyAll;});
+  var top=stats.slice(0,15).map(function(s){return s.name+(s.partNum?' (#'+s.partNum+')':'')+': '+s.qtyAll+' used all-time, '+s.qty90+' in last 90 days, '+s.qty30+' in last 30 days, '+fm(s.revAll)+' revenue';}).join('\n');
+  var low=((typeof PARTS!=='undefined'&&PARTS)||[]).filter(function(p){return (parseFloat(p.qty)||0)<=(parseFloat(p.min)||0);}).map(function(p){return p.name+' (qty '+p.qty+', min '+p.min+')';}).join(', ');
+  return 'You are helping the parts counter person at MT Truck & Trailer Repair, a heavy-duty diesel truck and trailer repair shop. Be brief and practical — shop-floor language, not corporate-speak.\n'
+    +'PART USAGE (from billed invoices):\n'+(top||'No usage history yet.')+'\n'
+    +'CURRENTLY LOW/OUT OF STOCK: '+(low||'None flagged low right now.')+'\n'
+    +'Answer questions about what\'s selling, what to reorder, and stocking levels using these real numbers. If asked something you can\'t answer from this data, say so plainly.';
+}
+function ppAiSend(){
+  var inp=el('pp-ai-inp');var q=inp?inp.value.trim():'';if(!q)return;
+  inp.value='';
+  PP_AI.push({role:'user',content:q});
+  var t=el('pp-ai-thread');if(t){t.insertAdjacentHTML('beforeend',tpAIBubble('user',q));t.scrollTop=t.scrollHeight;}
+  var typingId='pp-typing-'+Date.now();
+  if(t)t.insertAdjacentHTML('beforeend','<div id="'+typingId+'" style="align-self:flex-start;color:#888;font-size:13px;padding:4px 8px"><i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i></div>');
+  callClaudeChat(PP_AI,ppAiSys()).then(function(ans){
+    var td2=el(typingId);if(td2)td2.remove();
+    ans=ans||'(no response)';
+    PP_AI.push({role:'assistant',content:ans});
+    if(t){t.insertAdjacentHTML('beforeend',tpAIBubble('assistant',ans));t.scrollTop=t.scrollHeight;}
+  }).catch(function(){
+    var td2=el(typingId);if(td2)td2.remove();
+    if(t)t.insertAdjacentHTML('beforeend',tpAIBubble('assistant','Sorry, I could not reach the AI right now.'));
+  });
+}
+
 var _ownerTechsTab='live';
 function ownerTabClick(t){rOwnerTechs(t);}
 function rOwnerTechs(tab){
@@ -8396,14 +8714,21 @@ function svApprove(id,notifyCustomer){
       sms(ph,msg);
     }
   }
-  rOwnerTechs();
+  _afterPartsDecision();
 }
 function svDeny(id){
   var r=TECH_REQS.find(function(x){return x.id===id;});
   if(!r)return;
   r.status='Denied';
   r.denyReason=el('pr-deny')?el('pr-deny').value.trim():'';
-  saveAll();updTechBadge();cM();rOwnerTechs();
+  saveAll();updTechBadge();cM();_afterPartsDecision();
+}
+// svApprove/svDeny are shared by the owner's Techs page and the Parts Guy's
+// Parts Portal (Needed tab) - refresh whichever one is actually on screen so
+// neither crashes reaching into a container the other screen doesn't have.
+function _afterPartsDecision(){
+  if(el('pg-body'))rOwnerTechs();
+  if(typeof TP_USER!=='undefined'&&TP_USER&&TP_USER.isParts)ppRender();
 }
 
 // ── BACKGROUND NOTIFICATION POLLER ─────────────────────
@@ -9204,7 +9529,7 @@ async function _rsCommit(ev){
   _pendingReceiptImg=null;_rsData=null;_rsPending=null;_rsExistingPath='';_rsQueueReqId='';_rsPrefillCust='';_rsDefaultDest='stock';
   await saveAll();
   var bits=[];if(nStock)bits.push(nStock+' to stock');if(nCust)bits.push(nCust+' to '+(touchedIds.length===1?'invoice #'+INV[touchedIds[0]].num:touchedIds.length+' invoices'));if(nOh)bits.push(nOh+' to overhead');
-  expManager();
+  if(typeof TP_USER!=='undefined'&&TP_USER&&TP_USER.isParts){cM();ppRender();}else{expManager();}
   setTimeout(function(){alert('\u2705 Saved: '+bits.join(', ')+'.');},250);
 }
 
@@ -9299,6 +9624,7 @@ async function tpGotPartsFinish(){
   TECH_REQS.unshift(req);
   await saveAll();updTechBadge();
   if(shop.phone){var msg='Parts receipt from '+req.techName+(w?' (SO #'+w.ticket+(w.vehicle?', '+w.vehicle:'')+')':'')+'. Open app Techs tab to review and route.';try{window.open('sms:'+shop.phone.replace(/\D/g,'')+'?body='+encodeURIComponent(msg));}catch(e){}}
+  notifyPartsGuy('Parts receipt from '+req.techName+(w?' (SO #'+w.ticket+')':'')+'. Open the Parts Portal to route it.');
   _tpgpPending=null;
   oM('Sent \u2705','<div style="font-size:13px;color:#555;line-height:1.55;padding:6px 2px">Your parts receipt went to '+_rcEsc(shop.name||'the owner')+(parsed&&parsed.lines&&parsed.lines.length?'. Claude read '+parsed.lines.length+' item(s) off it.':'.')+' They\u2019ll add it to the job and inventory.</div>','<button class="btn bl" onclick="cM();tpRenderWO()">Done</button>');
 }
