@@ -483,7 +483,25 @@ function bdg(s,p){var m={'Open':'#E6F1FB,#0C447C','In Progress':'#FFF3CD,#664D03
 function invActive(iv){return iv.status!=='Paid'&&iv.status!=='Written Off';}
 
 async function dbS(k,v,tries){tries=tries||0;try{var r=await fetch(SB+'/rest/v1/shop_data',{method:'POST',headers:{'Content-Type':'application/json','apikey':SK,'Authorization':'Bearer '+SK,'Prefer':'resolution=merge-duplicates'},body:JSON.stringify({key:k,value:v,updated_at:new Date().toISOString()})});if(!r.ok){if(tries<2){await new Promise(function(res){setTimeout(res,800);});return dbS(k,v,tries+1);}return false;}return true;}catch(e){if(tries<2){await new Promise(function(res){setTimeout(res,800);});return dbS(k,v,tries+1);}return false;}}
-async function dbL(k){try{var r=await fetch(SB+'/rest/v1/shop_data?key=eq.'+k+'&select=value',{headers:{'apikey':SK,'Authorization':'Bearer '+SK}});var d=await r.json();return(d&&d.length)?d[0].value:null;}catch(e){return null;}}
+// Returns {ok:true, value:<string|null>} once the server was actually asked
+// and answered - value is null only when that key truly has no row yet, a
+// legitimate "this category starts empty" case. Returns {ok:false} when the
+// fetch itself failed (bad connection, bad response, etc.), so callers can
+// tell "confirmed empty" apart from "couldn't check" and never mistake the
+// second for the first - that mix-up is how a transient network hiccup on
+// load used to turn into a real category getting wiped on the next save.
+async function dbL(k,tries){
+  tries=tries||0;
+  try{
+    var r=await fetch(SB+'/rest/v1/shop_data?key=eq.'+k+'&select=value',{headers:{'apikey':SK,'Authorization':'Bearer '+SK}});
+    if(!r.ok){if(tries<2){await new Promise(function(res){setTimeout(res,800);});return dbL(k,tries+1);}return{ok:false,value:null};}
+    var d=await r.json();
+    return{ok:true,value:(d&&d.length)?d[0].value:null};
+  }catch(e){
+    if(tries<2){await new Promise(function(res){setTimeout(res,800);});return dbL(k,tries+1);}
+    return{ok:false,value:null};
+  }
+}
 
 async function uploadToStorage(base64data, path){
   try{
@@ -554,8 +572,24 @@ function getWODiagPhotos(woId){
   return saved.concat(mem.filter(function(p){return p.startsWith('data:');}));
 }
 var _saveInFlight=0;
+// 'pending' until the startup loadAll() resolves, then 'ok' (every category
+// confirmed loaded) or 'incomplete' (one or more categories couldn't be
+// confirmed - a network blip on just one of ~20 parallel fetches used to
+// silently leave that one array empty, and the next save would happily
+// write that emptiness over the real data on the server). saveAll() refuses
+// to run in anything but 'ok' so a bad load can never masquerade as "this
+// category is genuinely empty, go ahead and save that."
+var _loadState='pending';
 window.addEventListener('beforeunload',function(e){if(_saveInFlight>0){e.preventDefault();e.returnValue='';return '';}});
 async function saveAll(){
+  if(_loadState!=='ok'){
+    var si=el('sv-ind');
+    if(si){si.innerHTML='<i class="ti ti-alert-triangle"></i>NOT SAVED';si.style.color='#A32D2D';si.style.opacity='1';}
+    alert(_loadState==='pending'
+      ? '⚠️ Still loading your data — please wait a few seconds and try again.'
+      : '⚠️ Your data didn’t fully load when the app started, so saving is paused to protect your information from being overwritten.\n\nPlease reload the page (make sure you have a good signal) and try again.');
+    return false;
+  }
   _saveInFlight++;
   var results;
   try{
@@ -574,16 +608,21 @@ async function saveAll(){
 async function loadAll(){
   var ks=['wo','inv','cust','parts','shop','tech','pms','appts','vendors','kits','ctrs','estimates','estc','notifs','tech-reqs','tech-clocks','tech-codes','tech-timelog','tech-findings','exp','svcreq','returns'];
   var vs=await Promise.all(ks.map(function(k){return dbL('mttr-'+k);}));
+  var anyFailed=false;
   ks.forEach(function(k,i){
-    if(!vs[i])return;
-    try{var d=JSON.parse(vs[i]);
+    var res=vs[i];
+    if(!res||!res.ok){anyFailed=true;return;}
+    if(!res.value)return;
+    try{var d=JSON.parse(res.value);
       if(k==='wo')WO=d;else if(k==='inv')INV=d;else if(k==='cust')CUST=d;else if(k==='parts')PARTS=d;
       else if(k==='shop')Object.assign(shop,d);else if(k==='tech')TECH=d;
       else if(k==='pms')PMS=d;else if(k==='appts')APPTS=d;else if(k==='vendors')VENDORS=d;else if(k==='kits')KITS=d;
       else if(k==='tech-reqs')TECH_REQS=d;else if(k==='tech-clocks')TECH_CLOCKS=d;else if(k==='tech-codes')TECH_CODES=d;else if(k==='estimates')ESTIMATES=d;else if(k==='notifs')NOTIFS=d;else if(k==='estc'&&d.estc)estc=d.estc;else if(k==='tech-timelog')TECH_TIMELOG=d;else if(k==='tech-findings')TECH_FINDINGS=d;else if(k==='exp')EXPENSES=d;else if(k==='svcreq')SVCREQ=d;else if(k==='returns')RETURNS=d;
       else if(k==='ctrs'){if(d.woc)woc=d.woc;if(d.invc)invc=d.invc;if(d.PIN)PIN=d.PIN;if(d.OPIN!=null)OPIN=d.OPIN;}
-    }catch(ex){}
+    }catch(ex){anyFailed=true;}
   });
+  _loadState=anyFailed?'incomplete':'ok';
+  return !anyFailed;
 }
 
 function showScr(id){['SL','SH','SP','SCI','SS','STK','SBA','SRS','SFC','SIN','SAU','SFP'].forEach(function(s){var e=el(s);if(e){e.style.display='none';}});var t=el(id);if(t){t.style.display=(id==='SH'||id==='SP'||id==='SL')?'flex':'block';}}
@@ -7955,13 +7994,18 @@ function ppRender(){
   else if(PP_TAB==='insights')h+=ppInsightsHTML();
   h+='<div style="height:20px"></div>';
   el('tp-body').innerHTML=h;
-  if(PP_TAB==='returns')spSetup('pp-ret-part',partPickerItems(),function(p){var pn=el('pp-ret-partnum');if(pn)pn.value=p.partNum||'';var v=el('pp-ret-vendor');if(v&&!v.value)v.value=p.vendor||'';});
+  if(PP_TAB==='returns'){
+    spSetup('pp-ret-part',partPickerItems(),function(p){var pn=el('pp-ret-partnum');if(pn)pn.value=p.partNum||'';var v=el('pp-ret-vendor');if(v&&!v.value)v.value=p.vendor||'';});
+    spSetup('pp-ret-inv',invReturnPickerItems(),function(invId){ppRetInvPicked(invId);});
+  }
   if(PP_TAB==='insights')ppInsightsInit();
 }
 
 // ── Needed tab: parts requests + "got parts" receipts waiting on him ──
 function ppNeededHTML(reqs,gots){
-  var h='<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Parts Needed ('+reqs.length+')</div>';
+  var h='<label style="display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:#534AB7;color:#fff;border-radius:12px;padding:13px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:4px"><i class="ti ti-camera-ai" style="font-size:18px"></i>Scan a New Receipt<input type="file" accept="image/*" capture="environment" style="display:none" onchange="scanReceipt(this)"></label>'
+    +'<div style="font-size:11px;color:#888;text-align:center;margin-bottom:14px">Snap a receipt yourself — Claude reads the description, part #, and vendor off it, and every item defaults to going into stock (switch any line to a customer or overhead instead).</div>';
+  h+='<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Parts Needed ('+reqs.length+')</div>';
   if(!reqs.length)h+='<div style="background:#fff;border-radius:10px;padding:12px;font-size:13px;color:#888;margin-bottom:14px">Nothing needed right now.</div>';
   reqs.forEach(function(r){
     var pc=r.priority==='Urgent'?'#A32D2D':r.priority==='High'?'#BA7517':'#185FA5';
@@ -7988,28 +8032,80 @@ function ppNeededHTML(reqs,gots){
 }
 
 // ── Returns tab ──
+function invPartLineRefs(inv){
+  var refs=[];
+  (inv.lines||[]).forEach(function(l,li){if(l&&l.type==='part')refs.push({label:(l.desc||'Part')+' x'+(l.qty||1)+' — '+fm(l.subtotal),kind:'line',idx:li});});
+  (inv.jobs||[]).forEach(function(j,ji){(j.parts||[]).forEach(function(p,pi){refs.push({label:(p.desc||'Part')+' x'+(p.qty||1)+' — '+fm(p.subtotal)+' ('+(j.desc||'Job')+')',kind:'job',jobIdx:ji,idx:pi});});});
+  return refs;
+}
+function invReturnPickerItems(){
+  return activeInv().map(function(i){return {label:'#'+i.num+' — '+i.customer+(i.vehicle?' ('+i.vehicle+')':''),sub:i.status,value:i.id};});
+}
+function ppRetBilledToggle(){
+  var cb=el('pp-ret-billed');var w=el('pp-ret-billwrap');
+  if(w)w.style.display=(cb&&cb.checked)?'block':'none';
+}
+function ppRetInvPicked(invId){
+  var hid=el('pp-ret-invid');if(hid)hid.value=invId;
+  var inv=INV[invId];
+  var sel=el('pp-ret-invline');if(!sel)return;
+  sel.innerHTML='';
+  var ph=document.createElement('option');ph.value='';ph.textContent='— pick the part line —';sel.appendChild(ph);
+  (inv?invPartLineRefs(inv):[]).forEach(function(r){var o=document.createElement('option');o.value=JSON.stringify(r);o.textContent=r.label;sel.appendChild(o);});
+}
+function ppRetScan(){
+  openScanner(function(code){
+    var p=PARTS.find(function(x){return (x.partNum&&x.partNum.toLowerCase()===code.toLowerCase())||(x.upc&&x.upc===code);});
+    var t=el('pp-ret-part-t');
+    if(p){
+      if(t)t.value=p.name;
+      var pn=el('pp-ret-partnum');if(pn)pn.value=p.partNum||'';
+      var v=el('pp-ret-vendor');if(v&&!v.value)v.value=p.vendor||'';
+    } else {
+      if(t)t.value=code;
+      var pn2=el('pp-ret-partnum');if(pn2)pn2.value=code;
+      alert('"'+code+'" isn\'t in inventory — using the scanned code as the part name. Edit it if needed.');
+    }
+  });
+}
 function ppReturnsHTML(){
   var pend=RETURNS.filter(function(r){return r.status!=='Returned';});
   var done=RETURNS.filter(function(r){return r.status==='Returned';});
   var h='<div style="background:#E6F1FB;border:0.5px solid #185FA5;border-radius:12px;padding:12px 14px;margin-bottom:14px">'
     +'<div style="font-size:13px;font-weight:600;color:#0C447C;margin-bottom:8px">Flag a Part for Return</div>'
-    +spHtml('pp-ret-part','Search parts in stock, or type a name...','')
+    +'<div style="display:flex;gap:6px;align-items:flex-start;margin-bottom:8px"><div style="flex:1">'+spHtml('pp-ret-part','Search parts in stock, scan, or type a name...','')+'</div><button type="button" onclick="ppRetScan()" style="padding:0 14px;background:#185FA5;color:#fff;border:none;border-radius:8px;cursor:pointer;flex-shrink:0"><i class="ti ti-scan"></i></button></div>'
     +'<input type="hidden" id="pp-ret-partnum">'
-    +'<div style="display:flex;gap:8px;margin:8px 0"><input id="pp-ret-qty" type="number" min="1" value="1" style="width:70px;padding:9px 8px;font-size:13px;border-radius:8px;border:0.5px solid rgba(0,0,0,0.15);background:#fff;text-align:center;font-family:inherit"><input id="pp-ret-vendor" placeholder="Vendor" style="flex:1;padding:9px 10px;font-size:13px;border-radius:8px;border:0.5px solid rgba(0,0,0,0.15);background:#fff;font-family:inherit"></div>'
+    +'<div style="display:flex;gap:8px;margin-bottom:8px"><input id="pp-ret-qty" type="number" min="1" value="1" style="width:70px;padding:9px 8px;font-size:13px;border-radius:8px;border:0.5px solid rgba(0,0,0,0.15);background:#fff;text-align:center;font-family:inherit"><input id="pp-ret-vendor" placeholder="Vendor" style="flex:1;padding:9px 10px;font-size:13px;border-radius:8px;border:0.5px solid rgba(0,0,0,0.15);background:#fff;font-family:inherit"></div>'
     +'<select id="pp-ret-reason" style="width:100%;padding:9px 10px;font-size:13px;border-radius:8px;border:0.5px solid rgba(0,0,0,0.15);background:#fff;font-family:inherit;margin-bottom:8px"><option>Wrong Part</option><option>Defective</option><option>Overstock / Not Needed</option><option>Core Return</option><option>Other</option></select>'
     +'<textarea id="pp-ret-notes" placeholder="Notes (optional)" rows="2" style="width:100%;padding:9px 10px;font-size:13px;border-radius:8px;border:0.5px solid rgba(0,0,0,0.15);background:#fff;font-family:inherit;resize:none;margin-bottom:8px"></textarea>'
+    +'<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:8px"><input type="checkbox" id="pp-ret-billed" onchange="ppRetBilledToggle()" style="width:16px;height:16px;accent-color:#185FA5;flex-shrink:0">Already billed to a customer — needs taking off their invoice</label>'
+    +'<div id="pp-ret-billwrap" style="display:none;background:#fff;border-radius:8px;padding:10px;margin-bottom:8px">'
+    +spHtml('pp-ret-inv','Search invoice # or customer...','')
+    +'<input type="hidden" id="pp-ret-invid">'
+    +'<select id="pp-ret-invline" style="width:100%;margin-top:8px;padding:9px 10px;font-size:13px;border-radius:8px;border:0.5px solid rgba(0,0,0,0.15);background:#f5f5f7;font-family:inherit"><option value="">— pick the part line —</option></select>'
+    +'</div>'
     +'<button onclick="ppAddReturn()" style="background:#185FA5;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px;justify-content:center;width:100%;font-family:inherit"><i class="ti ti-arrow-back-up"></i>Add to Return List</button>'
     +'</div>';
   h+='<div style="font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Needs Returning ('+pend.length+')</div>';
   if(!pend.length)h+='<div style="background:#fff;border-radius:10px;padding:12px;font-size:13px;color:#888;margin-bottom:14px">Nothing flagged for return.</div>';
   pend.forEach(function(r){
+    var invInfo=r.invId!=null?'<div style="font-size:11px;color:#A32D2D;background:#FCEBEB;display:inline-block;padding:2px 8px;border-radius:10px;margin-top:4px">On Invoice #'+r.invNum+' — '+r.invCustomer+(r.officeNotified?' · office notified':'')+'</div>':'';
+    var actions;
+    if(r.invId!=null&&!r.officeNotified){
+      actions='<button class="btn xs rd" onclick="ppRemoveFromInvoice(\''+r.id+'\')"><i class="ti ti-receipt-off"></i>Remove From Invoice</button><button class="btn xs" onclick="ppNotifyOfficeReturn(\''+r.id+'\')"><i class="ti ti-bell"></i>Notify Office</button>';
+    }else if(r.invId!=null&&r.officeNotified){
+      actions='<div style="font-size:11px;color:#633806;margin-bottom:5px">Office notified — waiting on them to adjust the invoice</div><button class="btn xs bl" onclick="ppMarkReturned(\''+r.id+'\')"><i class="ti ti-check"></i>Mark Returned</button>';
+    }else{
+      actions='<button class="btn xs bl" onclick="ppMarkReturned(\''+r.id+'\')"><i class="ti ti-check"></i>Mark Returned</button>';
+    }
     h+='<div style="background:#fff;border-radius:10px;padding:10px 12px;margin-bottom:7px;border:0.5px solid rgba(0,0,0,0.1)">'
       +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div>'
       +'<div style="font-size:13px;font-weight:600">'+r.name+(r.partNum?' <span style="color:#888;font-weight:400">#'+r.partNum+'</span>':'')+' <span style="color:#888;font-weight:400">x'+r.qty+'</span></div>'
       +'<div style="font-size:11px;color:#888;margin-top:1px">'+(r.vendor?r.vendor+' · ':'')+r.reason+' · '+r.date+'</div>'
       +(r.notes?'<div style="font-size:12px;color:#555;margin-top:3px">'+r.notes+'</div>':'')
+      +invInfo
       +'</div><button onclick="ppDelReturn(\''+r.id+'\')" style="background:transparent;border:none;color:#888;cursor:pointer;font-size:18px;flex-shrink:0">×</button></div>'
-      +'<button class="btn xs bl" style="margin-top:7px" onclick="ppMarkReturned(\''+r.id+'\')"><i class="ti ti-check"></i>Mark Returned</button>'
+      +'<div style="margin-top:7px">'+actions+'</div>'
       +'</div>';
   });
   if(done.length){
@@ -8028,8 +8124,44 @@ function ppAddReturn(){
   var name=t?t.value.trim():'';
   if(!name){alert('Enter or pick a part name.');return;}
   var ret={id:'RT-'+Date.now(),name:name,partNum:gv('pp-ret-partnum'),qty:parseInt(gv('pp-ret-qty'))||1,vendor:gv('pp-ret-vendor'),reason:el('pp-ret-reason')?el('pp-ret-reason').value:'Other',notes:gv('pp-ret-notes'),status:'Pending',date:td(),loggedBy:TP_USER?TP_USER.name:''};
+  var billedCb=el('pp-ret-billed');
+  if(billedCb&&billedCb.checked){
+    var invId=parseInt(gv('pp-ret-invid'));
+    var lineSel=el('pp-ret-invline');
+    if(isNaN(invId)||!lineSel||!lineSel.value){alert('Pick the invoice and which part line it was, or uncheck "Already billed to a customer".');return;}
+    var inv=INV[invId];
+    var ref=JSON.parse(lineSel.value);
+    ret.invId=invId;ret.invNum=inv?inv.num:'';ret.invCustomer=inv?inv.customer:'';ret.invRef=ref;
+  }
   RETURNS.unshift(ret);
   saveAll();ppRender();
+}
+function ppRemoveFromInvoice(retId){
+  var r=RETURNS.find(function(x){return x.id===retId;});if(!r||r.invId==null)return;
+  var inv=INV[r.invId];if(!inv){alert('That invoice could not be found — it may have been deleted.');return;}
+  if(!confirm('Remove '+r.name+' (x'+r.qty+') from Invoice #'+inv.num+' for '+inv.customer+'? This updates their total right away.'))return;
+  var ref=r.invRef;
+  if(ref&&ref.kind==='line'&&inv.lines&&inv.lines[ref.idx])inv.lines.splice(ref.idx,1);
+  else if(ref&&ref.kind==='job'&&inv.jobs&&inv.jobs[ref.jobIdx]&&inv.jobs[ref.jobIdx].parts&&inv.jobs[ref.jobIdx].parts[ref.idx])inv.jobs[ref.jobIdx].parts.splice(ref.idx,1);
+  recalcInv(r.invId);
+  r.status='Returned';r.returnedDate=td();r.removedFromInvoice=true;
+  saveAll();ppRender();
+  alert('Removed from Invoice #'+inv.num+'. New total: '+fm(inv.total));
+}
+function ppNotifyOfficeReturn(retId){
+  var r=RETURNS.find(function(x){return x.id===retId;});if(!r)return;
+  var msg='Return needs invoice adjustment: '+r.name+' x'+r.qty+(r.invNum?' on Invoice #'+r.invNum+' ('+r.invCustomer+')':'')+' — flagged by '+(TP_USER?TP_USER.name:'Parts Guy')+'.';
+  notifyOffice(msg);
+  r.officeNotified=true;
+  saveAll();ppRender();
+  alert('Office notified — they’ll take it off the invoice.');
+}
+function notifyOffice(msg){
+  if(!shop.phone)return;
+  var digits=(shop.phone||'').replace(/\D/g,'');
+  var tel=(digits.length===10)?('+1'+digits):((digits.length===11&&digits.charAt(0)==='1')?('+'+digits):'');
+  if(!tel)return;
+  fetch(AIPROXY+'/send-sms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:tel,body:msg})}).catch(function(){});
 }
 function ppDelReturn(id){
   var i=RETURNS.findIndex(function(r){return r.id===id;});if(i===-1)return;
@@ -8082,11 +8214,64 @@ function ppPartDetail(i){
     +'<div style="background:'+((parseFloat(p.qty)||0)<=(parseFloat(p.min)||0)?'#F8D7DA':'#D1E7DD')+';border-radius:8px;padding:8px;text-align:center"><div style="font-size:10px;color:#888">In Stock</div><div style="font-size:15px;font-weight:700">'+(p.qty||0)+'</div></div>'
     +'<div style="background:#f5f5f7;border-radius:8px;padding:8px;text-align:center"><div style="font-size:10px;color:#888">Min</div><div style="font-size:15px;font-weight:700">'+(p.min||0)+'</div></div>'
     +'</div>',
-    '<button class="btn xs" onclick="ppAdjQty('+i+',-1)"><i class="ti ti-minus"></i>Use 1</button>'
+    '<button class="btn xs bl" onclick="ppAddToWOPrompt('+i+')"><i class="ti ti-clipboard-plus"></i>Add to Work Order</button>'
+    +'<button class="btn xs" onclick="ppAdjQty('+i+',-1)"><i class="ti ti-minus"></i>Use 1</button>'
     +'<button class="btn xs gr" onclick="ppAdjQty('+i+',1)"><i class="ti ti-plus"></i>Received 1</button>'
     +'<button class="btn xs" style="background:#FFF3CD;color:#664D03" onclick="ppFlagReturn('+i+')"><i class="ti ti-arrow-back-up"></i>Flag Return</button>'
     +'<button class="btn" onclick="cM()">Close</button>'
   );
+}
+// Pushes a part straight onto an open work order's job (reusing the same
+// job.parts shape the owner's own Work Order screen uses), so it rides along
+// correctly into the invoice when the job is converted via toInv(). WOs with
+// no job yet get a lightweight "Parts" job auto-created to hold it.
+function ppAddToWOPrompt(i){
+  var p=PARTS[i];if(!p)return;
+  var openWOs=activeWO().filter(function(w){return w.status!=='Completed';});
+  if(!openWOs.length){alert('No open work orders right now.');return;}
+  var opts=openWOs.map(function(w){return '<option value="'+w.id+'">#'+w.ticket+' — '+w.customer+(w.vehicle?' ('+w.vehicle+')':'')+'</option>';}).join('');
+  oM('Add to Work Order',
+    '<div style="background:#f5f5f7;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:13px"><strong>'+p.name+'</strong>'+(p.partNum?' · #'+p.partNum:'')+' · '+(p.qty||0)+' in stock</div>'
+    +'<div class="fg"><label>Work Order</label><select id="pp-wo-sel" onchange="ppWOJobOpts()" style="padding:9px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%;font-family:inherit">'+opts+'</select></div>'
+    +'<div class="fg" id="pp-wo-jobwrap" style="display:none"><label>Job</label><select id="pp-wo-job" style="padding:9px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%;font-family:inherit"></select></div>'
+    +'<div class="fg"><label>Qty</label><input id="pp-wo-qty" type="number" min="1" value="1" style="padding:9px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>',
+    '<button class="btn bl" onclick="ppConfirmAddToWO('+i+')"><i class="ti ti-check"></i>Add Part</button><button class="btn" onclick="ppPartDetail('+i+')">Cancel</button>'
+  );
+  ppWOJobOpts();
+}
+function ppWOJobOpts(){
+  var sel=el('pp-wo-sel');if(!sel)return;
+  var wid=parseInt(sel.value);var w=WO[wid];var jw=el('pp-wo-jobwrap');if(!w||!jw)return;
+  if(w.jobs&&w.jobs.length){
+    jw.style.display='block';
+    el('pp-wo-job').innerHTML=w.jobs.map(function(j,ji){return '<option value="'+ji+'">'+_rcEsc(j.desc||'Job '+(ji+1))+'</option>';}).join('')+'<option value="__new">+ New job line for this part</option>';
+  }else{
+    jw.style.display='none';
+  }
+}
+function ppConfirmAddToWO(i){
+  var p=PARTS[i];if(!p)return;
+  var wid=parseInt(el('pp-wo-sel')?el('pp-wo-sel').value:'');
+  var w=WO[wid];if(!w){alert('Work order not found.');return;}
+  var qty=parseInt(el('pp-wo-qty')?el('pp-wo-qty').value:1)||1;
+  if(!w.jobs)w.jobs=[];
+  var jobSel=el('pp-wo-job');
+  var ji;
+  if(!w.jobs.length||(jobSel&&jobSel.value==='__new')){
+    w.jobs.push({desc:'Parts',hrs:0,rate:0,tax:true,parts:[],laborSubtotal:0,subtotal:0});
+    ji=w.jobs.length-1;
+  }else{
+    ji=parseInt(jobSel.value);
+  }
+  var mk=parseFloat(p.markup)||getMarkup(p.cost);
+  var sell=parseFloat(p.sell)||getSell(p.cost);
+  w.jobs[ji].parts=w.jobs[ji].parts||[];
+  w.jobs[ji].parts.push({partNum:p.partNum||'',desc:p.name,cost:parseFloat(p.cost)||0,markup:mk,qty:qty,sell:sell,tax:true,subtotal:+(qty*sell).toFixed(2)});
+  jobRecalc(wid,ji);
+  if((parseFloat(p.qty)||0)>=qty)p.qty=(parseFloat(p.qty)||0)-qty;
+  saveAll();cM();
+  alert('✅ Added '+qty+'x '+p.name+' to SO #'+w.ticket+'.');
+  ppSetTab('inventory');
 }
 function ppAdjQty(i,delta){
   var p=PARTS[i];if(!p)return;
@@ -8794,8 +8979,8 @@ async function checkForUpdates(){
     var r2=await dbL('mttr-tech-findings');
     var r3=await dbL('mttr-tech-clocks');
     var msgs=[];
-    if(r1){
-      var newReqs=JSON.parse(r1);
+    if(r1.ok&&r1.value){
+      var newReqs=JSON.parse(r1.value);
       var pendingNow=newReqs.filter(function(r){return r.status==='Pending';}).length;
       if(pendingNow>_lastReqCount){
         var diff=pendingNow-_lastReqCount;
@@ -8809,8 +8994,8 @@ async function checkForUpdates(){
         _lastReqCount=pendingNow;
       }
     }
-    if(r2){
-      var newFinds=JSON.parse(r2);
+    if(r2.ok&&r2.value){
+      var newFinds=JSON.parse(r2.value);
       var pendingNow2=newFinds.filter(function(f){return !f.customerResponse&&!f.customerNotified;}).length;
       if(pendingNow2>_lastFindCount){
         var diff2=pendingNow2-_lastFindCount;
@@ -8823,8 +9008,8 @@ async function checkForUpdates(){
         _lastFindCount=pendingNow2;
       }
     }
-    if(r3){
-      var newClocks=JSON.parse(r3);
+    if(r3.ok&&r3.value){
+      var newClocks=JSON.parse(r3.value);
       // Check if new tech clocked in
       var oldIn=Object.keys(TECH_CLOCKS).length;
       var newIn=Object.keys(newClocks).length;
@@ -8836,8 +9021,8 @@ async function checkForUpdates(){
     }
     // Check for new NOTIFS from customers
     var r4=await dbL('mttr-notifs');
-    if(r4){
-      var newNotifs=JSON.parse(r4);
+    if(r4.ok&&r4.value){
+      var newNotifs=JSON.parse(r4.value);
       var unreadNew=newNotifs.filter(function(n){return!n.read;});
       var unreadOld=NOTIFS.filter(function(n){return!n.read;});
       if(unreadNew.length>unreadOld.length){
@@ -10009,8 +10194,10 @@ function fpRender(ci){
 
 (async function(){
   var skip=setTimeout(function(){var b=el('skip-load');if(b)b.style.display='block';},4000);
-  try{if(typeof emailjs!=='undefined')emailjs.init(EK);await loadAll();}catch(e){console.log('load error:',e);}
+  var loadedOK=false;
+  try{if(typeof emailjs!=='undefined')emailjs.init(EK);loadedOK=await loadAll();}catch(e){console.log('load error:',e);}
   clearTimeout(skip);
+  if(!loadedOK)setTimeout(function(){alert('⚠️ Some of your data could not be confirmed loaded (connection trouble). The app will still open, but saving is paused until you reload with a good signal — this protects your information from being overwritten by mistake.');},300);
   migrateTech();
   el('SL').style.display='none';
   // Check URL params for direct links
