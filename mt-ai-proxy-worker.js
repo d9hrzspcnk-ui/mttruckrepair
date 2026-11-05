@@ -44,6 +44,14 @@
 //   invoice messages, and hasn't been reminded in 7+ days - up to 4 reminders
 //   per invoice. After the 4th, it stops and flags the invoice (reminderCapped)
 //   so the office sees it needs a personal follow-up instead of another text.
+//
+//   Also runs runDailyBackup() on the same trigger: snapshots every mttr-*
+//   category into one dated row (mttr-backup-YYYY-MM-DD) so there's always a
+//   real server-side copy, independent of whether anyone opened the app that
+//   day. Keeps the last BACKUP_RETENTION_DAYS and prunes older ones. The app
+//   (Settings -> Backups) reads/restores these directly from Supabase with
+//   the same anon key it already uses for everything else - this Worker only
+//   needs to exist to take the snapshot on a schedule nobody has to remember.
 
 const ALLOWED_ORIGINS = [
   "https://mttruckandtrailerrepair.com",
@@ -102,6 +110,7 @@ export default {
 
   async scheduled(event, env, ctx) {
     ctx.waitUntil(sendInvoiceReminders(env));
+    ctx.waitUntil(runDailyBackup(env));
   }
 };
 
@@ -421,6 +430,42 @@ async function sbPut(key, value) {
     },
     body: JSON.stringify({ key: key, value: JSON.stringify(value), updated_at: new Date().toISOString() })
   });
+}
+
+// Every category the app itself persists via saveAll() - keep this list in
+// sync with the `ks` array in shop.html's loadAll()/saveAll() if a new data
+// type is ever added there, or it won't be included in the daily backup.
+const BACKUP_KEYS = [
+  "wo", "inv", "cust", "parts", "shop", "tech", "pms", "appts", "vendors",
+  "kits", "ctrs", "estimates", "estc", "notifs", "tech-reqs", "tech-clocks",
+  "tech-codes", "tech-timelog", "tech-findings", "exp", "svcreq", "returns"
+];
+const BACKUP_RETENTION_DAYS = 14;
+
+async function runDailyBackup(env) {
+  const snapshot = {};
+  for (const k of BACKUP_KEYS) {
+    const v = await sbGet("mttr-" + k);
+    if (v !== null) snapshot[k] = v;
+  }
+  const dateStr = new Date().toISOString().slice(0, 10);
+  await sbPut("mttr-backup-" + dateStr, { takenAt: new Date().toISOString(), data: snapshot });
+  await pruneOldBackups();
+}
+
+async function pruneOldBackups() {
+  const r = await fetch(SB_URL + "/rest/v1/shop_data?key=like.mttr-backup-*&select=key&order=key.desc", {
+    headers: { apikey: SB_KEY, Authorization: "Bearer " + SB_KEY }
+  });
+  const rows = await r.json();
+  if (!Array.isArray(rows) || rows.length <= BACKUP_RETENTION_DAYS) return;
+  const toDelete = rows.slice(BACKUP_RETENTION_DAYS);
+  for (const row of toDelete) {
+    await fetch(SB_URL + "/rest/v1/shop_data?key=eq." + encodeURIComponent(row.key), {
+      method: "DELETE",
+      headers: { apikey: SB_KEY, Authorization: "Bearer " + SB_KEY }
+    });
+  }
 }
 
 function toE164(raw) {

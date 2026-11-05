@@ -4711,6 +4711,12 @@ function declineSvcReq(idx){
 function toggleAIKeyVis(){var i=document.getElementById('s-aikey');if(i)i.type=i.type==='password'?'text':'password';}
 function rSet(){
   el('pg-body').innerHTML='<div class="card"><div style="font-size:14px;font-weight:600;margin-bottom:12px">Shop Info</div><div class="g2"><div class="fg full"><label>Shop Name</label><input id="sn" value="'+shop.name+'" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div><div class="fg"><label>Phone</label><input id="sp" value="'+shop.phone+'" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div><div class="fg"><label>Email</label><input id="se" value="'+shop.email+'" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div><div class="fg full"><label>Address</label><input id="sa" value="'+shop.addr+'" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div><div class="fg"><label>Labor Rate ($/hr)</label><input id="slr" type="number" value="'+shop.laborRate+'" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div><div class="fg"><label>Parts Markup (%)</label><input id="smk" type="number" value="'+shop.markup+'" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div><div class="fg"><label>Shop Supplies (%)</label><input id="ssu" type="number" value="'+shop.suppliesRate+'" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div><div class="fg"><label>Tax Rate (%)</label><input id="stx" type="number" value="'+shop.taxRate+'" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div></div></div>'
+    +(ROLE==='owner'?'<div class="card" style="border:1.5px solid #185FA5;margin-bottom:12px">'
+    +'<div style="font-size:14px;font-weight:600;margin-bottom:4px;color:#0C447C"><i class="ti ti-database-export" style="font-size:16px;vertical-align:-2px"></i> Daily Backups</div>'
+    +'<div style="font-size:12px;color:#888;margin-bottom:10px">A full snapshot of everything — invoices, customers, inventory, work orders, all of it — is taken automatically once a day and kept for 14 days, whether or not anyone has the app open. Download one anytime, or restore your data back to a specific day if something ever goes wrong.</div>'
+    +'<div id="backup-lst"><div style="font-size:13px;color:#888">Loading…</div></div>'
+    +'<button class="btn xs" onclick="loadBackupList()" style="margin-top:8px"><i class="ti ti-refresh"></i>Refresh List</button>'
+    +'</div>':'')
     +'<div class="card"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px"><div style="font-size:14px;font-weight:600">Technicians</div><button class="btn xs bl" onclick="addTech()"><i class="ti ti-plus"></i>Add</button></div><div id="tech-lst"></div></div>'
     +'<div class="card"><div style="font-size:14px;font-weight:600;margin-bottom:12px">Change PIN</div><div class="g2"><div class="fg"><label>New PIN (4 digits)</label><input id="np1" type="password" maxlength="4" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%" placeholder="New PIN"></div><div class="fg"><label>Confirm PIN</label><input id="np2" type="password" maxlength="4" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%" placeholder="Confirm"></div></div></div>'
     +'<div class="card"><div style="font-size:14px;font-weight:600;margin-bottom:6px">Office Staff Login</div><div style="font-size:12px;color:#888;margin-bottom:12px">Set a separate 4-digit PIN for an office employee. They sign in with this PIN and get a limited view: no Profit Dashboard, Reports, Tech pay, Settings, part costs, or revenue figures. Leave blank to disable office access.</div><div class="g2"><div class="fg"><label>Office PIN (4 digits)</label><input id="op1" type="text" inputmode="numeric" maxlength="4" value="'+(OPIN||'')+'" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%" placeholder="e.g. 5678"></div><div class="fg" style="display:flex;align-items:flex-end"><div style="font-size:12px;font-weight:600;color:'+(OPIN?'#3B6D11':'#888')+'">'+(OPIN?'● Office login active':'○ Office login off')+'</div></div></div></div>'
@@ -4762,6 +4768,63 @@ function rSet(){
     +'</div>':'')
     +'<button class="btn bl" style="width:100%;justify-content:center;padding:14px;font-size:15px" onclick="saveSet()"><i class="ti ti-check"></i>Save All Settings</button>';
   rTechs();rVendors();setTimeout(rMarkupTiers,100);
+  if(ROLE==='owner')loadBackupList();
+}
+// ── DAILY BACKUPS ── snapshots are taken server-side by the Cloudflare
+// Worker's Cron Trigger (runDailyBackup in mt-ai-proxy-worker.js), stored as
+// mttr-backup-YYYY-MM-DD rows in the same Supabase table everything else
+// lives in. This app just lists/reads/restores them directly, the same way
+// it reads and writes every other category.
+async function loadBackupList(){
+  var c=el('backup-lst');if(!c)return;
+  c.innerHTML='<div style="font-size:13px;color:#888">Loading…</div>';
+  try{
+    var r=await fetch(SB+'/rest/v1/shop_data?key=like.mttr-backup-*&select=key,updated_at&order=key.desc',{headers:{apikey:SK,Authorization:'Bearer '+SK}});
+    var rows=await r.json();
+    if(!Array.isArray(rows)||!rows.length){c.innerHTML='<div style="font-size:13px;color:#888">No backups yet — the first automatic one runs within 24 hours of this feature going live.</div>';return;}
+    c.innerHTML=rows.map(function(row){
+      var dateStr=row.key.replace('mttr-backup-','');
+      return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid var(--bd);gap:8px">'
+        +'<div style="min-width:0"><div style="font-size:13px;font-weight:600">'+dateStr+'</div><div style="font-size:11px;color:#888">Taken '+new Date(row.updated_at).toLocaleString()+'</div></div>'
+        +'<div style="display:flex;gap:6px;flex-shrink:0"><button class="btn xs" onclick="downloadBackup(\''+dateStr+'\')" title="Download"><i class="ti ti-download"></i></button><button class="btn xs rd" onclick="confirmRestoreBackup(\''+dateStr+'\')"><i class="ti ti-history"></i>Restore</button></div>'
+        +'</div>';
+    }).join('');
+  }catch(e){c.innerHTML='<div style="font-size:13px;color:#A32D2D">Could not load the backup list — check your connection and tap Refresh List.</div>';}
+}
+async function downloadBackup(dateStr){
+  var res=await dbL('mttr-backup-'+dateStr);
+  if(!res.ok||!res.value){alert('Could not load that backup — check your connection and try again.');return;}
+  var blob=new Blob([res.value],{type:'application/json'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');a.href=url;a.download='MT_Truck_Backup_'+dateStr+'.json';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+}
+function confirmRestoreBackup(dateStr){
+  oM('Restore Backup — '+dateStr,
+    '<div style="background:#FCEBEB;border-radius:8px;padding:12px;margin-bottom:12px;font-size:13px;color:#501313"><i class="ti ti-alert-triangle"></i> This replaces ALL current data — invoices, customers, inventory, work orders, everything — with the snapshot from '+dateStr+'. Anything entered after that day will be gone. This cannot be undone.</div>'
+    +'<div class="fg"><label>Type RESTORE to confirm</label><input id="restore-confirm-txt" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%;text-transform:uppercase"></div>',
+    '<button class="btn rd" onclick="doRestoreBackup(\''+dateStr+'\')"><i class="ti ti-history"></i>Restore</button><button class="btn" onclick="cM()">Cancel</button>'
+  );
+  setTimeout(function(){var e=el('restore-confirm-txt');if(e)e.focus();},100);
+}
+async function doRestoreBackup(dateStr){
+  var confirmInp=el('restore-confirm-txt');
+  if(!confirmInp||confirmInp.value.trim().toUpperCase()!=='RESTORE'){alert('Type RESTORE exactly to confirm.');return;}
+  cM();
+  oM('Restoring…','<div style="text-align:center;padding:30px 10px"><div class="spin" style="margin:0 auto 14px"></div><div style="font-size:13px;color:#888">Writing '+dateStr+'’s data back to the server…</div></div>','');
+  var res=await dbL('mttr-backup-'+dateStr);
+  if(!res.ok||!res.value){cM();alert('Could not load that backup — check your connection and try again.');return;}
+  var snap;
+  try{snap=JSON.parse(res.value);}catch(e){cM();alert('That backup looks corrupted and can’t be restored.');return;}
+  var data=snap.data||{};
+  var writes=Object.keys(data).map(function(k){return dbS('mttr-'+k,JSON.stringify(data[k]));});
+  var results=await Promise.all(writes);
+  cM();
+  if(results.indexOf(false)>-1){
+    alert('⚠️ Some categories did not restore — check your connection and try again before assuming this worked.');
+  }else{
+    alert('✅ Restored '+dateStr+'’s data to the server. Reload the page now to see it.');
+  }
 }
 function previewLaborTaxFix(){
   var hits=[];
