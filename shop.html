@@ -4429,7 +4429,7 @@ function apVendChange(){
   var nd=el('ap-vnew');
   if(nd)nd.style.display=(v==='__new')?'block':'none';
 }
-function svPart(editIdx){
+async function svPart(editIdx){
   var n=gv('ap-n');if(!n){alert('Enter part name/description');return;}
   var vSel=el('ap-v')?el('ap-v').value:'';
   var vName=vSel==='__new'?(gv('ap-vnewname')||''):vSel;
@@ -4441,10 +4441,21 @@ function svPart(editIdx){
     VENDORS.push({id:Date.now(),name:vName,phone:'',email:'',rep:'',address:'',account:'',notes:''});
   }
   var priceEntry=vName&&cost?{vendorName:vName,cost:cost,date:td(),po:po}:null;
-  // Read image
+  // Read image - #ap-imgpv only has an <img> in it if the user just picked a
+  // new file (previewPartImg), so this only fires for an actual new photo,
+  // never for a photo already on the part being edited. Upload it and keep
+  // just the URL, instead of embedding the photo as base64 text on the part
+  // (that's what ran the parts category up to 8MB+ and nearly broke backups).
   var imgInp=el('ap-img');
   var pv=el('ap-imgpv');
-  var imgData=pv&&pv.querySelector('img')?pv.querySelector('img').src:'';
+  var imgDataRaw=pv&&pv.querySelector('img')?pv.querySelector('img').src:'';
+  var imgData='';
+  if(imgDataRaw){
+    var small=await _rcResize(imgDataRaw,700,0.75);
+    var url=await uploadToStorage(small,'parts/'+Date.now()+'-'+Math.floor(Math.random()*10000)+'.jpg');
+    if(url)imgData=url;
+    else alert('Could not upload the part photo — the rest of the part was still saved, just without the photo. Try adding the photo again from the part’s detail screen.');
+  }
   var partObj={
     name:n, partNum:gv('ap-num'), upc:gv('ap-upc'),
     manufacturer:gv('ap-mfr'), cat:gv('ap-c')||'General',
@@ -8395,7 +8406,12 @@ async function ppSetPhoto(i,inp){
   var p=PARTS[i];if(!p)return;
   var raw;try{raw=await new Promise(function(res,rej){var rd=new FileReader();rd.onload=function(e){res(e.target.result);};rd.onerror=rej;rd.readAsDataURL(f);});}catch(e){return;}
   var small=await _rcResize(raw,700,0.75);
-  p.image=small;
+  // Upload to storage and keep just the URL on the part, instead of
+  // embedding the photo as base64 text - that's what ran the parts
+  // category up to 8MB+ and nearly broke the backup system.
+  var url=await uploadToStorage(small,'parts/'+Date.now()+'-'+Math.floor(Math.random()*10000)+'.jpg');
+  if(!url){alert('Could not upload that photo — check your connection and try again.');return;}
+  p.image=url;
   saveAll();ppPartDetail(i);if(PP_TAB==='inventory')ppInvFilter();
 }
 function ppFlagReturn(i){
