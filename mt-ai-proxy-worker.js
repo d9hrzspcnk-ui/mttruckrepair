@@ -442,14 +442,17 @@ const BACKUP_KEYS = [
 ];
 const BACKUP_RETENTION_DAYS = 14;
 
+// One row per category per day (mttr-backup-YYYY-MM-DD-<category>), not one
+// combined blob - parts alone can run 8MB+ once part photos are in the mix,
+// and bundling everything into a single write made the whole day's backup
+// fail if that one write was too large. Per-category rows mean a problem
+// with one category can't take the rest of the day's backup down with it.
 async function runDailyBackup(env) {
-  const snapshot = {};
+  const dateStr = new Date().toISOString().slice(0, 10);
   for (const k of BACKUP_KEYS) {
     const v = await sbGet("mttr-" + k);
-    if (v !== null) snapshot[k] = v;
+    if (v !== null) await sbPut("mttr-backup-" + dateStr + "-" + k, v);
   }
-  const dateStr = new Date().toISOString().slice(0, 10);
-  await sbPut("mttr-backup-" + dateStr, { takenAt: new Date().toISOString(), data: snapshot });
   await pruneOldBackups();
 }
 
@@ -458,13 +461,28 @@ async function pruneOldBackups() {
     headers: { apikey: SB_KEY, Authorization: "Bearer " + SB_KEY }
   });
   const rows = await r.json();
-  if (!Array.isArray(rows) || rows.length <= BACKUP_RETENTION_DAYS) return;
-  const toDelete = rows.slice(BACKUP_RETENTION_DAYS);
-  for (const row of toDelete) {
-    await fetch(SB_URL + "/rest/v1/shop_data?key=eq." + encodeURIComponent(row.key), {
-      method: "DELETE",
-      headers: { apikey: SB_KEY, Authorization: "Bearer " + SB_KEY }
-    });
+  if (!Array.isArray(rows)) return;
+  // Keys look like mttr-backup-2026-11-05-tech-reqs - the date is always the
+  // fixed-width 10 chars right after the prefix, so slicing by position (not
+  // splitting on "-") works even though category names have hyphens in them.
+  const PREFIX = "mttr-backup-";
+  const byDate = {};
+  const dates = [];
+  for (const row of rows) {
+    if (!row.key.startsWith(PREFIX)) continue;
+    const dateStr = row.key.slice(PREFIX.length, PREFIX.length + 10);
+    if (!byDate[dateStr]) { byDate[dateStr] = []; dates.push(dateStr); }
+    byDate[dateStr].push(row.key);
+  }
+  dates.sort().reverse();
+  const datesToDelete = dates.slice(BACKUP_RETENTION_DAYS);
+  for (const d of datesToDelete) {
+    for (const key of byDate[d]) {
+      await fetch(SB_URL + "/rest/v1/shop_data?key=eq." + encodeURIComponent(key), {
+        method: "DELETE",
+        headers: { apikey: SB_KEY, Authorization: "Bearer " + SB_KEY }
+      });
+    }
   }
 }
 
