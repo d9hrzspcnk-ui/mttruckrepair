@@ -8377,6 +8377,9 @@ function ppConfirmAddToWO(i){
   var wid=parseInt(el('pp-wo-sel')?el('pp-wo-sel').value:'');
   var w=WO[wid];if(!w){alert('Work order not found.');return;}
   var qty=parseInt(el('pp-wo-qty')?el('pp-wo-qty').value:1)||1;
+  if(!(parseFloat(p.sell)>0)&&!(parseFloat(p.cost)>0)){
+    if(!confirm(p.name+' has no price set yet — this will add it to the work order as a $0 line. Add it anyway?'))return;
+  }
   if(!w.jobs)w.jobs=[];
   var jobSel=el('pp-wo-job');
   var ji;
