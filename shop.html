@@ -1044,7 +1044,8 @@ function vWO(id){
     ?('<div id="wjb'+id+'">'+bJobLns(id)+'</div>'
       +'<div style="margin-bottom:8px"><button class="btn bl xs" onclick="WO['+id+'].jobs.push({desc:\'\',hrs:1,rate:shop.laborRate,tax:false,laborSubtotal:shop.laborRate,parts:[],subtotal:shop.laborRate});rJobLns('+id+')"><i class="ti ti-plus"></i>'+t('jbAddLabor')+'</button></div>'
       +'<div id="wje'+id+'">'+bJobExtras(id)+'</div>'
-      +'<div style="margin-bottom:12px"><button class="btn xs" style="background:#FBF4E6;color:#8a5a00;border:1px solid #BA7517" onclick="WO['+id+'].extras.push({desc:\'\',sell:0,tax:true,subtotal:0});rJobLns('+id+')"><i class="ti ti-plus"></i>'+t('jbAddFee')+'</button></div>')
+      +'<div style="margin-bottom:12px;display:flex;gap:6px;flex-wrap:wrap"><button class="btn xs" style="background:#FBF4E6;color:#8a5a00;border:1px solid #BA7517" onclick="WO['+id+'].extras.push({desc:\'\',sell:0,tax:true,subtotal:0});rJobLns('+id+')"><i class="ti ti-plus"></i>'+t('jbAddFee')+'</button>'
+      +'<button class="btn xs" style="background:#FBF4E6;color:#8a5a00;border:1px solid #BA7517" onclick="WO['+id+'].extras.push({desc:\'Diagnostic Fee\',sell:150,tax:false,subtotal:150});rJobLns('+id+')"><i class="ti ti-plus"></i>+$150 Diagnostic</button></div>')
     :('<div style="overflow-x:auto;margin-bottom:10px"><table style="width:100%;border-collapse:collapse;font-size:11px;min-width:360px">'
       +'<thead><tr><th style="padding:5px;text-align:left;background:#f5f5f7;font-size:9px;color:#888;text-transform:uppercase;border-bottom:0.5px solid var(--bd)">Type</th><th style="padding:5px;text-align:left;background:#f5f5f7;font-size:9px;color:#888;text-transform:uppercase;border-bottom:0.5px solid var(--bd)">Description</th><th style="padding:5px;text-align:left;background:#f5f5f7;font-size:9px;color:#888;text-transform:uppercase;border-bottom:0.5px solid var(--bd)">Qty/Hrs</th><th style="padding:5px;text-align:left;background:#f5f5f7;font-size:9px;color:#888;text-transform:uppercase;border-bottom:0.5px solid var(--bd)">Rate</th><th style="padding:5px;text-align:left;background:#f5f5f7;font-size:9px;color:#888;text-transform:uppercase;border-bottom:0.5px solid var(--bd)">Total</th><th style="width:24px"></th></tr></thead>'
       +'<tbody id="wln'+id+'">'+bLns(id)+'</tbody></table></div>'
@@ -1053,7 +1054,8 @@ function vWO(id){
       +'<button class="btn bl xs" onclick="WO['+id+'].lines.push({type:\'part\',partNum:\'\',desc:\'\',qty:1,cost:0,sell:0,markup:shop.markup,tax:true,subtotal:0});rLns('+id+')"><i class="ti ti-plus"></i>Part</button>'
       +'<button class="btn xs gr" onclick="scanPartToWO('+id+')"><i class="ti ti-scan"></i>Scan Part</button>'
       +'<button class="btn xs" onclick="svcMnu('+id+')">Services</button>'
-      +'<button class="btn xs" onclick="WO['+id+'].lines.push({type:\'svc\',desc:\'Misc Fee\',rate:0,tax:true,subtotal:0});rLns('+id+')">Misc</button></div>');
+      +'<button class="btn xs" onclick="WO['+id+'].lines.push({type:\'svc\',desc:\'Misc Fee\',rate:0,tax:true,subtotal:0});rLns('+id+')">Misc</button>'
+      +'<button class="btn xs" onclick="WO['+id+'].lines.push({type:\'svc\',desc:\'Diagnostic Fee\',rate:150,tax:false,subtotal:150});rLns('+id+')">+$150 Diagnostic</button></div>');
   var body='<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">'
     +'<div style="background:#f5f5f7;border-radius:8px;padding:10px"><div style="font-size:10px;font-weight:600;color:#888;text-transform:uppercase;margin-bottom:6px">Customer</div>'
     +spHtml('vwo-cust','Type customer name...',custLabel)
@@ -1893,6 +1895,7 @@ function addEstPartLine(id){
 }
 function addEstFeeLine(id){
   var presets=[
+    {name:'Diagnostic Fee',amt:150,tax:false},
     {name:'Shop Supplies (3%)',amt:0,pct:3},
     {name:'Environmental / Hazmat Fee',amt:25},
     {name:'Tire Disposal Fee',amt:15},
@@ -1908,6 +1911,7 @@ function addEstFeeLine(id){
     +'<div class="fg full"><label>Fee Description *</label><input id="fee-desc" placeholder="e.g. Tire Disposal Fee" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>Amount ($)</label><input id="fee-amt" type="number" min="0" step="0.01" value="0" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>Or % of subtotal</label><input id="fee-pct" type="number" min="0" max="100" step="0.1" value="0" placeholder="e.g. 3 for 3%" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
+    +'<div class="fg full"><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="fee-tax" checked style="width:16px;height:16px;accent-color:var(--bl)"> Taxable (CA generally doesn\'t tax labor/service fees like diagnostics — only parts &amp; materials)</label></div>'
     +'</div>',
     '<button class="btn" style="background:#BA7517;color:#fff" onclick="svEstFeeLine('+id+')"><i class="ti ti-check"></i>Add Fee</button>'
     +'<button class="btn" onclick="vEst('+id+')">Cancel</button>'
@@ -1916,7 +1920,7 @@ function addEstFeeLine(id){
 }
 function svEstFeeLine(id){
   var est=ESTIMATES[id];if(!est)return;
-  var desc=el('fee-desc');var amt=el('fee-amt');var pct=el('fee-pct');
+  var desc=el('fee-desc');var amt=el('fee-amt');var pct=el('fee-pct');var tx=el('fee-tax');
   if(!desc||!desc.value.trim()){alert('Enter a fee description');return;}
   var amount=parseFloat(amt?amt.value:0)||0;
   var pctVal=parseFloat(pct?pct.value:0)||0;
@@ -1925,7 +1929,7 @@ function svEstFeeLine(id){
     amount=+(sub*pctVal/100).toFixed(2);
   }
   if(!est.lines)est.lines=[];
-  est.lines.push({type:'fee',desc:desc.value.trim(),qty:1,sell:amount,subtotal:amount});
+  est.lines.push({type:'fee',desc:desc.value.trim(),qty:1,sell:amount,subtotal:amount,tax:tx?tx.checked:true});
   calcEstTot(id);saveAll();vEst(id);
 }
 async function sndEst(id){
@@ -2778,6 +2782,7 @@ function recalcInvJobs(inv){
 
 function addInvFeeLine(id){
   var presets=[
+    {name:'Diagnostic Fee',amt:150,tax:false},
     {name:'Tire Disposal Fee',amt:15},
     {name:'Shop Supplies (3%)',amt:0,pct:3},
     {name:'Environmental / Hazmat Fee',amt:25},
@@ -2795,6 +2800,7 @@ function addInvFeeLine(id){
     +'<div class="fg full"><label>Fee Description *</label><input id="fee-desc" placeholder="e.g. Tire Disposal Fee" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>Amount ($)</label><input id="fee-amt" type="number" min="0" step="0.01" value="0" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
     +'<div class="fg"><label>Or % of subtotal</label><input id="fee-pct" type="number" min="0" max="100" step="0.1" value="0" placeholder="e.g. 3 for 3%" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div>'
+    +'<div class="fg full"><label style="display:flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="fee-tax" checked style="width:16px;height:16px;accent-color:var(--bl)"> Taxable (CA generally doesn\'t tax labor/service fees like diagnostics — only parts &amp; materials)</label></div>'
     +'</div>',
     '<button class="btn" style="background:#BA7517;color:#fff" onclick="svInvFeeLine('+id+')"><i class="ti ti-check"></i>Add Fee</button>'
     +'<button class="btn" onclick="eInv('+id+')">Cancel</button>'
@@ -2803,17 +2809,18 @@ function addInvFeeLine(id){
   window._feePresets=presets;
 }
 function feePresetChange(id){
-  var sel=el('fee-preset');var desc=el('fee-desc');var amt=el('fee-amt');var pct=el('fee-pct');
+  var sel=el('fee-preset');var desc=el('fee-desc');var amt=el('fee-amt');var pct=el('fee-pct');var tx=el('fee-tax');
   if(!sel||sel.value==='')return;
   var p=window._feePresets[parseInt(sel.value)];
   if(!p)return;
   if(desc)desc.value=p.name;
   if(amt)amt.value=p.amt||0;
   if(pct)pct.value=p.pct||0;
+  if(tx)tx.checked=p.tax!==false;
 }
 function svInvFeeLine(id){
   var inv=INV[id];if(!inv)return;
-  var desc=el('fee-desc');var amt=el('fee-amt');var pct=el('fee-pct');
+  var desc=el('fee-desc');var amt=el('fee-amt');var pct=el('fee-pct');var tx=el('fee-tax');
   if(!desc||!desc.value.trim()){alert('Enter a fee description');return;}
   var amount=parseFloat(amt?amt.value:0)||0;
   var pctVal=parseFloat(pct?pct.value:0)||0;
@@ -2823,7 +2830,7 @@ function svInvFeeLine(id){
     amount=+(sub*pctVal/100).toFixed(2);
   }
   if(!inv.lines)inv.lines=[];
-  inv.lines.push({type:'fee',desc:desc.value.trim(),qty:1,sell:amount,subtotal:amount});
+  inv.lines.push({type:'fee',desc:desc.value.trim(),qty:1,sell:amount,subtotal:amount,tax:tx?tx.checked:true});
   recalcInv(id);saveAll();eInv(id);
 }
 function addInvLaborLine(id){
