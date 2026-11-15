@@ -764,8 +764,10 @@ function rDash(){
   var srq=SVCREQ.filter(function(r){return r.status==='Pending';});
   var nsr=el('nb-sr');if(nsr){nsr.textContent=srq.length;nsr.style.display=srq.length?'':'none';}
   var capped=unp.filter(function(i){return i.reminderCapped;});
+  var failedConfirm=wo.filter(function(w){return w.textConfirmSent===false;});
   var h='';
   if(nc.length)h+='<div style="background:#E6F1FB;border:0.5px solid #B5D4F4;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px"><i class="ti ti-bell" style="color:#185FA5;font-size:18px"></i><div style="font-size:13px;color:#0C447C"><strong>'+nc.length+'</strong> new check-in(s) — <span style="text-decoration:underline;cursor:pointer" onclick="goP(\'w\')">view orders</span></div></div>';
+  if(failedConfirm.length)h+='<div style="background:#FFF3CD;border:0.5px solid #E8C27A;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px"><i class="ti ti-message-off" style="color:#8a5a00;font-size:18px"></i><div style="font-size:13px;color:#664D03"><strong>'+failedConfirm.length+'</strong> check-in confirmation text(s) failed to send — <span style="text-decoration:underline;cursor:pointer" onclick="goP(\'w\')">view orders</span></div></div>';
   if(srq.length)h+='<div style="background:#FBF4E6;border:0.5px solid #E8C27A;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px"><i class="ti ti-clipboard-list" style="color:#BA7517;font-size:18px"></i><div style="font-size:13px;color:#8a5a00"><strong>'+srq.length+'</strong> customer service request(s) waiting for review — <span style="text-decoration:underline;cursor:pointer" onclick="goP(\'sr\')">review now</span></div></div>';
   if(capped.length)h+='<div style="background:#FCEBEB;border:0.5px solid #F0B8B8;border-radius:8px;padding:10px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px"><i class="ti ti-phone-off" style="color:#A32D2D;font-size:18px"></i><div style="font-size:13px;color:#A32D2D"><strong>'+capped.length+'</strong> invoice(s) auto-reminded 4x with no response — <span style="text-decoration:underline;cursor:pointer" onclick="goP(\'i\')">needs a personal follow-up</span></div></div>';
   h+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">';
@@ -1580,6 +1582,7 @@ function sndWOText(wid){
     if(!w.history)w.history=[];
     if(res.ok&&res.data&&res.data.success){
       w.history.push({type:'text-update',at:new Date().toLocaleString(),to:tel,status:'sent'});
+      w.textConfirmSent=true;
       saveAll();
       invToast('Update texted to '+tel,true);
       cM();
