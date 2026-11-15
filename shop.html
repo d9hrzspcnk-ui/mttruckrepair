@@ -5276,12 +5276,30 @@ function ciSrch(q){var dd=el('ci-dd');if(!dd||q.length<2){if(dd)dd.style.display
 function ciPhSrch(q){if(q.replace(/\D/g,'').length<7)return;var m=CUST.find(function(c){return(c.phone||'').replace(/\D/g,'').includes(q.replace(/\D/g,''));});if(m)ciFill(CUST.indexOf(m));}
 function ciFill(i){var c=CUST[i];function sv(id,v){var e=el(id);if(e)e.value=v||'';}sv('ci-n',c.name);sv('ci-ph',c.phone);sv('ci-em',c.email);sv('ci-dot',c.dot);sv('ci-mc',c.mc);var dd=el('ci-dd');if(dd)dd.style.display='none';var ret=el('ci-ret');if(ret)ret.style.display='flex';var rt=el('ci-ret-txt');if(rt)rt.textContent='Welcome back, '+c.name+'! '+(c.units&&c.units.length?c.units.length+' vehicle(s) on file.':'');if(c.units&&c.units.length){var u=c.units[c.units.length-1];sv('ci-type',u.type);sv('ci-yr',u.year);sv('ci-mk',u.make);sv('ci-md',u.model);sv('ci-en',u.engine);sv('ci-vin',u.vin);sv('ci-pl',u.plate);sv('ci-un',u.num);}}
 function submitCI(){var n=gv('ci-n'),ph=gv('ci-ph'),mk=gv('ci-mk'),cp=gv('ci-cp');if(!n||!mk||!cp){alert(t('ciAlertFields'));return;}if(!el('ci-terms')||!el('ci-terms').checked){alert(t('ciAlertTerms'));return;}if(isSigEmpty()){alert(t('ciAlertSig'));return;}var svcs=[];var svcMap=[['svc-diag','Diagnostic'],['svc-oil','Oil Change'],['svc-tire','Tire Change'],['svc-brake','Brake Service'],['svc-pm','Preventive Maintenance'],['svc-90','90-Day Inspection'],['svc-ann','Annual Inspection'],['svc-filter','Filter Service'],['svc-cool','Coolant Service'],['svc-elec','Electrical']];svcMap.forEach(function(s){if(el(s[0])&&el(s[0]).checked)svcs.push(s[1]);});var sigData=getSigData();var unit={type:el('ci-type').value,year:gv('ci-yr'),make:mk,model:gv('ci-md'),engine:gv('ci-en'),vin:gv('ci-vin'),miles:gv('ci-mi'),plate:gv('ci-pl'),num:gv('ci-un'),trailer:gv('ci-tr')};var veh=(unit.year+' '+mk+' '+unit.model).trim();var cx=CUST.findIndex(function(c){return c.name.toLowerCase()===n.toLowerCase();});if(cx===-1){CUST.push({name:n,phone:ph,email:gv('ci-em'),dot:gv('ci-dot'),mc:gv('ci-mc'),units:[unit],jobs:0,lastVisit:td()});cx=CUST.length-1;}else{CUST[cx].lastVisit=td();CUST[cx].units=CUST[cx].units||[];if(!CUST[cx].units.find(function(u){return u.vin===unit.vin&&unit.vin;}))CUST[cx].units.push(unit);}WO.push({id:WO.length,ticket:woc++,custId:cx,customer:n,phone:ph,vehicle:veh,unit:unit,complaint:cp,status:'Open',tech:'',date:td(),notes:'',jobs:[],extras:[],isNew:true,authorizer:'',poNum:'',custPO:'',checklist:svcs,custSig:sigData,sigDate:new Date().toLocaleString()});saveAll();var newWO2=WO[WO.length-1];
-  // Auto-send SMS confirmation to customer
-  if(ph&&shop.phone){
+  // Auto-send SMS confirmation to customer via the real Twilio backend (not a sms: link, which does nothing on a front-desk tablet)
+  var digits=(ph||'').replace(/\D/g,'');
+  var tel=(digits.length===10)?('+1'+digits):((digits.length===11&&digits.charAt(0)==='1')?('+'+digits):'');
+  var confirmId='ci-confirm-'+newWO2.id;
+  var confirmHtml=tel?('<div id="'+confirmId+'" style="background:#E6F1FB;border-radius:10px;padding:12px 16px;font-size:13px;color:#0C447C"><i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i> Sending confirmation text…</div>'):'';
+  el('ci-body').innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;text-align:center;gap:16px;padding:20px"><i class="ti ti-circle-check" style="font-size:56px;color:#3B6D11"></i><h2 style="font-size:22px;font-weight:700">'+t('ciSuccess')+'</h2><p style="font-size:15px;color:#888;max-width:280px">'+t('ciSuccessSub')+'</p>'+confirmHtml+'<button onclick="buildCI();setTimeout(initSig,100)" style="padding:12px 24px;font-size:15px;background:#f5f5f7;border:0.5px solid var(--bd);border-radius:10px;cursor:pointer;font-family:inherit">'+t('ciAnother')+'</button></div>';
+  if(tel){
     var smsMsg='Hi '+n+', you are checked in at '+shop.name+'! Your work order is #'+newWO2.ticket+'. Services: '+(svcs.length?svcs.join(', '):cp.substring(0,60))+'. We will update you when your truck is ready. Questions? Call '+shop.phone;
-    window.open('sms:'+ph.replace(/[^0-9]/g,'')+'?body='+encodeURIComponent(smsMsg));
+    fetch(AIPROXY+'/send-sms',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({to:tel,body:smsMsg})}).then(function(r){
+      return r.json().then(function(data){return{ok:r.ok&&data&&data.success};});
+    }).catch(function(){return{ok:false};}).then(function(res){
+      var box=el(confirmId);if(!box)return;
+      if(res.ok){
+        box.innerHTML='<i class="ti ti-message"></i> Confirmation text sent to '+ph;
+        newWO2.textConfirmSent=true;
+      }else{
+        box.style.background='#FFF3CD';box.style.color='#664D03';
+        box.innerHTML='<i class="ti ti-alert-triangle"></i> Couldn\'t send a confirmation text — you\'re still checked in, we have your info on file';
+        newWO2.textConfirmSent=false;
+      }
+      saveAll();
+    });
   }
-  el('ci-body').innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:60vh;text-align:center;gap:16px;padding:20px"><i class="ti ti-circle-check" style="font-size:56px;color:#3B6D11"></i><h2 style="font-size:22px;font-weight:700">'+t('ciSuccess')+'</h2><p style="font-size:15px;color:#888;max-width:280px">'+t('ciSuccessSub')+'</p><div style="background:#E6F1FB;border-radius:10px;padding:12px 16px;font-size:13px;color:#0C447C"><i class="ti ti-message"></i> Confirmation text sent to '+ph+'</div><button onclick="buildCI();setTimeout(initSig,100)" style="padding:12px 24px;font-size:15px;background:#f5f5f7;border:0.5px solid var(--bd);border-radius:10px;cursor:pointer;font-family:inherit">'+t('ciAnother')+'</button></div>';}
+}
 
 
 function rReports(){
