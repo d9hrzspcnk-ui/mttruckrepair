@@ -339,18 +339,39 @@ var MTLOGO='data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMj
 var LC=['Chassis/Cab','Engine','Transmission','Drive Axle','Steer Axle','Brakes','Air System','Electrical','A/C & Heating','Tires & Wheels','Suspension','Fuel System','Exhaust','PM Maintenance','Other'];
 // Default reminder intervals (days) for the PM types tied to the check-in checklist.
 // Editable per-vehicle after creation (Edit PM) — these are just sensible starting points.
-var PM_INTERVAL_DAYS={'Oil Change':90,'90-Day Inspection':90,'Annual Inspection':365,'Smog Test':365};
+// Smog Test = 182 days (twice a year) per CARB's Clean Truck Check program, which replaced
+// the old annual PSIP smoke test as of Feb 2026. Applies to diesel/alt-fuel trucks >14,000 lbs
+// GVWR operating in CA (i.e. basically every semi this shop services), deadlines tied to each
+// truck's DMV registration date. Starting Oct 1, 2027 this becomes quarterly (~90 days) for
+// trucks with 2013+ diesel engines (OBD-equipped) — older trucks stay on the 6-month schedule.
+var PM_INTERVAL_DAYS={'Oil Change':90,'90-Day Inspection':90,'Annual Inspection':365,'Smog Test':182};
+// Default oil-change mileage interval for diesel trucks — not a legal requirement like the
+// smog rules above, just a common fleet-maintenance default. Fully editable per vehicle.
+var OIL_CHANGE_MILES=15000;
+// Looks up a vehicle's most recently recorded odometer reading (set at check-in) so mileage-
+// based PM reminders can compare against real current mileage instead of a stale snapshot.
+function currentMilesFor(customer,vehicle){
+  var cx=CUST.find(function(c){return c.name===customer;});
+  if(!cx||!cx.units||!cx.units.length)return null;
+  var match=cx.units.find(function(u){return((u.year||'')+' '+(u.make||'')+' '+(u.model||'')).trim()===vehicle;});
+  var u=match||cx.units[cx.units.length-1];
+  return(u&&u.miles)?parseInt(u.miles):null;
+}
 // Creates or refreshes a PM reminder from a check-in service checkbox, so checking
 // "Oil Change" etc. at drop-off is the only step needed — no separate manual Add PM.
 function upsertPM(customer,vehicle,pmType,miles){
   var days=PM_INTERVAL_DAYS[pmType]||90;
   var due=new Date();due.setDate(due.getDate()+days);
+  // Oil changes get a mileage target too (whichever comes first, date or miles) since trucks
+  // vary so widely in how many miles they put on between visits.
+  var dueMiles=(pmType==='Oil Change'&&miles)?(parseInt(miles)+OIL_CHANGE_MILES):'';
   var existing=PMS.find(function(p){return p.customer===customer&&p.vehicle===vehicle&&p.pmType===pmType;});
   if(existing){
     existing.lastDate=td();existing.lastMiles=miles||existing.lastMiles;
     existing.dueDate=due.toISOString().slice(0,10);
+    if(dueMiles)existing.dueMiles=dueMiles;
   }else{
-    PMS.push({customer:customer,vehicle:vehicle,pmType:pmType,lastDate:td(),lastMiles:miles||'',dueMiles:'',dueDate:due.toISOString().slice(0,10),notes:'Auto-created from check-in'});
+    PMS.push({customer:customer,vehicle:vehicle,pmType:pmType,lastDate:td(),lastMiles:miles||'',dueMiles:dueMiles||'',dueDate:due.toISOString().slice(0,10),notes:'Auto-created from check-in'});
   }
 }
 // Exact text of the Vehicle Drop-Off Agreement the customer reads & signs during check-in (buildCI).
@@ -4701,14 +4722,26 @@ function vKit(i){
   );
 }
 
-function isDue(p){var now=new Date();if(p.dueMiles&&p.lastMiles)return(parseInt(p.dueMiles)-parseInt(p.lastMiles))<=5000;if(p.dueDate)return new Date(p.dueDate)<=new Date(now.getTime()+30*24*60*60*1000);return false;}
+// Due if EITHER the mileage target or the date window has been reached — matches how fleets
+// actually run PM schedules ("every X miles or Y months, whichever comes first").
+function isDue(p){
+  var now=new Date();
+  var dueByMiles=false;
+  if(p.dueMiles){
+    var cur=currentMilesFor(p.customer,p.vehicle);
+    if(cur!=null)dueByMiles=cur>=(parseInt(p.dueMiles)-2000); // "due soon" once within ~2,000mi of target
+    else if(p.lastMiles)dueByMiles=(parseInt(p.dueMiles)-parseInt(p.lastMiles))<=5000; // no live reading on file — fall back to the old static check
+  }
+  var dueByDate=p.dueDate?(new Date(p.dueDate)<=new Date(now.getTime()+30*24*60*60*1000)):false;
+  return dueByMiles||dueByDate;
+}
 
 function rPM(){
   var due=PMS.filter(isDue);
   var rows=PMS.length?PMS.map(function(p,i){return'<tr><td style="padding:7px 9px;font-weight:600">'+p.customer+'</td><td style="padding:7px 9px;font-size:11px">'+p.vehicle+'</td><td style="padding:7px 9px;font-size:11px">'+p.pmType+'</td><td style="padding:7px 9px;font-size:11px">'+(p.lastDate||'—')+'</td><td style="padding:7px 9px;font-size:11px">'+(p.dueMiles?p.dueMiles+' mi':'—')+'</td><td style="padding:7px 9px;font-size:11px">'+(p.dueDate||'—')+'</td><td style="padding:7px 9px">'+(isDue(p)?'<span style="background:#F8D7DA;color:#58151C;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600">Due Soon</span>':'<span style="background:#D1E7DD;color:#0A3622;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:600">OK</span>')+'</td><td style="padding:7px 9px;display:flex;gap:3px"><button class="btn xs bl" onclick="sPMRem('+i+')"><i class="ti ti-send"></i></button><button class="btn xs" onclick="ePM('+i+')">Edit</button><button class="btn xs rd" onclick="PMS.splice('+i+',1);saveAll();rPM()">Del</button></td></tr>';}).join(''):'<tr><td colspan="8" style="padding:16px;color:#888;font-size:12px">No PM schedules. Click Add PM.</td></tr>';
   el('pg-body').innerHTML='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px"><div class="stat"><div class="sl">Units Tracked</div><div class="sv">'+[...new Set(PMS.map(function(p){return p.customer;}))].length+'</div></div><div class="stat"><div class="sl">PMs Due Soon</div><div class="sv" style="color:#A32D2D">'+due.length+'</div></div></div><div style="display:flex;gap:8px;margin-bottom:12px"><button class="btn bl" onclick="nPM()"><i class="ti ti-plus"></i>Add PM</button><button class="btn gr" onclick="allRem()"><i class="ti ti-bell"></i>Send All Reminders</button></div><div class="tbl"><table><thead><tr><th>Customer</th><th>Vehicle</th><th>PM Type</th><th>Last Date</th><th>Due Miles</th><th>Due Date</th><th>Status</th><th></th></tr></thead><tbody>'+rows+'</tbody></table></div>';
 }
-function nPM(){var pts=['Oil Change','90-Day Inspection','Annual Inspection','Smog Test','\'A\' Basic Dry Service','\'B\' Wet Service (Oil & Filter)','Federal DOT Inspection','State DOT Inspection','PM Service','Brake Inspection','Tire Rotation','Coolant Flush','Transmission Service','Other'];oM('Add PM Schedule','<div class="g2"><div class="fg"><label>Customer</label>'+spHtml('pm-c','Type customer name...')+'<input type="hidden" id="pm-c"></div><div class="fg"><label>Vehicle</label><input id="pm-v" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%" placeholder="2019 Freightliner Cascadia"></div><div class="fg full"><label>PM Type</label><select id="pm-t" onchange="pmTypeChange()" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;font-family:inherit;background:#f5f5f7;width:100%">'+pts.map(function(t){return'<option>'+t+'</option>';}).join('')+'</select></div><div class="fg"><label>Last Service Date</label><input id="pm-ld" type="date" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div><div class="fg"><label>Last Miles</label><input id="pm-lm" type="number" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%" placeholder="150000"></div><div class="fg"><label>Due Miles</label><input id="pm-dm" type="number" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%" placeholder="165000"></div><div class="fg"><label>Due Date</label><input id="pm-dd" type="date" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div><div class="fg"><label>Notes</label><input id="pm-notes" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%" placeholder="Special instructions..."></div></div>','<button class="btn bl" onclick="svPM()">Save</button><button class="btn" onclick="cM()">Cancel</button>');spSetup('pm-c',custPickerItems(),function(idx,item){el('pm-c').value=item.label;});pmTypeChange();}
+function nPM(){var pts=['Oil Change','90-Day Inspection','Annual Inspection','Smog Test','\'A\' Basic Dry Service','\'B\' Wet Service (Oil & Filter)','Federal DOT Inspection','State DOT Inspection','PM Service','Brake Inspection','Tire Rotation','Coolant Flush','Transmission Service','Other'];oM('Add PM Schedule','<div class="g2"><div class="fg"><label>Customer</label>'+spHtml('pm-c','Type customer name...')+'<input type="hidden" id="pm-c"></div><div class="fg"><label>Vehicle</label><input id="pm-v" oninput="pmTypeChange()" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%" placeholder="2019 Freightliner Cascadia"></div><div class="fg full"><label>PM Type</label><select id="pm-t" onchange="pmTypeChange()" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;font-family:inherit;background:#f5f5f7;width:100%">'+pts.map(function(t){return'<option>'+t+'</option>';}).join('')+'</select></div><div class="fg"><label>Last Service Date</label><input id="pm-ld" type="date" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div><div class="fg"><label>Last Miles</label><input id="pm-lm" type="number" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%" placeholder="150000"></div><div class="fg"><label>Due Miles</label><input id="pm-dm" type="number" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%" placeholder="165000"></div><div class="fg"><label>Due Date</label><input id="pm-dd" type="date" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%"></div><div class="fg"><label>Notes</label><input id="pm-notes" style="padding:8px 10px;font-size:14px;border:0.5px solid var(--bd);border-radius:8px;background:#f5f5f7;width:100%" placeholder="Special instructions..."></div></div>','<button class="btn bl" onclick="svPM()">Save</button><button class="btn" onclick="cM()">Cancel</button>');spSetup('pm-c',custPickerItems(),function(idx,item){el('pm-c').value=item.label;pmTypeChange();});pmTypeChange();}
 // Pre-fills Last/Due Date from PM_INTERVAL_DAYS when a known type is picked — a starting
 // point, not locked in; she can still type her own dates or miles over it.
 function pmTypeChange(){
@@ -4717,6 +4750,16 @@ function pmTypeChange(){
   var ld=el('pm-ld'),dd=el('pm-dd');
   if(ld&&!ld.value)ld.value=isoToday();
   if(dd&&!dd.value){var d=new Date();d.setDate(d.getDate()+days);dd.value=d.toISOString().slice(0,10);}
+  // Oil Change also suggests a mileage target from the truck's last known odometer reading, if we have one.
+  if(tSel.value==='Oil Change'){
+    var custEl=el('pm-c'),vehEl=el('pm-v');
+    var cur=(custEl&&vehEl)?currentMilesFor(custEl.value,vehEl.value):null;
+    if(cur!=null){
+      var lm=el('pm-lm'),dm=el('pm-dm');
+      if(lm&&!lm.value)lm.value=cur;
+      if(dm&&!dm.value)dm.value=cur+OIL_CHANGE_MILES;
+    }
+  }
 }
 // td() returns a localized display string (e.g. "11/14/2026"); date <input> fields need ISO yyyy-mm-dd.
 function isoToday(){return new Date().toISOString().slice(0,10);}
@@ -5334,7 +5377,7 @@ function isSigEmpty(){var c=document.getElementById('sig-canvas');if(!c)return t
 function ciSrch(q){var dd=el('ci-dd');if(!dd||q.length<2){if(dd)dd.style.display='none';return;}var m=CUST.filter(function(c){return c.name.toLowerCase().includes(q.toLowerCase());}).slice(0,5);if(!m.length){dd.style.display='none';return;}dd.innerHTML=m.map(function(c){return'<div onclick="ciFill('+CUST.indexOf(c)+')" style="padding:11px 14px;cursor:pointer;border-bottom:0.5px solid var(--bd)"><div style="font-size:14px;font-weight:600">'+c.name+'</div><div style="font-size:12px;color:#888">'+(c.phone||'')+' | '+(c.units||[]).length+' unit(s)</div></div>';}).join('');dd.style.display='block';}
 function ciPhSrch(q){if(q.replace(/\D/g,'').length<7)return;var m=CUST.find(function(c){return(c.phone||'').replace(/\D/g,'').includes(q.replace(/\D/g,''));});if(m)ciFill(CUST.indexOf(m));}
 function ciFill(i){var c=CUST[i];function sv(id,v){var e=el(id);if(e)e.value=v||'';}sv('ci-n',c.name);sv('ci-ph',c.phone);sv('ci-em',c.email);sv('ci-dot',c.dot);sv('ci-mc',c.mc);var dd=el('ci-dd');if(dd)dd.style.display='none';var ret=el('ci-ret');if(ret)ret.style.display='flex';var rt=el('ci-ret-txt');if(rt)rt.textContent='Welcome back, '+c.name+'! '+(c.units&&c.units.length?c.units.length+' vehicle(s) on file.':'');if(c.units&&c.units.length){var u=c.units[c.units.length-1];sv('ci-type',u.type);sv('ci-yr',u.year);sv('ci-mk',u.make);sv('ci-md',u.model);sv('ci-en',u.engine);sv('ci-vin',u.vin);sv('ci-pl',u.plate);sv('ci-un',u.num);}}
-function submitCI(){var n=gv('ci-n'),ph=gv('ci-ph'),mk=gv('ci-mk'),cp=gv('ci-cp');if(!n||!mk||!cp){alert(t('ciAlertFields'));return;}if(!el('ci-terms')||!el('ci-terms').checked){alert(t('ciAlertTerms'));return;}if(isSigEmpty()){alert(t('ciAlertSig'));return;}var svcs=[];var svcMap=[['svc-diag','Diagnostic'],['svc-oil','Oil Change'],['svc-tire','Tire Change'],['svc-brake','Brake Service'],['svc-pm','Preventive Maintenance'],['svc-90','90-Day Inspection'],['svc-ann','Annual Inspection'],['svc-filter','Filter Service'],['svc-cool','Coolant Service'],['svc-elec','Electrical'],['svc-smog','Smog Test']];svcMap.forEach(function(s){if(el(s[0])&&el(s[0]).checked)svcs.push(s[1]);});var sigData=getSigData();var unit={type:el('ci-type').value,year:gv('ci-yr'),make:mk,model:gv('ci-md'),engine:gv('ci-en'),vin:gv('ci-vin'),miles:gv('ci-mi'),plate:gv('ci-pl'),num:gv('ci-un'),trailer:gv('ci-tr')};var veh=(unit.year+' '+mk+' '+unit.model).trim();var cx=CUST.findIndex(function(c){return c.name.toLowerCase()===n.toLowerCase();});if(cx===-1){CUST.push({name:n,phone:ph,email:gv('ci-em'),dot:gv('ci-dot'),mc:gv('ci-mc'),units:[unit],jobs:0,lastVisit:td()});cx=CUST.length-1;}else{CUST[cx].lastVisit=td();CUST[cx].units=CUST[cx].units||[];if(!CUST[cx].units.find(function(u){return u.vin===unit.vin&&unit.vin;}))CUST[cx].units.push(unit);}WO.push({id:WO.length,ticket:woc++,custId:cx,customer:n,phone:ph,vehicle:veh,unit:unit,complaint:cp,status:'Open',tech:'',date:td(),notes:'',jobs:[],extras:[],isNew:true,authorizer:'',poNum:'',custPO:'',checklist:svcs,custSig:sigData,sigDate:new Date().toLocaleString()});
+function submitCI(){var n=gv('ci-n'),ph=gv('ci-ph'),mk=gv('ci-mk'),cp=gv('ci-cp');if(!n||!mk||!cp){alert(t('ciAlertFields'));return;}if(!el('ci-terms')||!el('ci-terms').checked){alert(t('ciAlertTerms'));return;}if(isSigEmpty()){alert(t('ciAlertSig'));return;}var svcs=[];var svcMap=[['svc-diag','Diagnostic'],['svc-oil','Oil Change'],['svc-tire','Tire Change'],['svc-brake','Brake Service'],['svc-pm','Preventive Maintenance'],['svc-90','90-Day Inspection'],['svc-ann','Annual Inspection'],['svc-filter','Filter Service'],['svc-cool','Coolant Service'],['svc-elec','Electrical'],['svc-smog','Smog Test']];svcMap.forEach(function(s){if(el(s[0])&&el(s[0]).checked)svcs.push(s[1]);});var sigData=getSigData();var unit={type:el('ci-type').value,year:gv('ci-yr'),make:mk,model:gv('ci-md'),engine:gv('ci-en'),vin:gv('ci-vin'),miles:gv('ci-mi'),plate:gv('ci-pl'),num:gv('ci-un'),trailer:gv('ci-tr')};var veh=(unit.year+' '+mk+' '+unit.model).trim();var cx=CUST.findIndex(function(c){return c.name.toLowerCase()===n.toLowerCase();});if(cx===-1){CUST.push({name:n,phone:ph,email:gv('ci-em'),dot:gv('ci-dot'),mc:gv('ci-mc'),units:[unit],jobs:0,lastVisit:td()});cx=CUST.length-1;}else{CUST[cx].lastVisit=td();CUST[cx].units=CUST[cx].units||[];var _existingUnit=CUST[cx].units.find(function(u){return u.vin&&unit.vin&&u.vin===unit.vin;});if(_existingUnit){if(unit.miles)_existingUnit.miles=unit.miles;if(unit.plate)_existingUnit.plate=unit.plate;if(unit.engine)_existingUnit.engine=unit.engine;}else{CUST[cx].units.push(unit);}}WO.push({id:WO.length,ticket:woc++,custId:cx,customer:n,phone:ph,vehicle:veh,unit:unit,complaint:cp,status:'Open',tech:'',date:td(),notes:'',jobs:[],extras:[],isNew:true,authorizer:'',poNum:'',custPO:'',checklist:svcs,custSig:sigData,sigDate:new Date().toLocaleString()});
   svcs.forEach(function(s){if(PM_INTERVAL_DAYS[s])upsertPM(n,veh,s,unit.miles);});
   saveAll();var newWO2=WO[WO.length-1];
   // Auto-send SMS confirmation to customer via the real Twilio backend (not a sms: link, which does nothing on a front-desk tablet)
