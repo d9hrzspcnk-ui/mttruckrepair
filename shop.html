@@ -8157,8 +8157,8 @@ function ppNeededHTML(reqs,gots){
 // ── Returns tab ──
 function invPartLineRefs(inv){
   var refs=[];
-  (inv.lines||[]).forEach(function(l,li){if(l&&l.type==='part')refs.push({label:(l.desc||'Part')+' x'+(l.qty||1)+' — '+fm(l.subtotal),kind:'line',idx:li});});
-  (inv.jobs||[]).forEach(function(j,ji){(j.parts||[]).forEach(function(p,pi){refs.push({label:(p.desc||'Part')+' x'+(p.qty||1)+' — '+fm(p.subtotal)+' ('+(j.desc||'Job')+')',kind:'job',jobIdx:ji,idx:pi});});});
+  (inv.lines||[]).forEach(function(l,li){if(l&&l.type==='part')refs.push({label:(l.desc||'Part')+' x'+(l.qty||1)+' — '+fm(l.subtotal),kind:'line',idx:li,desc:l.desc||'',subtotal:l.subtotal});});
+  (inv.jobs||[]).forEach(function(j,ji){(j.parts||[]).forEach(function(p,pi){refs.push({label:(p.desc||'Part')+' x'+(p.qty||1)+' — '+fm(p.subtotal)+' ('+(j.desc||'Job')+')',kind:'job',jobIdx:ji,idx:pi,desc:p.desc||'',subtotal:p.subtotal});});});
   return refs;
 }
 function invReturnPickerItems(){
@@ -8262,10 +8262,16 @@ function ppAddReturn(){
 function ppRemoveFromInvoice(retId){
   var r=RETURNS.find(function(x){return x.id===retId;});if(!r||r.invId==null)return;
   var inv=INV[r.invId];if(!inv){alert('That invoice could not be found — it may have been deleted.');return;}
-  if(!confirm('Remove '+r.name+' (x'+r.qty+') from Invoice #'+inv.num+' for '+inv.customer+'? This updates their total right away.'))return;
   var ref=r.invRef;
-  if(ref&&ref.kind==='line'&&inv.lines&&inv.lines[ref.idx])inv.lines.splice(ref.idx,1);
-  else if(ref&&ref.kind==='job'&&inv.jobs&&inv.jobs[ref.jobIdx]&&inv.jobs[ref.jobIdx].parts&&inv.jobs[ref.jobIdx].parts[ref.idx])inv.jobs[ref.jobIdx].parts.splice(ref.idx,1);
+  // The invoice may have been edited (lines added/removed/reordered) since this
+  // return was flagged, which would shift ref.idx onto a different line - so
+  // re-check the line still matches what was flagged before touching anything.
+  var cur=(ref&&ref.kind==='line')?(inv.lines&&inv.lines[ref.idx]):(ref&&ref.kind==='job'?(inv.jobs&&inv.jobs[ref.jobIdx]&&inv.jobs[ref.jobIdx].parts&&inv.jobs[ref.jobIdx].parts[ref.idx]):null);
+  var matches=cur&&(cur.desc||'')===(ref.desc||'')&&+(cur.subtotal||0)===+(ref.subtotal||0);
+  if(!ref||!matches){alert('Invoice #'+inv.num+' has changed since this return was flagged — the part line can\'t be matched safely anymore. Please remove it from the invoice by hand.');return;}
+  if(!confirm('Remove '+r.name+' (x'+r.qty+') from Invoice #'+inv.num+' for '+inv.customer+'? This updates their total right away.'))return;
+  if(ref.kind==='line')inv.lines.splice(ref.idx,1);
+  else inv.jobs[ref.jobIdx].parts.splice(ref.idx,1);
   recalcInv(r.invId);
   r.status='Returned';r.returnedDate=td();r.removedFromInvoice=true;
   saveAll();ppRender();
@@ -8380,6 +8386,10 @@ function ppConfirmAddToWO(i){
   if(!(parseFloat(p.sell)>0)&&!(parseFloat(p.cost)>0)){
     if(!confirm(p.name+' has no price set yet — this will add it to the work order as a $0 line. Add it anyway?'))return;
   }
+  var curStock=parseFloat(p.qty)||0;
+  if(qty>curStock){
+    if(!confirm('Only '+curStock+' of '+p.name+' in stock, but adding '+qty+'. Add anyway? (Stock will drop to 0.)'))return;
+  }
   if(!w.jobs)w.jobs=[];
   var jobSel=el('pp-wo-job');
   var ji;
@@ -8394,7 +8404,7 @@ function ppConfirmAddToWO(i){
   w.jobs[ji].parts=w.jobs[ji].parts||[];
   w.jobs[ji].parts.push({partNum:p.partNum||'',desc:p.name,cost:parseFloat(p.cost)||0,markup:mk,qty:qty,sell:sell,tax:true,subtotal:+(qty*sell).toFixed(2)});
   jobRecalc(wid,ji);
-  if((parseFloat(p.qty)||0)>=qty)p.qty=(parseFloat(p.qty)||0)-qty;
+  p.qty=Math.max(0,curStock-qty);
   saveAll();cM();
   alert('✅ Added '+qty+'x '+p.name+' to SO #'+w.ticket+'.');
   ppSetTab('inventory');
@@ -9584,6 +9594,13 @@ var _pendingReceiptImg=null;
 function _rcEsc(s){return (''+(s==null?'':s)).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function _rcISO(s){return (/^\d{4}-\d{2}-\d{2}$/.test(s||''))?s:new Date().toISOString().slice(0,10);}
 function _rcResize(dataURL,maxDim,q){return new Promise(function(res){var img=new Image();img.onload=function(){var w=img.width,h=img.height;if(w>=h&&w>maxDim){h=Math.round(h*maxDim/w);w=maxDim;}else if(h>w&&h>maxDim){w=Math.round(w*maxDim/h);h=maxDim;}var c=document.createElement('canvas');c.width=w;c.height=h;c.getContext('2d').drawImage(img,0,0,w,h);try{res(c.toDataURL('image/jpeg',q||0.7));}catch(e){res(dataURL);}};img.onerror=function(){res(dataURL);};img.src=dataURL;});}
+// Scan-a-receipt is shared between the owner's Operating Expenses screen and
+// the Parts Portal - exits from it (cancel/back/save-done) need to return to
+// whichever one opened it, not always dump into the owner's expense screen.
+function _rcBack(){
+  if(typeof TP_USER!=='undefined'&&TP_USER&&TP_USER.isParts){cM();ppRender();}
+  else{expManager();}
+}
 async function scanReceipt(input){
   var file=input.files&&input.files[0];if(!file)return;input.value='';
   var origURL;
@@ -9597,7 +9614,7 @@ async function scanReceipt(input){
   if(raw==null){cM();return;}
   raw=raw.replace(/```json|```/g,'').trim();
   var d;try{d=JSON.parse(raw);}catch(e){
-    oM('Couldn\u2019t read that one','<div style="font-size:13px;color:#888;line-height:1.5;padding:6px 2px">Claude couldn\u2019t pull clean details off that photo. Try again with better lighting and the whole receipt flat in frame \u2014 or just add it by hand.</div>','<button class="btn bl" onclick="expManager()">Back</button>');
+    oM('Couldn\u2019t read that one','<div style="font-size:13px;color:#888;line-height:1.5;padding:6px 2px">Claude couldn\u2019t pull clean details off that photo. Try again with better lighting and the whole receipt flat in frame \u2014 or just add it by hand.</div>','<button class="btn bl" onclick="_rcBack()">Back</button>');
     return;
   }
   _rsExistingPath='';_rsQueueReqId='';_rsPrefillCust='';_rsDefaultDest='stock';
@@ -9624,7 +9641,7 @@ function receiptPreview(d,imgURL){
     +'<div class="fg full"><label>Date</label><input id="rc-d" type="date" value="'+_rcISO(d.date)+'" style="'+inS+'"></div>'
     +'<div class="fg full"><label>Note</label><input id="rc-note" value="'+_rcEsc(d.note)+'" placeholder="optional" style="'+inS+'"></div>'
     +'</div>',
-    '<button class="btn bl" onclick="receiptSave(event)"><i class="ti ti-check"></i>Save Expense</button><button class="btn" onclick="expManager()">Cancel</button>'
+    '<button class="btn bl" onclick="receiptSave(event)"><i class="ti ti-check"></i>Save Expense</button><button class="btn" onclick="_rcBack()">Cancel</button>'
   );
 }
 async function receiptSave(ev){
@@ -9644,7 +9661,7 @@ async function receiptSave(ev){
   if(_rsQueueReqId){var rq=TECH_REQS.find(function(x){return x.id===_rsQueueReqId;});if(rq)rq.status='Routed';}
   _pendingReceiptImg=null;_rsExistingPath='';_rsQueueReqId='';_rsPrefillCust='';_rsDefaultDest='stock';
   await saveAll();
-  expManager();
+  _rcBack();
 }
 
 // ── ITEMIZED RECEIPT: split each line to Stock / Customer invoice / Overhead ──
@@ -9703,7 +9720,7 @@ function receiptSplitPreview(d,imgURL){
     +'<div class="fg"><label>Overhead category</label><select id="rs-cat" style="'+inS+';font-family:inherit">'+catOpts+'</select></div>'
     +'</div>'
     +'<div style="font-size:12px;font-weight:600;margin-bottom:8px">Items on this receipt</div>'+rows,
-    '<button class="btn bl" onclick="receiptSplitSave(event)"><i class="ti ti-check"></i>Save All</button><button class="btn" onclick="receiptPreview(_rsData,_pendingReceiptImg)">Whole receipt as 1 expense</button><button class="btn" onclick="expManager()">Cancel</button>'
+    '<button class="btn bl" onclick="receiptSplitSave(event)"><i class="ti ti-check"></i>Save All</button><button class="btn" onclick="receiptPreview(_rsData,_pendingReceiptImg)">Whole receipt as 1 expense</button><button class="btn" onclick="_rcBack()">Cancel</button>'
   );
   for(var ri=0;ri<lines.length;ri++){_rsToggleCust(ri);_rsInvOpts(ri);}
 }
