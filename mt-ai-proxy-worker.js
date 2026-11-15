@@ -440,7 +440,7 @@ const BACKUP_KEYS = [
   "kits", "ctrs", "estimates", "estc", "notifs", "tech-reqs", "tech-clocks",
   "tech-codes", "tech-timelog", "tech-findings", "exp", "svcreq", "returns"
 ];
-const BACKUP_RETENTION_DAYS = 14;
+const BACKUP_RETENTION_DAYS = 700;
 
 // One row per category per day (mttr-backup-YYYY-MM-DD-<category>), not one
 // combined blob - parts alone can run 8MB+ once part photos are in the mix,
