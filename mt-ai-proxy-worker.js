@@ -37,6 +37,11 @@
 //                             Verifies the Clover-Signature header, looks up which
 //                             invoice(s) that checkout session was for, and marks them
 //                             paid (or partial, for a partial payment) in the shop's data.
+//   POST /decode-vin       -> looks up a VIN via NHTSA's vPIC database. Body: { "vin": "..." }
+//                             Proxied through here (instead of the browser calling
+//                             vpic.nhtsa.dot.gov directly) because some shop networks/devices
+//                             block .gov domains outright, which broke VIN lookup on the
+//                             front-desk tablet while everything else kept working fine.
 //
 // Cron Trigger (set in dashboard under Triggers - not in this code):
 //   Runs sendInvoiceReminders() once a day. Texts a reminder for every
@@ -103,6 +108,10 @@ export default {
 
     if (url.pathname === "/create-checkout") {
       return handleCreateCheckout(request, env, origin);
+    }
+
+    if (url.pathname === "/decode-vin") {
+      return handleDecodeVin(request, env, origin);
     }
 
     return handleAnthropic(request, env, origin);
@@ -292,6 +301,42 @@ async function handleCreateCheckout(request, env, origin) {
     });
   } catch (e) {
     return new Response(JSON.stringify({ success: false, error: "Upstream error", detail: String(e) }), {
+      status: 502,
+      headers: { ...corsHeaders(origin), "Content-Type": "application/json" }
+    });
+  }
+}
+
+async function handleDecodeVin(request, env, origin) {
+  let payload;
+  try {
+    payload = await request.json();
+  } catch (e) {
+    return new Response(JSON.stringify({ error: "Bad request body" }), {
+      status: 400,
+      headers: { ...corsHeaders(origin), "Content-Type": "application/json" }
+    });
+  }
+
+  const vin = ((payload && payload.vin) || "").trim().toUpperCase();
+  if (!vin) {
+    return new Response(JSON.stringify({ error: "Missing vin" }), {
+      status: 400,
+      headers: { ...corsHeaders(origin), "Content-Type": "application/json" }
+    });
+  }
+
+  try {
+    const upstream = await fetch(
+      "https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVINValues/" + encodeURIComponent(vin) + "?format=json"
+    );
+    const text = await upstream.text();
+    return new Response(text, {
+      status: upstream.status,
+      headers: { ...corsHeaders(origin), "Content-Type": "application/json" }
+    });
+  } catch (e) {
+    return new Response(JSON.stringify({ error: "Upstream error", detail: String(e) }), {
       status: 502,
       headers: { ...corsHeaders(origin), "Content-Type": "application/json" }
     });

@@ -3565,7 +3565,7 @@ function prtInv(id){
       lineSum+=parseFloat(j.laborSubtotal)||0;
       (j.parts||[]).forEach(function(p){
         var ptx=(p.tax!==false)?'Y':'N';
-        rows+='<tr class="ln"><td>'+t('jbParts')+'</td><td style="padding-left:16px">'+((p.partNum)?'<strong>'+p.partNum+'</strong> — ':'')+(p.desc||'')+'</td><td class="r">'+(parseFloat(p.qty)||0).toFixed(2)+'</td><td class="r">'+fm(p.sell)+'</td><td class="r b">'+fm(p.subtotal)+'</td><td class="c">'+ptx+'</td></tr>';
+        rows+='<tr class="ln"><td>'+t('jbParts')+'</td><td style="padding-left:16px">'+(p.desc||'')+'</td><td class="r">'+(parseFloat(p.qty)||0).toFixed(2)+'</td><td class="r">'+fm(p.sell)+'</td><td class="r b">'+fm(p.subtotal)+'</td><td class="c">'+ptx+'</td></tr>';
         lineSum+=parseFloat(p.subtotal)||0;
       });
       rows+='<tr class="sub"><td colspan="4" class="r b nv">'+t('jbJobSubtotal')+'</td><td class="r b nv">'+fm(j.subtotal)+'</td><td></td></tr>';
@@ -6269,7 +6269,7 @@ async function decodeVIN(vin, callback){
   vin=vin.trim().toUpperCase();
   if(vin.length<11){alert('VIN must be at least 11 characters.');return;}
   try{
-    var res=await fetch('https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVINValues/'+vin+'?format=json');
+    var res=await fetch(AIPROXY+'/decode-vin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({vin:vin})});
     var data=await res.json();
     if(!data.Results||!data.Results.length){alert('VIN not found. Check the VIN and try again.');return;}
     var r=data.Results[0];
