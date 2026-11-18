@@ -182,7 +182,7 @@ tr:last-child td{border-bottom:none}
 
 <!-- SHOP -->
 <div id="SS" class="scr" style="padding-bottom:70px">
-  <div id="notif-bar" style="display:none;position:sticky;top:0;z-index:100;background:#185FA5;color:#fff;padding:10px 14px;display:none;align-items:center;justify-content:space-between;gap:10px;cursor:pointer" onclick="notifBarClick()">
+  <div id="notif-bar" style="display:none;position:sticky;top:0;z-index:600;background:#185FA5;color:#fff;padding:10px 14px;display:none;align-items:center;justify-content:space-between;gap:10px;cursor:pointer" onclick="notifBarClick()">
     <div style="display:flex;align-items:center;gap:8px"><i class="ti ti-bell" style="font-size:18px"></i><span id="notif-msg" style="font-size:13px;font-weight:500"></span></div>
     <div style="display:flex;align-items:center;gap:8px"><span style="font-size:12px;background:rgba(255,255,255,0.2);padding:3px 10px;border-radius:20px">View</span><span onclick="event.stopPropagation();hideNotif()" style="font-size:18px;opacity:0.7;padding:2px 6px">×</span></div>
   </div>
@@ -458,6 +458,7 @@ var TR={
     jbPartNumPlaceholder:'Part #',jbFeeDescPlaceholder:'Fee description...',
     jbNoJobsYet:'No jobs yet — add labor to get started.',
     jbPickJob:'Which job is this part for?',jbNoJobSelect:'- pick a job -',
+    jbSortPrice:'Sort $ High→Low',jbSortPriceShort:'Sort $',jbMoveUp:'Move up',jbMoveDown:'Move down',
     delInvoiceQ:'Delete invoice',delWOQ:'Delete work order',delEstQ:'Delete estimate',
     delWarn:'This removes it from all lists, searches, and reports. You can restore it later from Show Deleted.',
     delBtn:'Delete',delCancelBtn:'Cancel',restoreBtn:'Restore',
@@ -516,6 +517,7 @@ var TR={
     jbPartNumPlaceholder:'No. de Pieza',jbFeeDescPlaceholder:'Descripcion del cargo...',
     jbNoJobsYet:'Aun no hay trabajos — agregue mano de obra para comenzar.',
     jbPickJob:'Para cual trabajo es esta pieza?',jbNoJobSelect:'- seleccione un trabajo -',
+    jbSortPrice:'Ordenar $ Mayor a Menor',jbSortPriceShort:'Ordenar $',jbMoveUp:'Subir',jbMoveDown:'Bajar',
     delInvoiceQ:'Eliminar factura',delWOQ:'Eliminar orden de trabajo',delEstQ:'Eliminar estimado',
     delWarn:'Esto lo quita de todas las listas, busquedas e informes. Puede restaurarlo despues desde Mostrar Eliminados.',
     delBtn:'Eliminar',delCancelBtn:'Cancelar',restoreBtn:'Restaurar',
@@ -2118,8 +2120,15 @@ function eInv(id){
   var eiCustIdx=custIdxForInv(inv);
   var eiCustNote=(eiCustIdx>-1&&CUST[eiCustIdx].receiptNote)?CUST[eiCustIdx].receiptNote:'';
   _modLock=true;
+  function moveBtns(li,len){
+    return '<div style="display:flex;flex-direction:column;gap:0">'
+      +'<button type="button" title="'+t('jbMoveUp')+'" '+(li===0?'disabled':'')+' onclick="moveInvLine('+id+','+li+',-1)" style="background:transparent;border:none;color:'+(li===0?'#ccc':'#185FA5')+';font-size:11px;cursor:'+(li===0?'default':'pointer')+';padding:0;line-height:1"><i class="ti ti-chevron-up"></i></button>'
+      +'<button type="button" title="'+t('jbMoveDown')+'" '+(li===len-1?'disabled':'')+' onclick="moveInvLine('+id+','+li+',1)" style="background:transparent;border:none;color:'+(li===len-1?'#ccc':'#185FA5')+';font-size:11px;cursor:'+(li===len-1?'default':'pointer')+';padding:0;line-height:1"><i class="ti ti-chevron-down"></i></button>'
+      +'</div>';
+  }
   function bRows(){
-    var rows=(inv.lines||[]).map(function(l,li){
+    var lns=inv.lines||[];
+    var rows=lns.map(function(l,li){
       if(l.type==='fee'){
         return'<tr>'
           +'<td style="padding:5px 6px"><span style="background:#FAEEDA;color:#633806;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:600">Fee</span></td>'
@@ -2128,7 +2137,7 @@ function eInv(id){
           +'<td style="padding:5px 6px"><input type="number" value="'+(l.sell||0)+'" onchange="INV['+id+'].lines['+li+'].sell=parseFloat(this.value)||0;INV['+id+'].lines['+li+'].subtotal=+(INV['+id+'].lines['+li+'].sell).toFixed(2);recalcInv('+id+');eInv('+id+')" style="width:65px;padding:5px;font-size:13px;border:0.5px solid var(--bd);border-radius:5px;font-family:inherit"></td>'
           +'<td style="padding:5px 6px;text-align:center"><input type="checkbox" '+(l.tax!==false?'checked':'')+' onchange="INV['+id+'].lines['+li+'].tax=this.checked;recalcInv('+id+');eInv('+id+')"></td>'
           +'<td style="padding:5px 6px;font-weight:600;font-size:13px">'+fm(l.subtotal)+'</td>'
-          +'<td style="padding:5px 6px"><button onclick="INV['+id+'].lines.splice('+li+',1);recalcInv('+id+');eInv('+id+')" style="background:#FCEBEB;color:#A32D2D;border:none;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:13px">×</button></td>'
+          +'<td style="padding:5px 6px;display:flex;gap:4px;align-items:center">'+moveBtns(li,lns.length)+'<button onclick="INV['+id+'].lines.splice('+li+',1);recalcInv('+id+');eInv('+id+')" style="background:#FCEBEB;color:#A32D2D;border:none;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:13px">×</button></td>'
           +'</tr>';
       } else if(l.type==='labor'){
         return'<tr>'
@@ -2138,22 +2147,23 @@ function eInv(id){
           +'<td style="padding:5px 6px"><input type="number" value="'+(l.rate||125)+'" onchange="INV['+id+'].lines['+li+'].rate=parseFloat(this.value)||0;INV['+id+'].lines['+li+'].subtotal=+(INV['+id+'].lines['+li+'].hrs*INV['+id+'].lines['+li+'].rate).toFixed(2);recalcInv('+id+');eInv('+id+')" style="width:65px;padding:5px;font-size:13px;border:0.5px solid var(--bd);border-radius:5px;font-family:inherit"></td>'
           +'<td style="padding:5px 6px;text-align:center"><input type="checkbox" '+(l.tax!==false?'checked':'')+' onchange="INV['+id+'].lines['+li+'].tax=this.checked;recalcInv('+id+');eInv('+id+')"></td>'
           +'<td style="padding:5px 6px;font-weight:600;font-size:13px">'+fm(l.subtotal)+'</td>'
-          +'<td style="padding:5px 6px"><button onclick="INV['+id+'].lines.splice('+li+',1);recalcInv('+id+');eInv('+id+')" style="background:#FCEBEB;color:#A32D2D;border:none;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:13px">×</button></td>'
+          +'<td style="padding:5px 6px;display:flex;gap:4px;align-items:center">'+moveBtns(li,lns.length)+'<button onclick="INV['+id+'].lines.splice('+li+',1);recalcInv('+id+');eInv('+id+')" style="background:#FCEBEB;color:#A32D2D;border:none;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:13px">×</button></td>'
           +'</tr>';
       } else {
         return'<tr>'
           +'<td style="padding:5px 6px"><span style="background:#EAF3DE;color:#27500A;padding:1px 6px;border-radius:10px;font-size:10px;font-weight:600">Part</span></td>'
           +'<td style="padding:5px 6px;position:relative"><input value="'+(l.desc||'')+'" placeholder="Part name or #..." autocomplete="off" oninput="eiSrchP('+id+','+li+',this)" onchange="INV['+id+'].lines['+li+'].desc=this.value" style="width:100%;padding:5px;font-size:13px;border:0.5px solid var(--bd);border-radius:5px;font-family:inherit"><div id="eipd_'+id+'_'+li+'" style="display:none;border:0.5px solid var(--bd);border-radius:5px;max-height:150px;overflow-y:auto;background:#fff;position:relative;z-index:60;margin-top:2px;box-shadow:0 4px 12px rgba(0,0,0,0.12)"></div>'
-          +'<div style="display:flex;gap:3px;margin-top:3px;align-items:center"><span style="font-size:10px;color:#888">Cost$</span><input type="number" step="0.01" value="'+(l.cost||0)+'" onchange="var L=INV['+id+'].lines['+li+'];L.cost=parseFloat(this.value)||0;if(!L.mkMan)L.markup=getMarkup(L.cost);L.sell=+(L.cost*(1+(L.markup!==undefined?L.markup:getMarkup(L.cost))/100)).toFixed(2);L.subtotal=+(L.qty*L.sell).toFixed(2);recalcInv('+id+');eInv('+id+')" style="width:58px;padding:3px 4px;font-size:11px;border:0.5px solid var(--bd);border-radius:4px;font-family:inherit"><span style="font-size:10px;color:#888">Mk%</span><input type="number" value="'+(l.markup!==undefined?l.markup:shop.markup)+'" onchange="var L=INV['+id+'].lines['+li+'];L.markup=parseFloat(this.value)||0;L.mkMan=true;if(L.cost){L.sell=+(L.cost*(1+L.markup/100)).toFixed(2);L.subtotal=+(L.qty*L.sell).toFixed(2);}recalcInv('+id+');eInv('+id+')" style="width:44px;padding:3px 4px;font-size:11px;border:0.5px solid var(--bd);border-radius:4px;font-family:inherit"></div></td>'
+          +'<div style="display:flex;gap:3px;margin-top:3px;align-items:center"><span style="font-size:10px;color:#888">Cost$</span><input type="number" step="0.01" value="'+(l.cost||0)+'" onchange="var L=INV['+id+'].lines['+li+'];L.cost=parseFloat(this.value)||0;if(!L.mkMan)L.markup=getMarkup(L.cost);L.sell=+(L.cost*(1+(L.markup!==undefined?L.markup:getMarkup(L.cost))/100)).toFixed(2);L.subtotal=+(L.qty*L.sell).toFixed(2);recalcInv('+id+');eInv('+id+')" style="width:58px;padding:3px 4px;font-size:11px;border:0.5px solid var(--bd);border-radius:4px;font-family:inherit"><span style="font-size:10px;color:#888">Mk%</span><input type="number" value="'+(l.markup!==undefined?l.markup:shop.markup)+'" onchange="var L=INV['+id+'].lines['+li+'];L.markup=parseFloat(this.value)||0;L.mkMan=true;if(L.cost){L.sell=+(L.cost*(1+L.markup/100)).toFixed(2);L.subtotal=+(L.qty*L.sell).toFixed(2);}recalcInv('+id+');eInv('+id+')" style="width:44px;padding:3px 4px;font-size:11px;border:0.5px solid var(--bd);border-radius:4px;font-family:inherit">'
+          +'<button type="button" title="Save this part to Inventory at this cost, qty 0" onclick="saveInvLinePartToInv('+id+','+li+')" style="padding:3px 5px;font-size:10px;border:1px solid #185FA5;background:#E6F1FB;color:#0C447C;border-radius:4px;cursor:pointer;white-space:nowrap;font-family:inherit"><i class="ti ti-box"></i></button></div></td>'
           +'<td style="padding:5px 6px"><input type="number" value="'+(l.qty||1)+'" onchange="INV['+id+'].lines['+li+'].qty=parseFloat(this.value)||0;INV['+id+'].lines['+li+'].subtotal=+(INV['+id+'].lines['+li+'].qty*INV['+id+'].lines['+li+'].sell).toFixed(2);recalcInv('+id+');eInv('+id+')" style="width:55px;padding:5px;font-size:13px;border:0.5px solid var(--bd);border-radius:5px;font-family:inherit"></td>'
           +'<td style="padding:5px 6px"><input type="number" value="'+(l.sell||0)+'" onchange="INV['+id+'].lines['+li+'].sell=parseFloat(this.value)||0;INV['+id+'].lines['+li+'].subtotal=+(INV['+id+'].lines['+li+'].qty*INV['+id+'].lines['+li+'].sell).toFixed(2);recalcInv('+id+');eInv('+id+')" style="width:65px;padding:5px;font-size:13px;border:0.5px solid var(--bd);border-radius:5px;font-family:inherit"></td>'
           +'<td style="padding:5px 6px;text-align:center"><input type="checkbox" '+(l.tax!==false?'checked':'')+' onchange="INV['+id+'].lines['+li+'].tax=this.checked;recalcInv('+id+');eInv('+id+')"></td>'
           +'<td style="padding:5px 6px;font-weight:600;font-size:13px">'+fm(l.subtotal)+'</td>'
-          +'<td style="padding:5px 6px"><button onclick="INV['+id+'].lines.splice('+li+',1);recalcInv('+id+');eInv('+id+')" style="background:#FCEBEB;color:#A32D2D;border:none;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:13px">×</button></td>'
+          +'<td style="padding:5px 6px;display:flex;gap:4px;align-items:center">'+moveBtns(li,lns.length)+'<button onclick="INV['+id+'].lines.splice('+li+',1);recalcInv('+id+');eInv('+id+')" style="background:#FCEBEB;color:#A32D2D;border:none;border-radius:5px;padding:3px 8px;cursor:pointer;font-size:13px">×</button></td>'
           +'</tr>';
       }
     }).join('');
-    return rows||'<tr><td colspan="6" style="padding:10px;color:#888;font-size:13px">No line items — add labor or parts below</td></tr>';
+    return rows||'<tr><td colspan="7" style="padding:10px;color:#888;font-size:13px">No line items — add labor or parts below</td></tr>';
   }
 
   var taxPct=inv.taxPct!==undefined?inv.taxPct:(parseFloat(shop.tax)||0);
@@ -2180,6 +2190,7 @@ function eInv(id){
     +'<button onclick="addInvLaborLine('+id+')" class="btn xs bl"><i class="ti ti-plus"></i>Add Labor</button>'
     +'<button onclick="addInvPartLine('+id+')" class="btn xs gr"><i class="ti ti-plus"></i>Add Part</button>'
     +'<button onclick="addInvFeeLine('+id+')" class="btn xs" style="background:#BA7517;color:#fff"><i class="ti ti-plus"></i>Add Fee</button>'
+    +'<button onclick="sortInvLinesByPrice('+id+')" class="btn xs" title="Sort all lines by $ amount, highest first" style="background:#f5f5f7;color:#333;border:0.5px solid var(--bd)"><i class="ti ti-sort-descending-2"></i>'+t('jbSortPrice')+'</button>'
     +'<label style="display:flex;align-items:center;gap:5px;padding:4px 10px;background:#534AB7;color:#fff;border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;font-family:inherit"><i class="ti ti-camera-ai" style="font-size:14px"></i>Scan Vendor Invoice<input type="file" accept="image/*,application/pdf" style="display:none" onchange="scanVendorInvoice(this,'+id+')"></label>'
     +'</div>'
     +'<div id="scan-inv-status" style="display:none;padding:10px;background:#EEEDFE;border-radius:8px;font-size:13px;color:#3C3489;margin-bottom:8px;text-align:center"><i class="ti ti-loader" style="animation:spin 1s linear infinite;display:inline-block"></i> Reading invoice with AI...</div>'
@@ -2896,6 +2907,52 @@ function addInvPartLine(id){
   INV[id].lines.push({type:'part',desc:'Part',qty:1,sell:0,subtotal:0});
   recalcInv(id);eInv(id);
 }
+// Swaps a line with the one above/below it so a line typed as the wrong
+// type (e.g. a part typed into the labor row) can be moved into place
+// without deleting and retyping it.
+function moveInvLine(id,li,dir){
+  var arr=INV[id]&&INV[id].lines;if(!arr)return;
+  var ni=li+dir;
+  if(ni<0||ni>=arr.length)return;
+  var tmp=arr[li];arr[li]=arr[ni];arr[ni]=tmp;
+  recalcInv(id);eInv(id);
+}
+function sortInvLinesByPrice(id){
+  var arr=INV[id]&&INV[id].lines;if(!arr||arr.length<2)return;
+  arr.sort(function(a,b){return(parseFloat(b.subtotal)||0)-(parseFloat(a.subtotal)||0);});
+  recalcInv(id);eInv(id);
+}
+// Saves a part typed on an invoice into the PARTS inventory list at the cost
+// price entered, with stock qty set to 0 (she's selling the one she bought,
+// not stocking extras) — mirrors the existing "scan a part not on file" save
+// flow on Work Orders, so new parts added straight on an invoice aren't lost.
+function savePartToInventory(partNum,desc,cost,markup){
+  desc=(desc||'').trim();
+  if(!desc)return{ok:false,msg:'Enter a part description first.'};
+  partNum=(partNum||'').trim();
+  var existing=PARTS.find(function(p){
+    if(partNum&&p.partNum&&(''+p.partNum).toLowerCase()===partNum.toLowerCase())return true;
+    if(!partNum&&!p.partNum&&p.name&&p.name.toLowerCase()===desc.toLowerCase())return true;
+    return false;
+  });
+  if(existing)return{ok:false,msg:'"'+desc+'" is already in Inventory (current stock: '+(existing.qty||0)+').'};
+  var c=parseFloat(cost)||0;
+  var mk=(markup!=null&&markup!=='')?parseFloat(markup):getMarkup(c);
+  if(isNaN(mk))mk=getMarkup(c);
+  PARTS.push({name:desc,partNum:partNum,cat:'General',vendor:'',cost:c.toFixed(2),sell:(c*(1+mk/100)).toFixed(2),markup:mk,qty:0,min:2});
+  saveAll();
+  return{ok:true,msg:'"'+desc+'" saved to Inventory at cost $'+c.toFixed(2)+' (stock qty 0).'};
+}
+function saveInvLinePartToInv(id,li){
+  var L=INV[id]&&INV[id].lines&&INV[id].lines[li];if(!L)return;
+  var r=savePartToInventory(L.partNum,L.desc,L.cost,L.markup);
+  invToast(r.msg,r.ok);
+}
+function niJobSavePartToInv(ji,pi){
+  var j=_niJobs[ji];if(!j)return;var p=(j.parts||[])[pi];if(!p)return;
+  var r=savePartToInventory(p.partNum,p.desc,p.cost,p.markup);
+  invToast(r.msg,r.ok);
+}
 
 function svEInv(id){
   var inv=INV[id];if(!inv)return;
@@ -3296,6 +3353,18 @@ function niJobAddPart(ji){
   niJobRender();
 }
 function niJobDelPart(ji,pi){var j=_niJobs[ji];if(!j)return;j.parts.splice(pi,1);niJobRecalcJob(j);niJobRender();}
+function niJobMovePart(ji,pi,dir){
+  var j=_niJobs[ji];if(!j||!j.parts)return;
+  var np=pi+dir;
+  if(np<0||np>=j.parts.length)return;
+  var tmp=j.parts[pi];j.parts[pi]=j.parts[np];j.parts[np]=tmp;
+  niJobRender();
+}
+function niJobSortPartsByPrice(ji){
+  var j=_niJobs[ji];if(!j||!j.parts||j.parts.length<2)return;
+  j.parts.sort(function(a,b){return(parseFloat(b.subtotal)||0)-(parseFloat(a.subtotal)||0);});
+  niJobRender();
+}
 function niJobAddExtra(){_niExtras.push({desc:'',sell:0,tax:true,subtotal:0});niJobRender();}
 function niJobDelExtra(i){_niExtras.splice(i,1);niJobRender();}
 function niJobRecalcJob(j){
@@ -3417,6 +3486,9 @@ function niJobRender(){
           +'<div style="display:flex;gap:6px;align-items:center;margin-bottom:5px">'
           +'<input value="'+_esc(p.partNum||'')+'" placeholder="'+t('jbPartNumPlaceholder')+'" oninput="niJobPartU('+ji+','+pi+',\'partNum\',this.value)" style="width:80px;'+inp+'">'
           +'<input value="'+_esc(p.desc||'')+'" placeholder="'+t('jbPartDescPlaceholder')+'" oninput="niJobPartU('+ji+','+pi+',\'desc\',this.value)" style="flex:1;'+inp+'">'
+          +'<button type="button" title="'+t('jbMoveUp')+'" '+(pi===0?'disabled':'')+' onclick="niJobMovePart('+ji+','+pi+',-1)" style="background:transparent;border:none;color:'+(pi===0?'#ccc':'#185FA5')+';font-size:14px;cursor:'+(pi===0?'default':'pointer')+';padding:0 2px"><i class="ti ti-chevron-up"></i></button>'
+          +'<button type="button" title="'+t('jbMoveDown')+'" '+(pi===(j.parts.length-1)?'disabled':'')+' onclick="niJobMovePart('+ji+','+pi+',1)" style="background:transparent;border:none;color:'+(pi===(j.parts.length-1)?'#ccc':'#185FA5')+';font-size:14px;cursor:'+(pi===(j.parts.length-1)?'default':'pointer')+';padding:0 2px"><i class="ti ti-chevron-down"></i></button>'
+          +'<button type="button" title="Save this part to Inventory at this cost, qty 0" onclick="niJobSavePartToInv('+ji+','+pi+')" style="background:transparent;border:none;color:#185FA5;font-size:16px;cursor:pointer;padding:0 4px"><i class="ti ti-box"></i></button>'
           +'<button type="button" onclick="niJobDelPart('+ji+','+pi+')" style="background:transparent;border:none;color:#A32D2D;font-size:16px;cursor:pointer;padding:0 4px">\u00d7</button></div>'
           +'<div style="display:flex;gap:6px;align-items:center;margin-bottom:5px"><span style="font-size:11px;color:#888">'+t('jbCost')+' $</span><input type="number" step="0.01" value="'+(p.cost||0)+'" oninput="niJobPartU('+ji+','+pi+',\'cost\',this.value)" style="width:70px;'+inp+'">'
           +'<span style="font-size:11px;color:#888">'+t('jbMarkup')+' %</span><input id="nj-mk-'+ji+'-'+pi+'" type="number" value="'+(p.markup!==undefined?p.markup:shop.markup)+'" oninput="niJobPartU('+ji+','+pi+',\'markup\',this.value)" style="width:55px;'+inp+'"></div>'
@@ -3426,6 +3498,7 @@ function niJobRender(){
           +'<span id="nj-pamt-'+ji+'-'+pi+'" style="margin-left:auto;font-weight:700;font-size:13px">'+fm(p.subtotal)+'</span></div></div>';
       });
       h+='<button type="button" class="btn xs" onclick="niJobAddPart('+ji+')" style="background:#fff;border:1px dashed #BA7517;color:#8a5a00"><i class="ti ti-plus"></i>'+t('jbAddPart')+'</button>';
+      if((j.parts||[]).length>1)h+='<button type="button" class="btn xs" title="Sort this job\'s parts by $ amount, highest first" onclick="niJobSortPartsByPrice('+ji+')" style="background:#fff;border:1px solid var(--bd);color:#555;margin-left:6px"><i class="ti ti-sort-descending-2"></i>'+t('jbSortPriceShort')+'</button>';
       h+='</div>';
       h+='<div style="text-align:right;font-size:12px;font-weight:700;color:#185FA5;border-top:0.5px solid var(--bd);padding-top:5px">'+t('jbJobSubtotal')+': <span id="nj-sub-'+ji+'">'+fm(j.subtotal)+'</span></div>';
       h+='</div>';
