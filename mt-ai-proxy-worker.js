@@ -460,12 +460,13 @@ async function sbGet(key) {
   const r = await fetch(SB_URL + "/rest/v1/shop_data?key=eq." + key + "&select=value", {
     headers: { apikey: SB_KEY, Authorization: "Bearer " + SB_KEY }
   });
+  if (!r.ok) throw new Error("sbGet " + key + " failed: " + r.status + " " + (await r.text()));
   const rows = await r.json();
   return rows[0] ? JSON.parse(rows[0].value) : null;
 }
 
 async function sbPut(key, value) {
-  await fetch(SB_URL + "/rest/v1/shop_data", {
+  const r = await fetch(SB_URL + "/rest/v1/shop_data", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -475,6 +476,7 @@ async function sbPut(key, value) {
     },
     body: JSON.stringify({ key: key, value: JSON.stringify(value), updated_at: new Date().toISOString() })
   });
+  if (!r.ok) throw new Error("sbPut " + key + " failed: " + r.status + " " + (await r.text()));
 }
 
 // Every category the app itself persists via saveAll() - keep this list in
@@ -494,11 +496,26 @@ const BACKUP_RETENTION_DAYS = 700;
 // with one category can't take the rest of the day's backup down with it.
 async function runDailyBackup(env) {
   const dateStr = new Date().toISOString().slice(0, 10);
+  let okCount = 0, failCount = 0;
+  // Each category is wrapped on its own - a problem reading/writing one
+  // (oversized payload, transient network blip) used to throw out of the
+  // whole loop uncaught, silently skipping every category after it (and
+  // the prune step) for that day with zero record anywhere that it happened.
   for (const k of BACKUP_KEYS) {
-    const v = await sbGet("mttr-" + k);
-    if (v !== null) await sbPut("mttr-backup-" + dateStr + "-" + k, v);
+    try {
+      const v = await sbGet("mttr-" + k);
+      if (v !== null) { await sbPut("mttr-backup-" + dateStr + "-" + k, v); okCount++; }
+    } catch (e) {
+      failCount++;
+      console.error("runDailyBackup: " + k + " failed: " + e.message);
+    }
   }
-  await pruneOldBackups();
+  try {
+    await pruneOldBackups();
+  } catch (e) {
+    console.error("runDailyBackup: pruneOldBackups failed: " + e.message);
+  }
+  console.log("runDailyBackup " + dateStr + ": " + okCount + " ok, " + failCount + " failed");
 }
 
 async function pruneOldBackups() {

@@ -533,7 +533,7 @@ function td(){return new Date().toLocaleDateString();}
 function bdg(s,p){var m={'Open':'#E6F1FB,#0C447C','In Progress':'#FFF3CD,#664D03','Completed':'#D1E7DD,#0A3622','Waiting Parts':'#F8D7DA,#58151C','Paid':'#D1E7DD,#0A3622','Unpaid':'#F8D7DA,#58151C','Partial':'#FFF3CD,#664D03','Written Off':'#E5E5EA,#48484A','Pending':'#FFF3CD,#664D03','Approved':'#D1E7DD,#0A3622','Declined':'#F8D7DA,#58151C'};var c=(m[s]||'#E6F1FB,#0C447C').split(',');return'<span style="background:'+c[0]+';color:'+c[1]+';padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600">'+s+'</span>';}
 function invActive(iv){return iv.status!=='Paid'&&iv.status!=='Written Off';}
 
-async function dbS(k,v,tries){tries=tries||0;try{var r=await fetch(SB+'/rest/v1/shop_data',{method:'POST',headers:{'Content-Type':'application/json','apikey':SK,'Authorization':'Bearer '+SK,'Prefer':'resolution=merge-duplicates'},body:JSON.stringify({key:k,value:v,updated_at:new Date().toISOString()})});if(!r.ok){if(tries<2){await new Promise(function(res){setTimeout(res,800);});return dbS(k,v,tries+1);}return false;}return true;}catch(e){if(tries<2){await new Promise(function(res){setTimeout(res,800);});return dbS(k,v,tries+1);}return false;}}
+async function dbS(k,v,tries,ts){tries=tries||0;ts=ts||new Date().toISOString();try{var r=await fetch(SB+'/rest/v1/shop_data',{method:'POST',headers:{'Content-Type':'application/json','apikey':SK,'Authorization':'Bearer '+SK,'Prefer':'resolution=merge-duplicates'},body:JSON.stringify({key:k,value:v,updated_at:ts})});if(!r.ok){if(tries<2){await new Promise(function(res){setTimeout(res,800);});return dbS(k,v,tries+1,ts);}return false;}return true;}catch(e){if(tries<2){await new Promise(function(res){setTimeout(res,800);});return dbS(k,v,tries+1,ts);}return false;}}
 // Returns {ok:true, value:<string|null>} once the server was actually asked
 // and answered - value is null only when that key truly has no row yet, a
 // legitimate "this category starts empty" case. Returns {ok:false} when the
@@ -544,13 +544,13 @@ async function dbS(k,v,tries){tries=tries||0;try{var r=await fetch(SB+'/rest/v1/
 async function dbL(k,tries){
   tries=tries||0;
   try{
-    var r=await fetch(SB+'/rest/v1/shop_data?key=eq.'+k+'&select=value',{headers:{'apikey':SK,'Authorization':'Bearer '+SK}});
-    if(!r.ok){if(tries<2){await new Promise(function(res){setTimeout(res,800);});return dbL(k,tries+1);}return{ok:false,value:null};}
+    var r=await fetch(SB+'/rest/v1/shop_data?key=eq.'+k+'&select=value,updated_at',{headers:{'apikey':SK,'Authorization':'Bearer '+SK}});
+    if(!r.ok){if(tries<2){await new Promise(function(res){setTimeout(res,800);});return dbL(k,tries+1);}return{ok:false,value:null,updatedAt:null};}
     var d=await r.json();
-    return{ok:true,value:(d&&d.length)?d[0].value:null};
+    return{ok:true,value:(d&&d.length)?d[0].value:null,updatedAt:(d&&d.length)?d[0].updated_at:null};
   }catch(e){
     if(tries<2){await new Promise(function(res){setTimeout(res,800);});return dbL(k,tries+1);}
-    return{ok:false,value:null};
+    return{ok:false,value:null,updatedAt:null};
   }
 }
 
@@ -631,6 +631,30 @@ var _saveInFlight=0;
 // to run in anything but 'ok' so a bad load can never masquerade as "this
 // category is genuinely empty, go ahead and save that."
 var _loadState='pending';
+// Tracks the updated_at this tab last saw for every mttr-* category, set by
+// loadAll() and refreshed after every successful save. checkForConflicts()
+// re-checks these against the server immediately before each save so a tab
+// that's been open a while (dev/testing session, a tab left open for days,
+// anything) can never blindly push its in-memory copy over newer data it
+// never saw - the exact way the 11/04 parts wipe and an 11/17 invoice loss
+// happened: a save succeeded with no error shown, from a copy that was
+// already stale, silently erasing newer work saved elsewhere in between.
+var _LOAD_TS={};
+var _SAVE_KEYS=['mttr-wo','mttr-inv','mttr-cust','mttr-parts','mttr-shop','mttr-tech','mttr-pms','mttr-appts','mttr-vendors','mttr-kits','mttr-ctrs','mttr-tech-reqs','mttr-tech-clocks','mttr-tech-codes','mttr-estimates','mttr-notifs','mttr-estc','mttr-tech-timelog','mttr-tech-findings','mttr-exp','mttr-svcreq','mttr-returns'];
+async function checkForConflicts(){
+  try{
+    var r=await fetch(SB+'/rest/v1/shop_data?select=key,updated_at',{headers:{'apikey':SK,'Authorization':'Bearer '+SK}});
+    if(!r.ok)return null;
+    var rows=await r.json();
+    var serverTs={};
+    (Array.isArray(rows)?rows:[]).forEach(function(row){serverTs[row.key]=row.updated_at;});
+    var conflicts=[];
+    Object.keys(_LOAD_TS).forEach(function(k){
+      if((_LOAD_TS[k]||null)!==(serverTs[k]||null))conflicts.push(k.replace('mttr-',''));
+    });
+    return conflicts;
+  }catch(e){return null;}
+}
 window.addEventListener('beforeunload',function(e){if(_saveInFlight>0){e.preventDefault();e.returnValue='';return '';}});
 async function saveAll(){
   if(_loadState!=='ok'){
@@ -644,7 +668,16 @@ async function saveAll(){
   _saveInFlight++;
   var results;
   try{
-    results=await Promise.all([dbS('mttr-wo',JSON.stringify(WO)),dbS('mttr-inv',JSON.stringify(INV)),dbS('mttr-cust',JSON.stringify(CUST)),dbS('mttr-parts',JSON.stringify(PARTS)),dbS('mttr-shop',JSON.stringify(shop)),dbS('mttr-tech',JSON.stringify(TECH)),dbS('mttr-pms',JSON.stringify(PMS)),dbS('mttr-appts',JSON.stringify(APPTS)),dbS('mttr-vendors',JSON.stringify(VENDORS)),dbS('mttr-kits',JSON.stringify(KITS)),dbS('mttr-ctrs',JSON.stringify({woc:woc,invc:invc,PIN:PIN,OPIN:OPIN})),dbS('mttr-tech-reqs',JSON.stringify(TECH_REQS)),dbS('mttr-tech-clocks',JSON.stringify(TECH_CLOCKS)),dbS('mttr-tech-codes',JSON.stringify(TECH_CODES)),dbS('mttr-estimates',JSON.stringify(ESTIMATES)),dbS('mttr-notifs',JSON.stringify(NOTIFS)),dbS('mttr-estc',JSON.stringify({estc:estc})),dbS('mttr-tech-timelog',JSON.stringify(TECH_TIMELOG)),dbS('mttr-tech-findings',JSON.stringify(TECH_FINDINGS)),dbS('mttr-exp',JSON.stringify(EXPENSES)),dbS('mttr-svcreq',JSON.stringify(SVCREQ)),dbS('mttr-returns',JSON.stringify(RETURNS))]);
+    var conflicts=await checkForConflicts();
+    if(conflicts&&conflicts.length){
+      var ci=el('sv-ind');
+      if(ci){ci.innerHTML='<i class="ti ti-alert-triangle"></i>NOT SAVED';ci.style.color='#A32D2D';ci.style.opacity='1';}
+      alert('⚠️ Someone or something else saved changes to this data ('+conflicts.join(', ')+') since this page loaded. To protect that newer data, your change was NOT saved.\n\nReload the page now to get the latest version, then redo what you just did.');
+      return false;
+    }
+    var batchTs=new Date().toISOString();
+    results=await Promise.all([dbS('mttr-wo',JSON.stringify(WO),0,batchTs),dbS('mttr-inv',JSON.stringify(INV),0,batchTs),dbS('mttr-cust',JSON.stringify(CUST),0,batchTs),dbS('mttr-parts',JSON.stringify(PARTS),0,batchTs),dbS('mttr-shop',JSON.stringify(shop),0,batchTs),dbS('mttr-tech',JSON.stringify(TECH),0,batchTs),dbS('mttr-pms',JSON.stringify(PMS),0,batchTs),dbS('mttr-appts',JSON.stringify(APPTS),0,batchTs),dbS('mttr-vendors',JSON.stringify(VENDORS),0,batchTs),dbS('mttr-kits',JSON.stringify(KITS),0,batchTs),dbS('mttr-ctrs',JSON.stringify({woc:woc,invc:invc,PIN:PIN,OPIN:OPIN}),0,batchTs),dbS('mttr-tech-reqs',JSON.stringify(TECH_REQS),0,batchTs),dbS('mttr-tech-clocks',JSON.stringify(TECH_CLOCKS),0,batchTs),dbS('mttr-tech-codes',JSON.stringify(TECH_CODES),0,batchTs),dbS('mttr-estimates',JSON.stringify(ESTIMATES),0,batchTs),dbS('mttr-notifs',JSON.stringify(NOTIFS),0,batchTs),dbS('mttr-estc',JSON.stringify({estc:estc}),0,batchTs),dbS('mttr-tech-timelog',JSON.stringify(TECH_TIMELOG),0,batchTs),dbS('mttr-tech-findings',JSON.stringify(TECH_FINDINGS),0,batchTs),dbS('mttr-exp',JSON.stringify(EXPENSES),0,batchTs),dbS('mttr-svcreq',JSON.stringify(SVCREQ),0,batchTs),dbS('mttr-returns',JSON.stringify(RETURNS),0,batchTs)]);
+    results.forEach(function(ok,i){if(ok)_LOAD_TS[_SAVE_KEYS[i]]=batchTs;});
   }finally{_saveInFlight--;}
   var s=el('sv-ind');
   var failed=results.indexOf(false)>-1;
@@ -663,6 +696,7 @@ async function loadAll(){
   ks.forEach(function(k,i){
     var res=vs[i];
     if(!res||!res.ok){anyFailed=true;return;}
+    _LOAD_TS['mttr-'+k]=res.updatedAt;
     if(!res.value)return;
     try{var d=JSON.parse(res.value);
       if(k==='wo')WO=d;else if(k==='inv')INV=d;else if(k==='cust')CUST=d;else if(k==='parts')PARTS=d;
