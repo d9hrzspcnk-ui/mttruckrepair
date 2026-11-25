@@ -118,7 +118,14 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(sendInvoiceReminders(env));
+    // sendInvoiceReminders() is NOT run here on purpose. The app already
+    // sends reminders client-side (checkInvoiceReminders() in shop.html,
+    // on every login) and has for months - confirmed by reminder history
+    // going back to August, long before this Cron Trigger ever actually
+    // fired. Running it here too meant two independent systems writing to
+    // mttr-inv on their own schedules, which the save-conflict guard then
+    // (correctly) treated as a real conflict on ordinary saves several
+    // times an hour. Backups only here; reminders stay client-side.
     ctx.waitUntil(runDailyBackup(env));
   }
 };
