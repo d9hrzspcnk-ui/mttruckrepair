@@ -640,8 +640,30 @@ var _loadState='pending';
 // happened: a save succeeded with no error shown, from a copy that was
 // already stale, silently erasing newer work saved elsewhere in between.
 var _LOAD_TS={};
-var _SAVE_KEYS=['mttr-wo','mttr-inv','mttr-cust','mttr-parts','mttr-shop','mttr-tech','mttr-pms','mttr-appts','mttr-vendors','mttr-kits','mttr-ctrs','mttr-tech-reqs','mttr-tech-clocks','mttr-tech-codes','mttr-estimates','mttr-notifs','mttr-estc','mttr-tech-timelog','mttr-tech-findings','mttr-exp','mttr-svcreq','mttr-returns'];
-async function checkForConflicts(){
+// Last known-good JSON string per category, as of the last successful load
+// or save - used to tell "I actually edited this category" apart from "it
+// just happens to be part of every saveAll() call." Multiple people use this
+// app at once (owner, office, techs on their own portal) and every save
+// pushes all 22 categories regardless of what was actually touched, so
+// checking every category's server timestamp on every save would mean any
+// two people active at once permanently block each other's saves over
+// categories neither of them is even looking at. Only categories that
+// actually changed in THIS tab get conflict-checked and written.
+var _LAST_SAVED={};
+function _currentCategoryJSON(){
+  return {
+    'mttr-wo':JSON.stringify(WO),'mttr-inv':JSON.stringify(INV),'mttr-cust':JSON.stringify(CUST),
+    'mttr-parts':JSON.stringify(PARTS),'mttr-shop':JSON.stringify(shop),'mttr-tech':JSON.stringify(TECH),
+    'mttr-pms':JSON.stringify(PMS),'mttr-appts':JSON.stringify(APPTS),'mttr-vendors':JSON.stringify(VENDORS),
+    'mttr-kits':JSON.stringify(KITS),'mttr-ctrs':JSON.stringify({woc:woc,invc:invc,PIN:PIN,OPIN:OPIN}),
+    'mttr-tech-reqs':JSON.stringify(TECH_REQS),'mttr-tech-clocks':JSON.stringify(TECH_CLOCKS),
+    'mttr-tech-codes':JSON.stringify(TECH_CODES),'mttr-estimates':JSON.stringify(ESTIMATES),
+    'mttr-notifs':JSON.stringify(NOTIFS),'mttr-estc':JSON.stringify({estc:estc}),
+    'mttr-tech-timelog':JSON.stringify(TECH_TIMELOG),'mttr-tech-findings':JSON.stringify(TECH_FINDINGS),
+    'mttr-exp':JSON.stringify(EXPENSES),'mttr-svcreq':JSON.stringify(SVCREQ),'mttr-returns':JSON.stringify(RETURNS)
+  };
+}
+async function checkForConflicts(keys){
   try{
     var r=await fetch(SB+'/rest/v1/shop_data?select=key,updated_at',{headers:{'apikey':SK,'Authorization':'Bearer '+SK}});
     if(!r.ok)return null;
@@ -649,7 +671,7 @@ async function checkForConflicts(){
     var serverTs={};
     (Array.isArray(rows)?rows:[]).forEach(function(row){serverTs[row.key]=row.updated_at;});
     var conflicts=[];
-    Object.keys(_LOAD_TS).forEach(function(k){
+    keys.forEach(function(k){
       if((_LOAD_TS[k]||null)!==(serverTs[k]||null))conflicts.push(k.replace('mttr-',''));
     });
     return conflicts;
@@ -666,21 +688,25 @@ async function saveAll(){
     return false;
   }
   _saveInFlight++;
-  var results;
+  var results,dirty;
   try{
-    var conflicts=await checkForConflicts();
-    if(conflicts&&conflicts.length){
-      var ci=el('sv-ind');
-      if(ci){ci.innerHTML='<i class="ti ti-alert-triangle"></i>NOT SAVED';ci.style.color='#A32D2D';ci.style.opacity='1';}
-      alert('⚠️ Someone or something else saved changes to this data ('+conflicts.join(', ')+') since this page loaded. To protect that newer data, your change was NOT saved.\n\nReload the page now to get the latest version, then redo what you just did.');
-      return false;
+    var all=_currentCategoryJSON();
+    dirty=Object.keys(all).filter(function(k){return all[k]!==_LAST_SAVED[k];});
+    if(dirty.length){
+      var conflicts=await checkForConflicts(dirty);
+      if(conflicts&&conflicts.length){
+        var ci=el('sv-ind');
+        if(ci){ci.innerHTML='<i class="ti ti-alert-triangle"></i>NOT SAVED';ci.style.color='#A32D2D';ci.style.opacity='1';}
+        alert('⚠️ Someone or something else saved changes to this data ('+conflicts.join(', ')+') since this page loaded. To protect that newer data, your change was NOT saved.\n\nReload the page now to get the latest version, then redo what you just did.');
+        return false;
+      }
     }
     var batchTs=new Date().toISOString();
-    results=await Promise.all([dbS('mttr-wo',JSON.stringify(WO),0,batchTs),dbS('mttr-inv',JSON.stringify(INV),0,batchTs),dbS('mttr-cust',JSON.stringify(CUST),0,batchTs),dbS('mttr-parts',JSON.stringify(PARTS),0,batchTs),dbS('mttr-shop',JSON.stringify(shop),0,batchTs),dbS('mttr-tech',JSON.stringify(TECH),0,batchTs),dbS('mttr-pms',JSON.stringify(PMS),0,batchTs),dbS('mttr-appts',JSON.stringify(APPTS),0,batchTs),dbS('mttr-vendors',JSON.stringify(VENDORS),0,batchTs),dbS('mttr-kits',JSON.stringify(KITS),0,batchTs),dbS('mttr-ctrs',JSON.stringify({woc:woc,invc:invc,PIN:PIN,OPIN:OPIN}),0,batchTs),dbS('mttr-tech-reqs',JSON.stringify(TECH_REQS),0,batchTs),dbS('mttr-tech-clocks',JSON.stringify(TECH_CLOCKS),0,batchTs),dbS('mttr-tech-codes',JSON.stringify(TECH_CODES),0,batchTs),dbS('mttr-estimates',JSON.stringify(ESTIMATES),0,batchTs),dbS('mttr-notifs',JSON.stringify(NOTIFS),0,batchTs),dbS('mttr-estc',JSON.stringify({estc:estc}),0,batchTs),dbS('mttr-tech-timelog',JSON.stringify(TECH_TIMELOG),0,batchTs),dbS('mttr-tech-findings',JSON.stringify(TECH_FINDINGS),0,batchTs),dbS('mttr-exp',JSON.stringify(EXPENSES),0,batchTs),dbS('mttr-svcreq',JSON.stringify(SVCREQ),0,batchTs),dbS('mttr-returns',JSON.stringify(RETURNS),0,batchTs)]);
-    results.forEach(function(ok,i){if(ok)_LOAD_TS[_SAVE_KEYS[i]]=batchTs;});
+    results=await Promise.all(dirty.map(function(k){return dbS(k,all[k],0,batchTs);}));
+    dirty.forEach(function(k,i){if(results[i]){_LOAD_TS[k]=batchTs;_LAST_SAVED[k]=all[k];}});
   }finally{_saveInFlight--;}
   var s=el('sv-ind');
-  var failed=results.indexOf(false)>-1;
+  var failed=dirty.length>0&&results.indexOf(false)>-1;
   if(failed){
     if(s){s.innerHTML='<i class="ti ti-alert-triangle"></i>NOT SAVED';s.style.color='#A32D2D';s.style.opacity='1';}
     alert('⚠️ Could not save to the server — check your internet connection.\n\nDo NOT close this page or your changes could be lost. Tap OK, then try the action again once you have a signal.');
@@ -706,6 +732,12 @@ async function loadAll(){
       else if(k==='ctrs'){if(d.woc)woc=d.woc;if(d.invc)invc=d.invc;if(d.PIN)PIN=d.PIN;if(d.OPIN!=null)OPIN=d.OPIN;}
     }catch(ex){anyFailed=true;}
   });
+  // Baseline for saveAll()'s dirty-check: captured from the fully-assembled
+  // in-memory state (not the raw loaded strings), since some categories
+  // (shop merges onto existing defaults, ctrs/estc combine several vars)
+  // serialize differently than what was read - this must match exactly what
+  // _currentCategoryJSON() will produce if nothing changes before the next save.
+  if(!anyFailed)_LAST_SAVED=_currentCategoryJSON();
   _loadState=anyFailed?'incomplete':'ok';
   return !anyFailed;
 }
